@@ -1,0 +1,278 @@
+{
+  "_schema": "starbound.entity_template.factions.v1",
+  "_description": "Faction generation templates. Each galaxy generates one faction per category (or rolls for optional categories). Name patterns use slots like {adj}, {noun}, {civ_prefix} filled from component pools. Category determines base traits; components add variation.",
+
+  "generation_rules": {
+    "_description": "Which categories to generate. 'guaranteed' always appear. 'optional' have a chance per seed.",
+    "guaranteed": ["military", "economic", "guild", "religious", "criminal_frontier"],
+    "optional": [
+      { "category": "criminal_covert", "chance": 0.8 },
+      { "category": "military", "chance": 0.4, "_note": "Second military faction from rival civ" },
+      { "category": "economic", "chance": 0.3, "_note": "Competing trade network" }
+    ],
+    "max_factions": 8
+  },
+
+  "categories": {
+    "military": {
+      "scope": "civ_internal",
+      "_scope_note": "Attached to a parent civilization. Uses civ name in faction name.",
+      "base_traits": {
+        "alignment": 0.8,
+        "aggression": 0.7,
+        "openness": 0.2,
+        "secrecy": 0.3
+      },
+      "default_services": ["intelligence", "missions"],
+      "visibility_range": [0.7, 1.0],
+
+      "name_patterns": [
+        "{civ_prefix} Military Command",
+        "{civ_prefix} Defense Corps",
+        "{civ_prefix} Strategic Command",
+        "{civ_prefix} Guard Fleet",
+        "{civ_prefix} {mil_suffix}",
+        "The {civ_prefix} {mil_suffix}"
+      ],
+
+      "components": {
+        "mil_suffix": [
+          { "name": "War Council", "weight": 0.8, "trait_bias": { "aggression": 0.1 } },
+          { "name": "Security Bureau", "weight": 1.0, "trait_bias": { "secrecy": 0.1 } },
+          { "name": "Naval Command", "weight": 1.0, "trait_bias": {} },
+          { "name": "Frontier Watch", "weight": 0.7, "trait_bias": { "openness": 0.1 } },
+          { "name": "Iron Fleet", "weight": 0.6, "trait_bias": { "aggression": 0.15 } },
+          { "name": "Sentinel Corps", "weight": 0.8, "trait_bias": { "alignment": 0.1 } }
+        ]
+      }
+    },
+
+    "economic": {
+      "scope": "transnational",
+      "_scope_note": "Operates across civilization borders. Independent naming.",
+      "base_traits": {
+        "alignment": 0.5,
+        "aggression": 0.2,
+        "openness": 0.7,
+        "secrecy": 0.3
+      },
+      "default_services": ["trade", "missions"],
+      "visibility_range": [0.6, 0.9],
+
+      "name_patterns": [
+        "{trade_noun} Guild",
+        "{trade_noun} Exchange",
+        "{trade_noun} Consortium",
+        "The {trade_adj} {trade_noun}",
+        "{trade_noun} Trading Company",
+        "The {trade_adj} Exchange"
+      ],
+
+      "components": {
+        "trade_noun": [
+          { "name": "Corridor", "weight": 1.0, "trait_bias": {}, "flavor": ["routes", "logistics"] },
+          { "name": "Nexus", "weight": 0.8, "trait_bias": { "openness": 0.1 }, "flavor": ["hub", "central"] },
+          { "name": "Meridian", "weight": 0.8, "trait_bias": {}, "flavor": ["crossroads", "established"] },
+          { "name": "Void", "weight": 0.7, "trait_bias": { "secrecy": 0.1 }, "flavor": ["deep_space", "frontier_trade"] },
+          { "name": "Crucible", "weight": 0.6, "trait_bias": { "aggression": 0.1 }, "flavor": ["competitive", "ruthless"] },
+          { "name": "Anchor", "weight": 0.8, "trait_bias": { "alignment": 0.1 }, "flavor": ["stable", "reliable"] },
+          { "name": "Transit", "weight": 0.7, "trait_bias": { "openness": 0.1 }, "flavor": ["movement", "shipping"] },
+          { "name": "Arch", "weight": 0.6, "trait_bias": {}, "flavor": ["old", "structural"] },
+          { "name": "Span", "weight": 0.6, "trait_bias": { "openness": 0.05 }, "flavor": ["bridging", "connecting"] }
+        ],
+        "trade_adj": [
+          { "name": "Golden", "weight": 0.7, "trait_bias": {}, "flavor": ["wealthy", "ostentatious"] },
+          { "name": "Free", "weight": 0.8, "trait_bias": { "openness": 0.15 }, "flavor": ["libertarian", "unregulated"] },
+          { "name": "Iron", "weight": 0.6, "trait_bias": { "aggression": 0.1 }, "flavor": ["ruthless", "monopolistic"] },
+          { "name": "Silver", "weight": 0.7, "trait_bias": { "alignment": 0.05 }, "flavor": ["reputable", "established"] },
+          { "name": "Far", "weight": 0.8, "trait_bias": {}, "flavor": ["distant", "frontier"] },
+          { "name": "Deep", "weight": 0.6, "trait_bias": { "secrecy": 0.1 }, "flavor": ["extensive", "hidden_reach"] }
+        ]
+      }
+    },
+
+    "guild": {
+      "scope": "independent",
+      "_scope_note": "Worker/spacer organizations. Neutral ground, slow trust.",
+      "base_traits": {
+        "alignment": 0.6,
+        "aggression": 0.1,
+        "openness": 0.5,
+        "secrecy": 0.2
+      },
+      "default_services": ["repair", "trade"],
+      "visibility_range": [0.5, 0.8],
+
+      "name_patterns": [
+        "Spacers' {guild_suffix}",
+        "The {guild_adj} {guild_suffix}",
+        "{guild_noun} Collective",
+        "{guild_noun} Brotherhood",
+        "The {guild_noun} Guild",
+        "{guild_adj} Spacers' {guild_suffix}"
+      ],
+
+      "components": {
+        "guild_suffix": [
+          { "name": "Collective", "weight": 1.0, "trait_bias": { "alignment": 0.1 }, "flavor": ["union", "mutual_aid"] },
+          { "name": "Union", "weight": 0.8, "trait_bias": { "aggression": 0.05 }, "flavor": ["organized", "labor"] },
+          { "name": "Fellowship", "weight": 0.7, "trait_bias": { "openness": 0.1 }, "flavor": ["fraternal", "supportive"] },
+          { "name": "League", "weight": 0.8, "trait_bias": {}, "flavor": ["professional", "established"] },
+          { "name": "Circle", "weight": 0.6, "trait_bias": { "secrecy": 0.05 }, "flavor": ["informal", "trust_based"] },
+          { "name": "Network", "weight": 0.7, "trait_bias": { "openness": 0.1 }, "flavor": ["distributed", "modern"] }
+        ],
+        "guild_adj": [
+          { "name": "Free", "weight": 0.8, "trait_bias": { "openness": 0.1 }, "flavor": ["independent"] },
+          { "name": "Outer", "weight": 0.7, "trait_bias": {}, "flavor": ["frontier"] },
+          { "name": "Deep", "weight": 0.6, "trait_bias": {}, "flavor": ["experienced", "veteran"] },
+          { "name": "Independent", "weight": 0.7, "trait_bias": { "alignment": -0.05 }, "flavor": ["unaffiliated"] },
+          { "name": "Void", "weight": 0.5, "trait_bias": {}, "flavor": ["spacer_identity"] }
+        ],
+        "guild_noun": [
+          { "name": "Dockworkers'", "weight": 0.8, "trait_bias": {}, "flavor": ["blue_collar", "practical"] },
+          { "name": "Haulers'", "weight": 0.7, "trait_bias": {}, "flavor": ["freight", "working_class"] },
+          { "name": "Wayfarers'", "weight": 0.6, "trait_bias": { "openness": 0.05 }, "flavor": ["travelers", "romantic"] },
+          { "name": "Wrench", "weight": 0.5, "trait_bias": {}, "flavor": ["mechanics", "hands_on"] },
+          { "name": "Starboard", "weight": 0.6, "trait_bias": {}, "flavor": ["nautical", "traditional"] }
+        ]
+      }
+    },
+
+    "religious": {
+      "scope": "independent",
+      "_scope_note": "Drawn to anomalous spacetime. Operate outside political structures.",
+      "base_traits": {
+        "alignment": 0.6,
+        "aggression": 0.0,
+        "openness": 0.4,
+        "secrecy": 0.3
+      },
+      "default_services": ["shelter", "intelligence"],
+      "visibility_range": [0.4, 0.7],
+
+      "name_patterns": [
+        "Order of the {rel_adj} {rel_noun}",
+        "The {rel_adj} {rel_noun}",
+        "Covenant of the {rel_noun}",
+        "The {rel_noun} Vigil",
+        "Pilgrims of the {rel_adj} {rel_noun}",
+        "Keepers of the {rel_noun}"
+      ],
+
+      "components": {
+        "rel_adj": [
+          { "name": "Quiet", "weight": 1.0, "trait_bias": {}, "flavor": ["contemplative", "listening"] },
+          { "name": "Distant", "weight": 0.8, "trait_bias": { "secrecy": 0.1 }, "flavor": ["remote", "esoteric"] },
+          { "name": "Broken", "weight": 0.6, "trait_bias": {}, "flavor": ["wounded", "penitent"] },
+          { "name": "Slow", "weight": 0.7, "trait_bias": {}, "flavor": ["patient", "time_aware"] },
+          { "name": "Hollow", "weight": 0.5, "trait_bias": { "secrecy": 0.1 }, "flavor": ["mysterian", "emptiness_theology"] },
+          { "name": "First", "weight": 0.6, "trait_bias": { "alignment": 0.1 }, "flavor": ["origin", "primordial"] },
+          { "name": "Long", "weight": 0.7, "trait_bias": {}, "flavor": ["endurance", "deep_time"] },
+          { "name": "Fading", "weight": 0.5, "trait_bias": {}, "flavor": ["entropy", "acceptance"] }
+        ],
+        "rel_noun": [
+          { "name": "Star", "weight": 1.0, "trait_bias": {}, "flavor": ["stellar", "cosmic"] },
+          { "name": "Watch", "weight": 0.8, "trait_bias": { "alignment": 0.05 }, "flavor": ["vigilance", "duty"] },
+          { "name": "Silence", "weight": 0.7, "trait_bias": { "secrecy": 0.1 }, "flavor": ["absence", "void"] },
+          { "name": "Threshold", "weight": 0.6, "trait_bias": {}, "flavor": ["liminal", "boundary"] },
+          { "name": "Wound", "weight": 0.5, "trait_bias": {}, "flavor": ["distortion_theology", "broken_space"] },
+          { "name": "Signal", "weight": 0.4, "trait_bias": {}, "flavor": ["mission_aware", "seeking"] },
+          { "name": "Flame", "weight": 0.6, "trait_bias": { "aggression": 0.05 }, "flavor": ["passion", "illumination"] },
+          { "name": "Tide", "weight": 0.6, "trait_bias": {}, "flavor": ["cycles", "time"] },
+          { "name": "Veil", "weight": 0.5, "trait_bias": { "secrecy": 0.15 }, "flavor": ["hidden", "revelation"] }
+        ]
+      }
+    },
+
+    "criminal_frontier": {
+      "scope": "independent",
+      "_scope_note": "Frontier operators. Visible, scrappy, service-oriented crime.",
+      "base_traits": {
+        "alignment": -0.3,
+        "aggression": 0.4,
+        "openness": 0.3,
+        "secrecy": 0.5
+      },
+      "default_services": ["smuggling", "repair"],
+      "visibility_range": [0.3, 0.6],
+
+      "name_patterns": [
+        "{frontier_name} Salvage",
+        "{frontier_name} Runners",
+        "The {frontier_adj} {frontier_noun}",
+        "{frontier_name} Crew",
+        "{frontier_adj} {frontier_name}",
+        "The {frontier_noun} of {frontier_name}"
+      ],
+
+      "components": {
+        "frontier_name": [
+          { "name": "Ashfall", "weight": 1.0, "trait_bias": {}, "flavor": ["destruction", "aftermath"] },
+          { "name": "Scrapyard", "weight": 0.7, "trait_bias": {}, "flavor": ["resourceful", "junk"] },
+          { "name": "Blackout", "weight": 0.6, "trait_bias": { "secrecy": 0.1 }, "flavor": ["off_grid", "dark"] },
+          { "name": "Rustbelt", "weight": 0.7, "trait_bias": {}, "flavor": ["industrial_decay", "working_class"] },
+          { "name": "Driftwood", "weight": 0.6, "trait_bias": {}, "flavor": ["castoffs", "survivors"] },
+          { "name": "Cinder", "weight": 0.7, "trait_bias": { "aggression": 0.05 }, "flavor": ["burnt", "dangerous"] },
+          { "name": "Thornfield", "weight": 0.5, "trait_bias": {}, "flavor": ["hostile_territory", "rough"] },
+          { "name": "Coldburn", "weight": 0.5, "trait_bias": { "aggression": 0.1 }, "flavor": ["ruthless", "efficient"] }
+        ],
+        "frontier_adj": [
+          { "name": "Burnt", "weight": 0.7, "trait_bias": { "aggression": 0.05 }, "flavor": ["scarred"] },
+          { "name": "Crooked", "weight": 0.8, "trait_bias": {}, "flavor": ["dishonest", "pragmatic"] },
+          { "name": "Blind", "weight": 0.6, "trait_bias": { "secrecy": 0.1 }, "flavor": ["unseen", "hidden"] },
+          { "name": "Ragged", "weight": 0.7, "trait_bias": {}, "flavor": ["worn", "tough"] },
+          { "name": "Last", "weight": 0.5, "trait_bias": {}, "flavor": ["desperate", "final_option"] }
+        ],
+        "frontier_noun": [
+          { "name": "Dogs", "weight": 0.7, "trait_bias": { "aggression": 0.1 }, "flavor": ["pack", "loyal_to_own"] },
+          { "name": "Rats", "weight": 0.5, "trait_bias": { "secrecy": 0.1 }, "flavor": ["survivors", "everywhere"] },
+          { "name": "Wolves", "weight": 0.6, "trait_bias": { "aggression": 0.15 }, "flavor": ["predatory", "organized"] },
+          { "name": "Ghosts", "weight": 0.5, "trait_bias": { "secrecy": 0.15 }, "flavor": ["invisible", "haunting"] },
+          { "name": "Hands", "weight": 0.7, "trait_bias": {}, "flavor": ["labor", "practical"] }
+        ]
+      }
+    },
+
+    "criminal_covert": {
+      "scope": "transnational",
+      "_scope_note": "Shadow networks. Operate inside civilized space. Nearly invisible.",
+      "base_traits": {
+        "alignment": -0.2,
+        "aggression": 0.2,
+        "openness": 0.1,
+        "secrecy": 0.9
+      },
+      "default_services": ["intelligence", "smuggling"],
+      "visibility_range": [0.05, 0.3],
+
+      "name_patterns": [
+        "The {covert_noun}",
+        "The {covert_adj} {covert_noun}",
+        "{covert_noun} Network",
+        "The {covert_adj} Web",
+        "{covert_noun} Protocol"
+      ],
+
+      "components": {
+        "covert_noun": [
+          { "name": "Lattice", "weight": 1.0, "trait_bias": {}, "flavor": ["geometric", "structured"] },
+          { "name": "Cipher", "weight": 0.8, "trait_bias": { "secrecy": 0.1 }, "flavor": ["encrypted", "coded"] },
+          { "name": "Ledger", "weight": 0.7, "trait_bias": {}, "flavor": ["records", "accountability"] },
+          { "name": "Needle", "weight": 0.6, "trait_bias": { "aggression": 0.1 }, "flavor": ["precise", "surgical"] },
+          { "name": "Mirror", "weight": 0.6, "trait_bias": { "secrecy": 0.1 }, "flavor": ["reflection", "doubles"] },
+          { "name": "Thread", "weight": 0.7, "trait_bias": {}, "flavor": ["connected", "thin"] },
+          { "name": "Index", "weight": 0.5, "trait_bias": {}, "flavor": ["catalogued", "systematic"] },
+          { "name": "Whisper", "weight": 0.6, "trait_bias": { "secrecy": 0.15 }, "flavor": ["quiet", "intimate"] }
+        ],
+        "covert_adj": [
+          { "name": "Blind", "weight": 0.7, "trait_bias": { "secrecy": 0.1 }, "flavor": ["unseen", "deniable"] },
+          { "name": "Silver", "weight": 0.6, "trait_bias": {}, "flavor": ["elegant", "expensive"] },
+          { "name": "Hollow", "weight": 0.5, "trait_bias": {}, "flavor": ["empty_surface", "hidden_depth"] },
+          { "name": "Pale", "weight": 0.6, "trait_bias": {}, "flavor": ["bloodless", "cold"] },
+          { "name": "Quiet", "weight": 0.7, "trait_bias": { "secrecy": 0.05 }, "flavor": ["unnoticed"] },
+          { "name": "Long", "weight": 0.5, "trait_bias": {}, "flavor": ["patience", "reach"] }
+        ]
+      }
+    }
+  }
+}

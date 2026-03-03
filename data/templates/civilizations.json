@@ -1,0 +1,331 @@
+{
+  "_schema": "starbound.entity_template.civilizations.v1",
+  "_description": "Civilization generation templates. Names are assembled as '{prefix} {suffix}'. Suffixes carry primary ethos weights that determine civilization behavior. Prefixes carry cultural flavor and optional secondary ethos bias. All ethos values are 0.0-1.0 base weights — the generator adds noise (±0.1) for variety.",
+
+  "generation_rules": {
+    "min_count": 2,
+    "max_count": 5,
+    "default_count": 3,
+    "ethos_noise": 0.1,
+    "_ethos_noise_note": "Random ± applied to each ethos value after derivation. Clamped to [0.0, 1.0]."
+  },
+
+  "prefixes": [
+    {
+      "name": "Terran",
+      "weight": 1.0,
+      "ethos_bias": {},
+      "flavor": ["earth_origin", "traditional", "diverse"]
+    },
+    {
+      "name": "Solari",
+      "weight": 1.0,
+      "ethos_bias": { "technocratic": 0.1 },
+      "flavor": ["stellar", "enlightened", "structured"]
+    },
+    {
+      "name": "Meridian",
+      "weight": 1.0,
+      "ethos_bias": { "mercantile": 0.1 },
+      "flavor": ["crossroads", "central", "connected"]
+    },
+    {
+      "name": "Kestari",
+      "weight": 1.0,
+      "ethos_bias": { "communal": 0.1 },
+      "flavor": ["nomadic_heritage", "adaptive", "resilient"]
+    },
+    {
+      "name": "Vennari",
+      "weight": 1.0,
+      "ethos_bias": { "diplomatic": 0.1 },
+      "flavor": ["ancient_culture", "refined", "patient"]
+    },
+    {
+      "name": "Ashkari",
+      "weight": 0.8,
+      "ethos_bias": { "militaristic": 0.1 },
+      "flavor": ["forged_in_conflict", "proud", "scarred"]
+    },
+    {
+      "name": "Cygnan",
+      "weight": 1.0,
+      "ethos_bias": { "technocratic": 0.1 },
+      "flavor": ["scientific", "methodical", "curious"]
+    },
+    {
+      "name": "Iron",
+      "weight": 0.7,
+      "ethos_bias": { "militaristic": 0.15, "expansionist": 0.1 },
+      "flavor": ["industrial", "unyielding", "utilitarian"]
+    },
+    {
+      "name": "Nova",
+      "weight": 0.8,
+      "ethos_bias": { "expansionist": 0.1 },
+      "flavor": ["young_civilization", "ambitious", "energetic"]
+    },
+    {
+      "name": "Haven",
+      "weight": 0.7,
+      "ethos_bias": { "isolationist": 0.15, "communal": 0.1 },
+      "flavor": ["sanctuary", "inward", "protective"]
+    },
+    {
+      "name": "Pale",
+      "weight": 0.6,
+      "ethos_bias": { "isolationist": 0.1 },
+      "flavor": ["remote", "austere", "quiet"]
+    },
+    {
+      "name": "Ember",
+      "weight": 0.7,
+      "ethos_bias": { "expansionist": 0.1, "theocratic": 0.05 },
+      "flavor": ["remnant", "enduring", "once_great"]
+    },
+    {
+      "name": "Dusk",
+      "weight": 0.6,
+      "ethos_bias": { "isolationist": 0.1, "theocratic": 0.1 },
+      "flavor": ["twilight", "philosophical", "contemplative"]
+    },
+    {
+      "name": "Thorn",
+      "weight": 0.6,
+      "ethos_bias": { "militaristic": 0.1 },
+      "flavor": ["defensive", "territorial", "sharp"]
+    },
+    {
+      "name": "Drift",
+      "weight": 0.5,
+      "ethos_bias": { "communal": 0.1, "mercantile": 0.05 },
+      "flavor": ["spacefaring", "decentralized", "rootless"]
+    },
+    {
+      "name": "Stellar",
+      "weight": 0.8,
+      "ethos_bias": {},
+      "flavor": ["generic_spacefaring", "neutral"]
+    },
+    {
+      "name": "Orin",
+      "weight": 0.8,
+      "ethos_bias": { "diplomatic": 0.05, "mercantile": 0.05 },
+      "flavor": ["old_lineage", "moderate", "balanced"]
+    }
+  ],
+
+  "suffixes": [
+    {
+      "name": "Hegemony",
+      "weight": 1.0,
+      "ethos_weights": {
+        "expansionist": 0.7,
+        "isolationist": 0.1,
+        "militaristic": 0.8,
+        "diplomatic": 0.2,
+        "theocratic": 0.0,
+        "mercantile": 0.3,
+        "technocratic": 0.3,
+        "communal": 0.1
+      },
+      "flavor": ["authoritarian", "centralized", "hierarchical"],
+      "government_style": "autocratic"
+    },
+    {
+      "name": "Compact",
+      "weight": 1.0,
+      "ethos_weights": {
+        "expansionist": 0.3,
+        "isolationist": 0.3,
+        "militaristic": 0.2,
+        "diplomatic": 0.8,
+        "theocratic": 0.0,
+        "mercantile": 0.6,
+        "technocratic": 0.4,
+        "communal": 0.7
+      },
+      "flavor": ["cooperative", "decentralized", "pragmatic"],
+      "government_style": "confederal"
+    },
+    {
+      "name": "Dominion",
+      "weight": 0.8,
+      "ethos_weights": {
+        "expansionist": 0.9,
+        "isolationist": 0.0,
+        "militaristic": 0.7,
+        "diplomatic": 0.1,
+        "theocratic": 0.2,
+        "mercantile": 0.4,
+        "technocratic": 0.3,
+        "communal": 0.1
+      },
+      "flavor": ["imperial", "dominant", "territorial"],
+      "government_style": "autocratic"
+    },
+    {
+      "name": "Federation",
+      "weight": 1.0,
+      "ethos_weights": {
+        "expansionist": 0.4,
+        "isolationist": 0.2,
+        "militaristic": 0.3,
+        "diplomatic": 0.7,
+        "theocratic": 0.0,
+        "mercantile": 0.5,
+        "technocratic": 0.5,
+        "communal": 0.5
+      },
+      "flavor": ["representative", "balanced", "legalistic"],
+      "government_style": "federal"
+    },
+    {
+      "name": "Concord",
+      "weight": 0.8,
+      "ethos_weights": {
+        "expansionist": 0.2,
+        "isolationist": 0.3,
+        "militaristic": 0.1,
+        "diplomatic": 0.9,
+        "theocratic": 0.1,
+        "mercantile": 0.7,
+        "technocratic": 0.3,
+        "communal": 0.6
+      },
+      "flavor": ["peaceful", "trade_focused", "consensus"],
+      "government_style": "confederal"
+    },
+    {
+      "name": "Sovereignty",
+      "weight": 0.7,
+      "ethos_weights": {
+        "expansionist": 0.1,
+        "isolationist": 0.8,
+        "militaristic": 0.4,
+        "diplomatic": 0.3,
+        "theocratic": 0.1,
+        "mercantile": 0.2,
+        "technocratic": 0.5,
+        "communal": 0.3
+      },
+      "flavor": ["independent", "proud", "self_sufficient"],
+      "government_style": "autocratic"
+    },
+    {
+      "name": "Collective",
+      "weight": 0.7,
+      "ethos_weights": {
+        "expansionist": 0.3,
+        "isolationist": 0.2,
+        "militaristic": 0.1,
+        "diplomatic": 0.5,
+        "theocratic": 0.1,
+        "mercantile": 0.3,
+        "technocratic": 0.7,
+        "communal": 0.9
+      },
+      "flavor": ["egalitarian", "shared_governance", "techno_communal"],
+      "government_style": "collective"
+    },
+    {
+      "name": "Assembly",
+      "weight": 0.6,
+      "ethos_weights": {
+        "expansionist": 0.3,
+        "isolationist": 0.2,
+        "militaristic": 0.2,
+        "diplomatic": 0.7,
+        "theocratic": 0.0,
+        "mercantile": 0.4,
+        "technocratic": 0.4,
+        "communal": 0.6
+      },
+      "flavor": ["democratic", "deliberative", "slow_but_stable"],
+      "government_style": "democratic"
+    },
+    {
+      "name": "Protectorate",
+      "weight": 0.6,
+      "ethos_weights": {
+        "expansionist": 0.2,
+        "isolationist": 0.6,
+        "militaristic": 0.5,
+        "diplomatic": 0.4,
+        "theocratic": 0.2,
+        "mercantile": 0.2,
+        "technocratic": 0.3,
+        "communal": 0.5
+      },
+      "flavor": ["defensive", "paternalistic", "guardian"],
+      "government_style": "autocratic"
+    },
+    {
+      "name": "Syndicate",
+      "weight": 0.5,
+      "ethos_weights": {
+        "expansionist": 0.5,
+        "isolationist": 0.1,
+        "militaristic": 0.3,
+        "diplomatic": 0.4,
+        "theocratic": 0.0,
+        "mercantile": 0.9,
+        "technocratic": 0.5,
+        "communal": 0.1
+      },
+      "flavor": ["corporate", "profit_driven", "networked"],
+      "government_style": "oligarchic"
+    },
+    {
+      "name": "Mandate",
+      "weight": 0.5,
+      "ethos_weights": {
+        "expansionist": 0.5,
+        "isolationist": 0.2,
+        "militaristic": 0.4,
+        "diplomatic": 0.2,
+        "theocratic": 0.8,
+        "mercantile": 0.2,
+        "technocratic": 0.2,
+        "communal": 0.4
+      },
+      "flavor": ["ideological", "purposeful", "rigid"],
+      "government_style": "theocratic"
+    },
+    {
+      "name": "Ascendancy",
+      "weight": 0.5,
+      "ethos_weights": {
+        "expansionist": 0.7,
+        "isolationist": 0.1,
+        "militaristic": 0.3,
+        "diplomatic": 0.3,
+        "theocratic": 0.1,
+        "mercantile": 0.4,
+        "technocratic": 0.8,
+        "communal": 0.2
+      },
+      "flavor": ["ambitious", "progressive", "techno_expansionist"],
+      "government_style": "meritocratic"
+    }
+  ],
+
+  "compatibility": {
+    "_description": "Some prefix+suffix combinations are dissonant and should be avoided. Each entry is a prefix name mapped to a list of incompatible suffix names. Absence means compatible with everything.",
+    "blocked_pairs": {
+      "Haven": ["Dominion", "Hegemony"],
+      "Drift": ["Sovereignty", "Dominion"],
+      "Iron": ["Concord", "Assembly"],
+      "Dusk": ["Dominion", "Syndicate"]
+    }
+  },
+
+  "initial_state_ranges": {
+    "_description": "Ranges for randomized starting conditions. Values chosen uniformly within range, then adjusted by ethos.",
+    "stability": [0.5, 0.8],
+    "growth_rate": [0.001, 0.005],
+    "military_capability": [0.2, 0.6],
+    "economic_output": [0.3, 0.7],
+    "tech_level": [0.3, 0.6]
+  }
+}

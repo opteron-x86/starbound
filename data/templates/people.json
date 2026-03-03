@@ -1,0 +1,32 @@
+{
+  "_schema": "starbound.entity_template.people.v1",
+  "_description": "People name generation templates. TODO: Full implementation. Crew, NPCs, historical figures. Names should reflect cultural origin — a person from a 'Kestari' civilization sounds different from someone raised in an 'Iron Hegemony'.",
+
+  "_design_notes": [
+    "Names should carry cultural signal tied to civilization flavor tags",
+    "Frontier-born people might have simpler or rougher names",
+    "Station-born people might have corporate-influenced naming",
+    "Crew members recruited in different regions should sound like they come from different places",
+    "Historical figures referenced in events need consistent naming with their culture",
+    "Consider: given name pools per culture, family name pools, nickname/callsign pools for spacers"
+  ],
+
+  "placeholder_pools": {
+    "given_names": [
+      "Lena", "Tomás", "Josen", "Reva", "Kael", "Suri", "Dex", "Maren",
+      "Yael", "Asa", "Tam", "Petra", "Nik", "Zara", "Orrin", "Hale",
+      "Voss", "Kira", "Jace", "Elara", "Renn", "Callum", "Sable", "Idris"
+    ],
+    "family_names": [
+      "Vasquez", "Achebe", "Tark", "Okonkwo", "Chen", "Volkov", "Reeves",
+      "Koskinen", "Nair", "Oduya", "Cortez", "Strand", "Halloran", "Voss",
+      "Maren", "Kaur", "Okoro", "Tanaka", "Dubois", "Rashid", "Brennan"
+    ],
+    "spacer_callsigns": [
+      "Patch", "Drift", "Wrench", "Scope", "Needle", "Coil", "Fuse",
+      "Bolt", "Tether", "Crimp", "Shim", "Gasket", "Rivet", "Solder"
+    ]
+  },
+
+  "_todo": "Expand with: culture-specific name pools keyed to civ flavor tags, name generation rules (given+family vs single name cultures), title/rank prefixes, NPC role-specific naming"
+}

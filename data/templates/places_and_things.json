@@ -1,0 +1,42 @@
+{
+  "_schema": "starbound.entity_template.places_and_things.v1",
+  "_description": "Name templates for in-world locations, objects, and points of interest the player encounters. TODO: Full implementation.",
+
+  "_design_notes": [
+    "Stations and ports: Named by function or by the culture that built them",
+    "Ships: Player ship names, NPC ship names, derelict names — each with different flavor",
+    "Bars and gathering places: Where encounters happen — names set atmosphere",
+    "Cargo and trade goods: What you carry, what you find",
+    "Artifacts and anomalies: The weird things at the edges",
+    "Signals and transmissions: What you hear in deep space"
+  ],
+
+  "placeholder_pools": {
+    "station_names": [
+      "Waypoint", "Anchorage", "Bulkhead", "Relay", "Cradle",
+      "Berth", "Lantern", "Compass", "Beacon", "Mooring"
+    ],
+    "ship_names": [
+      "Persistence", "Quiet Fortune", "Long Haul", "Second Thought",
+      "Hard Bargain", "Patient Zero", "Last Margin", "Soft Landing",
+      "Blind Optimism", "Credible Threat", "Due Diligence"
+    ],
+    "bar_names": [
+      "The Burned Clock", "Last Pour", "The Pressure Seal",
+      "Null Gravity", "The Wrong Heading", "Redshift",
+      "The Maintenance Hatch", "Terminal Velocity", "Cargo Hold C"
+    ],
+    "trade_goods": [
+      "Refined helium-3", "Atmospheric processors", "Navigation datasets",
+      "Sealed medical supplies", "Unregistered electronics", "Hull composites",
+      "Water reclamation filters", "Cultural archives", "Sensor components"
+    ],
+    "artifact_descriptors": [
+      "angular", "resonant", "non-reflective", "warm to the touch",
+      "geometrically impossible", "older than the survey", "singing",
+      "made of nothing identifiable", "too regular to be natural"
+    ]
+  },
+
+  "_todo": "Expand with: generation rules for each category, culture-specific variants, rarity tiers for trade goods, artifact naming system tied to the ancient layer"
+}
