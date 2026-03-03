@@ -1,2 +1,3 @@
 target/
 design_document.md
+*.patch
