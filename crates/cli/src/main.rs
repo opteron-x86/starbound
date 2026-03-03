@@ -27,6 +27,7 @@ use starbound_encounters::seed_event::SeedEvent;
 
 use starbound_simulation::generate::{generate_galaxy, GeneratedGalaxy};
 use starbound_simulation::travel::{describe_plan, plan_all_routes, TravelPlan};
+use starbound_simulation::tick::{tick_galaxy, TickResult, TickEventCategory};
 
 use starbound_game::travel::execute_travel;
 use starbound_game::consequences::{resolve_effects, apply_effects};
@@ -97,6 +98,8 @@ struct GameState {
     rng: StdRng,
     /// Track last visit times per system (galactic_days).
     visit_log: HashMap<Uuid, f64>,
+    /// Galactic day at which we last ran the tick engine.
+    last_ticked_day: f64,
 }
 
 impl GameState {
@@ -264,6 +267,7 @@ fn new_game(seed: u64) -> GameState {
         pipeline_config: PipelineConfig::default(),
         rng: StdRng::seed_from_u64(seed),
         visit_log,
+        last_ticked_day: 0.0,
     }
 }
 
@@ -320,6 +324,53 @@ fn display_routes(plans: &[TravelPlan], gs: &GameState) {
         let desc = describe_plan(plan, dest_name);
         let marker = if plan.feasible { " " } else { "×" };
         println!("  {}{}) {}", marker, i + 1, desc);
+    }
+}
+
+fn display_galactic_news(tick_result: &TickResult, _gs: &GameState) {
+    clear_screen();
+    display_header("While You Were Away");
+    println!();
+
+    let years = tick_result.days_consumed / 365.25;
+    for line in wrap_text(
+        &format!(
+            "{:.1} galactic years have passed. The galaxy has not been idle.",
+            years,
+        ), 60,
+    ) { println!("  {}", line); }
+    println!();
+
+    // Show the most interesting events (cap at 8 to avoid wall of text).
+    let mut shown = 0;
+    for event in &tick_result.events {
+        if shown >= 8 { break; }
+
+        // Skip some internal consolidation noise.
+        if event.category == TickEventCategory::Internal
+            && event.description.contains("focused on internal consolidation")
+        {
+            continue;
+        }
+
+        let icon = match event.category {
+            TickEventCategory::Expansion => "  ▸",
+            TickEventCategory::Infrastructure => "  ▸",
+            TickEventCategory::Diplomacy => "  ▸",
+            TickEventCategory::Military => "  ▸",
+            TickEventCategory::Internal => "  ▸",
+        };
+
+        for line in wrap_text(&format!("{} {}", icon, event.description), 60) {
+            println!("{}", line);
+        }
+        shown += 1;
+    }
+
+    let remaining = tick_result.events.len().saturating_sub(8);
+    if remaining > 0 {
+        println!("
+  ... and {} other developments.", remaining);
     }
 }
 
@@ -628,6 +679,25 @@ fn execute_travel_and_arrive(gs: &mut GameState, plan: &TravelPlan, dest_name: &
         outcome.total_galactic_years);
 
     pause();
+
+    // --- Phase 2: Run galactic tick engine ---
+    let galactic_days_elapsed = gs.journey.time.galactic_days - gs.last_ticked_day;
+    if galactic_days_elapsed >= 365.25 {
+        let tick_result = tick_galaxy(
+            &mut gs.galaxy,
+            galactic_days_elapsed,
+            gs.last_ticked_day,
+            &mut gs.rng,
+        );
+        gs.last_ticked_day = gs.journey.time.galactic_days;
+
+        if !tick_result.events.is_empty() {
+            display_galactic_news(&tick_result, gs);
+            pause();
+        }
+    } else {
+        gs.last_ticked_day = gs.journey.time.galactic_days;
+    }
 
     // Record visit.
     gs.record_visit();
