@@ -24,7 +24,7 @@ mod tests {
     #[test]
     fn all_events_load() {
         let events = all_seed_events();
-        assert!(events.len() >= 15, "Should have at least 15 seed events, got {}", events.len());
+        assert!(events.len() >= 23, "Should have at least 23 seed events, got {}", events.len());
     }
 
     #[test]

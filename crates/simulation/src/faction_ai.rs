@@ -121,7 +121,7 @@ pub fn evaluate_civ(
     // Find unclaimed systems adjacent to faction territory.
     let owned_ids: Vec<Uuid> = systems
         .iter()
-        .filter(|s| s.controlling_civ == Some(faction.id))
+        .filter(|s| s.controlling_civ == Some(civ.id))
         .map(|s| s.id)
         .collect();
 
@@ -151,7 +151,7 @@ pub fn evaluate_civ(
     let upgradeable: Vec<Uuid> = systems
         .iter()
         .filter(|s| {
-            s.controlling_civ == Some(faction.id)
+            s.controlling_civ == Some(civ.id)
                 && can_upgrade_infrastructure(s.infrastructure_level)
         })
         .map(|s| s.id)

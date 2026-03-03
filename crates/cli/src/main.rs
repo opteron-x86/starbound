@@ -123,6 +123,13 @@ impl GameState {
             .unwrap_or("Independent")
     }
 
+    fn faction_name(&self, id: Uuid) -> &str {
+        self.galaxy.factions.iter()
+            .find(|f| f.id == id)
+            .map(|f| f.name.as_str())
+            .unwrap_or("Unknown Faction")
+    }
+    
     fn connections_from_current(&self) -> Vec<Connection> {
         let id = self.journey.current_system;
         self.galaxy.connections.iter()
@@ -298,6 +305,39 @@ fn display_system_info(gs: &GameState) {
     if let Some(years) = gs.galactic_years_since_last_visit() {
         if years > 0.1 {
             println!("  Last visit: {:.0} galactic years ago", years);
+        }
+    }
+    
+    // Faction presence — show what the player would actually notice.
+    if !sys.faction_presence.is_empty() {
+        println!();
+        let mut visible: Vec<_> = sys.faction_presence.iter()
+            .filter(|fp| fp.visibility >= 0.3)
+            .collect();
+        visible.sort_by(|a, b| b.strength.partial_cmp(&a.strength).unwrap());
+
+        if visible.is_empty() {
+            println!("  No obvious faction activity.");
+        } else {
+            for fp in &visible {
+                let name = gs.faction_name(fp.faction_id);
+                let desc = if fp.strength >= 0.7 {
+                    "strong presence"
+                } else if fp.strength >= 0.4 {
+                    "established presence"
+                } else {
+                    "minor presence"
+                };
+                println!("  · {} — {}", name, desc);
+            }
+        }
+
+        let hidden = sys.faction_presence.iter()
+            .filter(|fp| fp.visibility < 0.3 && fp.visibility > 0.0)
+            .count();
+        if hidden > 0 {
+            println!("  ... and signs of {} other interest{}.",
+                hidden, if hidden == 1 { "" } else { "s" });
         }
     }
 }

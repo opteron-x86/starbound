@@ -152,6 +152,215 @@ pub fn resolve_effects(mechanical_effect: &str, journey: &Journey) -> Vec<Effect
             Effect::Hull(0.05),
             Effect::Narrative("Resupplied. The ship feels a little more whole.".into()),
         ],
+        
+        // -----------------------------------------------------------------
+        // Corridor Guild encounters
+        // -----------------------------------------------------------------
+        "guild_preferred_rates" => vec![
+            Effect::Fuel(30.0),
+            Effect::Resources(-50.0),
+            Effect::SpawnThread {
+                thread_type: ThreadType::Debt,
+                description: "Accepted Corridor Guild preferred rates. They'll \
+                    remember — and they'll expect reciprocity.".into(),
+            },
+            Effect::Narrative("Signed on with the Guild's network. Good prices. Strings attached.".into()),
+        ],
+        "buy_fuel_independent" => vec![
+            Effect::Fuel(20.0),
+            Effect::Resources(-80.0),
+            Effect::Narrative("Paid more than you had to. The independent seller looked grateful.".into()),
+        ],
+        "guild_probe_network" => vec![
+            Effect::SpawnThread {
+                thread_type: ThreadType::Secret,
+                description: "The Corridor Guild's logistics network extends further \
+                    than official records suggest. They know shipping routes, cargo \
+                    manifests, and who's moving what — including near the frontier.".into(),
+            },
+            Effect::Narrative("Learned more than the Guild rep intended to share.".into()),
+        ],
+
+        // -----------------------------------------------------------------
+        // Lattice encounters
+        // -----------------------------------------------------------------
+        "lattice_copy_intel" => vec![
+            Effect::SpawnThread {
+                thread_type: ThreadType::Secret,
+                description: "Copied data from a Lattice dead drop. Coordinates, \
+                    a name, and a warning: someone else knows about the signal.".into(),
+            },
+            Effect::Narrative("Took the knowledge. Left no trace.".into()),
+        ],
+        "lattice_take_chip" => vec![
+            Effect::SpawnThread {
+                thread_type: ThreadType::Secret,
+                description: "Took a Lattice dead drop chip. The coordinates and \
+                    name might be useful. Taking the chip means they know you found it.".into(),
+            },
+            Effect::AddCargo { item: "Lattice data chip".into(), quantity: 1 },
+            Effect::Narrative("Pocketed the chip. Someone will notice it's gone.".into()),
+        ],
+        "lattice_destroy" => vec![
+            Effect::Narrative("Crushed the chip under your boot. Some connections aren't worth making.".into()),
+        ],
+        "lattice_accept_broker" => vec![
+            Effect::Resources(-100.0),
+            Effect::SpawnThread {
+                thread_type: ThreadType::Secret,
+                description: "Established a channel with a Lattice intelligence broker. \
+                    They have information about the signal and faction movements near \
+                    distorted space. The relationship is transactional — for now.".into(),
+            },
+            Effect::Narrative("Made contact with the shadows. They had exactly what you needed.".into()),
+        ],
+        "lattice_negotiate" => vec![
+            Effect::Resources(-60.0),
+            Effect::SpawnThread {
+                thread_type: ThreadType::Secret,
+                description: "Negotiated limited terms with a Lattice broker. They \
+                    provided partial intelligence — enough to be useful, not enough \
+                    to feel comfortable.".into(),
+            },
+            Effect::Narrative("Bargained them down. They respected the counter-offer.".into()),
+        ],
+
+        // -----------------------------------------------------------------
+        // Order of the Quiet Star encounters
+        // -----------------------------------------------------------------
+        "quiet_star_listen" => vec![
+            Effect::CrewMood { mood: Mood::Inspired, all: true },
+            Effect::CrewStress(-0.05),
+            Effect::SpawnThread {
+                thread_type: ThreadType::Anomaly,
+                description: "The Order describes patterns in the time distortion — \
+                    rhythmic fluctuations that correlate with the signal's frequency. \
+                    They believe the distortion and the signal share a source.".into(),
+            },
+            Effect::Narrative("Listened. What they described changes the shape of everything.".into()),
+        ],
+        "quiet_star_ask_signal" => vec![
+            Effect::SpawnThread {
+                thread_type: ThreadType::Mystery,
+                description: "The Order has been tracking the signal independently. \
+                    Their data suggests the source is deep in distorted space — \
+                    somewhere time runs so slowly it might as well have stopped.".into(),
+            },
+            Effect::Narrative("They know about the signal. They've been listening longer than you have.".into()),
+        ],
+        "quiet_star_join" => vec![
+            Effect::CrewStress(-0.1),
+            Effect::CrewMood { mood: Mood::Hopeful, all: true },
+            Effect::SpawnThread {
+                thread_type: ThreadType::Anomaly,
+                description: "Spent time in the vigil, listening at the edge of \
+                    distorted space. Something was there — not a sound exactly, \
+                    but a structure in the silence.".into(),
+            },
+            Effect::Narrative("Sat in the quiet. Heard something. Can't explain what.".into()),
+        ],
+        "quiet_star_mission_clue" => vec![
+            Effect::SpawnThread {
+                thread_type: ThreadType::Mystery,
+                description: "The pilgrim described the signal as a question — \
+                    mathematical, patient, waiting for comprehension. The pattern \
+                    she drew matches nothing in human mathematics, but your \
+                    science officer thinks it resembles a topology proof.".into(),
+            },
+            Effect::CrewMood { mood: Mood::Inspired, all: false },
+            Effect::Narrative(
+                "The pattern burns in your mind. It means something. You almost understand.".into(),
+            ),
+        ],
+        "quiet_star_record_pattern" => vec![
+            Effect::SpawnThread {
+                thread_type: ThreadType::Mystery,
+                description: "Recorded the pattern the pilgrim drew on the viewport. \
+                    Analysis pending, but initial comparison suggests non-human \
+                    mathematical notation.".into(),
+            },
+            Effect::Narrative("Captured the image. Science will find what faith can't.".into()),
+        ],
+        "quiet_star_how_know" => vec![
+            Effect::SpawnThread {
+                thread_type: ThreadType::Secret,
+                description: "The pilgrim knew about the mission — claims the Order \
+                    has contacts who share information about signal-seekers. \
+                    Unclear whether this means allies or surveillance.".into(),
+            },
+            Effect::Narrative("She smiled. 'The distortion tells us who is listening.' Make of that what you will.".into()),
+        ],
+
+        // -----------------------------------------------------------------
+        // Ashfall Salvage encounters
+        // -----------------------------------------------------------------
+        "ashfall_repair_credits" => vec![
+            Effect::Hull(0.2),
+            Effect::RepairModule { module: ModuleTarget::Engine, amount: 0.15 },
+            Effect::Resources(-120.0),
+            Effect::Narrative("Professional work. No questions asked. Hull integrity restored.".into()),
+        ],
+        "ashfall_repair_trade" => vec![
+            Effect::Hull(0.15),
+            Effect::RepairModule { module: ModuleTarget::Engine, amount: 0.1 },
+            Effect::JettisonCargo,
+            Effect::Narrative("Traded cargo for repairs. Fair deal, out where fair is relative.".into()),
+        ],
+        "ashfall_probe_services" => vec![
+            Effect::SpawnThread {
+                thread_type: ThreadType::Secret,
+                description: "Ashfall Salvage runs more than a repair shop — they \
+                    move people, cargo, and information across borders the official \
+                    routes don't cross. The frontier has its own economy.".into(),
+            },
+            Effect::Narrative("Asked around. The frontier has layers you hadn't seen.".into()),
+        ],
+
+        // -----------------------------------------------------------------
+        // Hegemony Military Command encounters
+        // -----------------------------------------------------------------
+        "military_probe_intel" => vec![
+            Effect::SpawnThread {
+                thread_type: ThreadType::Secret,
+                description: "The military officer let slip that ships returning \
+                    from deep-frontier distorted space show anomalous navigation \
+                    log corruption. Hegemony Command is tracking it.".into(),
+            },
+            Effect::Narrative("She said more than she meant to. Or exactly as much as she intended.".into()),
+        ],
+        "military_ask_routes" => vec![
+            Effect::SpawnThread {
+                thread_type: ThreadType::Secret,
+                description: "Learned that Hegemony Military Command has designated \
+                    certain frontier routes as restricted — specifically near \
+                    systems with high time distortion. They're not saying why.".into(),
+            },
+            Effect::Narrative("Restricted zones. Near the frontier. Near the signal. That's not a coincidence.".into()),
+        ],
+
+        // -----------------------------------------------------------------
+        // Spacers' Collective encounters
+        // -----------------------------------------------------------------
+        "spacers_listen" => vec![
+            Effect::CrewStress(-0.05),
+            Effect::SpawnThread {
+                thread_type: ThreadType::Secret,
+                description: "The spacer's network has noticed unusual shipping \
+                    pattern changes — routes being rerouted around certain frontier \
+                    systems, contracts drying up near distorted space.".into(),
+            },
+            Effect::Narrative("Bought a round. Heard three rumors. Two of them might even be true.".into()),
+        ],
+        "spacers_favor" => vec![
+            Effect::SpawnThread {
+                thread_type: ThreadType::Debt,
+                description: "The spacer needs a message delivered to a contact at \
+                    a frontier system. Simple job, he says. Spacers don't ask for \
+                    favors unless the official channels won't work.".into(),
+            },
+            Effect::AddCargo { item: "Sealed message tube (Spacers' Collective)".into(), quantity: 1 },
+            Effect::Narrative("Took the job. A message, a destination, and a handshake.".into()),
+        ],
 
         // -----------------------------------------------------------------
         // Combat and evasion

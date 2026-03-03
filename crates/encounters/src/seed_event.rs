@@ -50,6 +50,24 @@ pub struct ContextRequirements {
     /// Tags for additional filtering (e.g. "frontier", "trade", "ancient").
     #[serde(default)]
     pub tags: Vec<String>,
+
+    // -------------------------------------------------------------------
+    // Faction presence requirements (Phase C)
+    // -------------------------------------------------------------------
+
+    /// A faction of this category must be present at the current system.
+    /// Uses the FactionCategory string representation: "military",
+    /// "economic", "guild", "religious", "criminal".
+    pub faction_category_present: Option<String>,
+    /// The matching faction presence must have at least this strength.
+    pub faction_min_strength: Option<f32>,
+    /// The matching faction presence must have at least this visibility.
+    /// Events gated on low visibility create "hidden world" encounters
+    /// that players discover by exploring the margins.
+    pub faction_max_visibility: Option<f32>,
+    /// The system's time distortion factor must be at least this value.
+    /// Used for encounters tied to anomalous spacetime.
+    pub time_factor_min: Option<f64>,
 }
 
 /// A choice the player can make in response to an encounter.
