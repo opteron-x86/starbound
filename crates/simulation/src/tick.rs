@@ -8,7 +8,7 @@ use uuid::Uuid;
 use starbound_core::galaxy::*;
 use starbound_core::time::Timestamp;
 
-use super::faction_ai::{evaluate_faction, next_infrastructure_level, FactionAction};
+use super::faction_ai::{evaluate_civ, next_infrastructure_level, FactionAction};
 use super::generate::GeneratedGalaxy;
 
 const DAYS_PER_TICK: f64 = 365.25;
@@ -59,11 +59,11 @@ pub fn tick_galaxy(
     let mut events = Vec::new();
     for tick in 0..num_ticks {
         let tick_day = galactic_day_base + (tick as f64 * DAYS_PER_TICK);
-        let faction_ids: Vec<Uuid> = galaxy.factions.iter().map(|f| f.id).collect();
-        for fid in &faction_ids {
-            let other_factions: Vec<&Faction> = galaxy.factions.iter().filter(|f| f.id != *fid).collect();
-            let faction = galaxy.factions.iter().find(|f| f.id == *fid).unwrap().clone();
-            let action = evaluate_faction(&faction, &galaxy.systems, &galaxy.connections, &other_factions, rng);
+        let civ_ids: Vec<Uuid> = galaxy.civilizations.iter().map(|f| f.id).collect();
+        for cid in &civ_ids {
+            let other_civs: Vec<&Civilization> = galaxy.civilizations.iter().filter(|f| f.id != *cid).collect();
+            let civ = galaxy.civilizations.iter().find(|f| f.id == *cid).unwrap().clone();
+            let action = evaluate_civ(&civ, &galaxy.systems, &galaxy.connections, &other_civs, rng);
             let tick_events = resolve_action(&action, galaxy, tick, tick_day);
             events.extend(tick_events);
         }
@@ -85,10 +85,10 @@ fn resolve_action(action: &FactionAction, galaxy: &mut GeneratedGalaxy, tick_num
 }
 
 fn resolve_expand(faction_id: Uuid, target_system: Uuid, galaxy: &mut GeneratedGalaxy, tick_number: usize, galactic_day: f64) -> Vec<TickEvent> {
-    let fname = get_faction_name(faction_id, &galaxy.factions);
+    let fname = get_civ_name(faction_id, &galaxy.civilizations);
     if let Some(system) = galaxy.systems.iter_mut().find(|s| s.id == target_system) {
-        if system.controlling_faction.is_some() { return vec![]; }
-        system.controlling_faction = Some(faction_id);
+        if system.controlling_civ.is_some() { return vec![]; }
+        system.controlling_civ = Some(faction_id);
         if system.infrastructure_level == InfrastructureLevel::None {
             system.infrastructure_level = InfrastructureLevel::Outpost;
         }
@@ -97,7 +97,7 @@ fn resolve_expand(faction_id: Uuid, target_system: Uuid, galaxy: &mut GeneratedG
             description: format!("{} established control.", fname),
         });
         let sname = system.name.clone();
-        if let Some(f) = galaxy.factions.iter_mut().find(|f| f.id == faction_id) {
+        if let Some(f) = galaxy.civilizations.iter_mut().find(|f| f.id == faction_id) {
             f.capabilities.wealth = (f.capabilities.wealth - 0.02).max(0.0);
             f.capabilities.size = (f.capabilities.size + 0.05).min(1.0);
         }
@@ -106,7 +106,7 @@ fn resolve_expand(faction_id: Uuid, target_system: Uuid, galaxy: &mut GeneratedG
 }
 
 fn resolve_consolidate(faction_id: Uuid, target_system: Uuid, galaxy: &mut GeneratedGalaxy, tick_number: usize, galactic_day: f64) -> Vec<TickEvent> {
-    let fname = get_faction_name(faction_id, &galaxy.factions);
+    let fname = get_civ_name(faction_id, &galaxy.civilizations);
     if let Some(system) = galaxy.systems.iter_mut().find(|s| s.id == target_system) {
         let old_level = system.infrastructure_level;
         system.infrastructure_level = next_infrastructure_level(old_level);
@@ -123,27 +123,27 @@ fn resolve_consolidate(faction_id: Uuid, target_system: Uuid, galaxy: &mut Gener
 }
 
 fn resolve_diplomacy(faction_id: Uuid, target_faction: Uuid, galaxy: &mut GeneratedGalaxy, tick_number: usize, galactic_day: f64) -> Vec<TickEvent> {
-    let a_name = get_faction_name(faction_id, &galaxy.factions);
-    let b_name = get_faction_name(target_faction, &galaxy.factions);
+    let a_name = get_civ_name(faction_id, &galaxy.civilizations);
+    let b_name = get_civ_name(target_faction, &galaxy.civilizations);
     shift_disposition(galaxy, faction_id, target_faction, DIPLOMACY_DISPOSITION_SHIFT, DIPLOMACY_DISPOSITION_SHIFT * 0.5, 0.0);
     shift_disposition(galaxy, target_faction, faction_id, DIPLOMACY_DISPOSITION_SHIFT * 0.5, DIPLOMACY_DISPOSITION_SHIFT * 0.3, 0.0);
     vec![TickEvent { tick_number, galactic_day, description: format!("Relations between {} and {} improved through diplomatic channels.", a_name, b_name), entities: vec![faction_id, target_faction], category: TickEventCategory::Diplomacy }]
 }
 
 fn resolve_pressure(faction_id: Uuid, target_faction: Uuid, galaxy: &mut GeneratedGalaxy, tick_number: usize, galactic_day: f64) -> Vec<TickEvent> {
-    let a_name = get_faction_name(faction_id, &galaxy.factions);
-    let b_name = get_faction_name(target_faction, &galaxy.factions);
+    let a_name = get_civ_name(faction_id, &galaxy.civilizations);
+    let b_name = get_civ_name(target_faction, &galaxy.civilizations);
     shift_disposition(galaxy, faction_id, target_faction, -PRESSURE_DISPOSITION_SHIFT * 0.5, 0.0, -PRESSURE_DISPOSITION_SHIFT);
     shift_disposition(galaxy, target_faction, faction_id, -PRESSURE_DISPOSITION_SHIFT, 0.0, -PRESSURE_DISPOSITION_SHIFT * 0.5);
-    if let Some(target) = galaxy.factions.iter_mut().find(|f| f.id == target_faction) {
+    if let Some(target) = galaxy.civilizations.iter_mut().find(|f| f.id == target_faction) {
         target.internal_dynamics.stability = (target.internal_dynamics.stability - 0.02).max(0.0);
     }
     vec![TickEvent { tick_number, galactic_day, description: format!("Tensions rose between {} and {}.", a_name, b_name), entities: vec![faction_id, target_faction], category: TickEventCategory::Military }]
 }
 
 fn resolve_militarize(faction_id: Uuid, galaxy: &mut GeneratedGalaxy, tick_number: usize, galactic_day: f64) -> Vec<TickEvent> {
-    let fname = get_faction_name(faction_id, &galaxy.factions);
-    if let Some(faction) = galaxy.factions.iter_mut().find(|f| f.id == faction_id) {
+    let fname = get_civ_name(faction_id, &galaxy.civilizations);
+    if let Some(faction) = galaxy.civilizations.iter_mut().find(|f| f.id == faction_id) {
         let old = faction.capabilities.military;
         faction.capabilities.military = (old + MILITARIZE_GROWTH).min(1.0);
         faction.capabilities.wealth = (faction.capabilities.wealth - 0.01).max(0.0);
@@ -155,12 +155,12 @@ fn resolve_militarize(faction_id: Uuid, galaxy: &mut GeneratedGalaxy, tick_numbe
 }
 
 fn resolve_stabilize(faction_id: Uuid, galaxy: &mut GeneratedGalaxy, tick_number: usize, galactic_day: f64) -> Vec<TickEvent> {
-    let fname = get_faction_name(faction_id, &galaxy.factions);
-    if let Some(faction) = galaxy.factions.iter_mut().find(|f| f.id == faction_id) {
+    let fname = get_civ_name(faction_id, &galaxy.civilizations);
+    if let Some(faction) = galaxy.civilizations.iter_mut().find(|f| f.id == faction_id) {
         faction.internal_dynamics.stability = (faction.internal_dynamics.stability + STABILIZE_RECOVERY).min(1.0);
         if !faction.internal_dynamics.pressures.is_empty() && faction.internal_dynamics.stability > 0.6 {
             let resolved = faction.internal_dynamics.pressures.remove(0);
-            return vec![TickEvent { tick_number, galactic_day, description: format!("{} addressed internal pressures: {}", fname, resolved), entities: vec![faction_id], category: TickEventCategory::Internal }];
+            return vec![TickEvent { tick_number, galactic_day, description: format!("{} addressed internal pressures: {}", fname, resolved.description), entities: vec![faction_id], category: TickEventCategory::Internal }];
         }
         return vec![TickEvent { tick_number, galactic_day, description: format!("{} focused on internal consolidation.", fname), entities: vec![faction_id], category: TickEventCategory::Internal }];
     }
@@ -168,21 +168,22 @@ fn resolve_stabilize(faction_id: Uuid, galaxy: &mut GeneratedGalaxy, tick_number
 }
 
 fn apply_passive_effects(galaxy: &mut GeneratedGalaxy, tick_number: usize, galactic_day: f64, rng: &mut StdRng, events: &mut Vec<TickEvent>) {
-    for faction in galaxy.factions.iter_mut() {
-        if !faction.internal_dynamics.pressures.is_empty() {
-            let decay = STABILITY_PASSIVE_DECAY * faction.internal_dynamics.pressures.len() as f32;
-            faction.internal_dynamics.stability = (faction.internal_dynamics.stability - decay).max(0.0);
+    for civ in galaxy.civilizations.iter_mut() {
+        if !civ.internal_dynamics.pressures.is_empty() {
+            let decay = STABILITY_PASSIVE_DECAY * civ.internal_dynamics.pressures.len() as f32;
+            civ.internal_dynamics.stability = (civ.internal_dynamics.stability - decay).max(0.0);
         }
         if rng.gen_bool(NEW_PRESSURE_CHANCE) {
             let pressure = generate_pressure(rng);
-            let fname = faction.name.clone();
-            faction.internal_dynamics.pressures.push(pressure.clone());
-            events.push(TickEvent { tick_number, galactic_day, description: format!("Unrest within {}: {}", fname, pressure), entities: vec![faction.id], category: TickEventCategory::Internal });
+            let fname = civ.name.clone();
+            let desc = pressure.description.clone();
+            civ.internal_dynamics.pressures.push(pressure);
+            events.push(TickEvent { tick_number, galactic_day, description: format!("Unrest within {}: {}", fname, desc), entities: vec![civ.id], category: TickEventCategory::Internal });
         }
     }
 }
 
-fn generate_pressure(rng: &mut StdRng) -> String {
+fn generate_pressure(rng: &mut StdRng) -> CivPressure {
     let pool = [
         "Trade unions demanding better terms",
         "Outer colony resource disputes",
@@ -201,11 +202,11 @@ fn generate_pressure(rng: &mut StdRng) -> String {
         "Research ethics scandal involving classified programs",
     ];
     let idx = rng.gen_range(0..pool.len());
-    pool[idx].to_string()
+    CivPressure { description: pool[idx].to_string(), source_faction: None }
 }
 
-fn get_faction_name(id: Uuid, factions: &[Faction]) -> String {
-    factions.iter().find(|f| f.id == id).map(|f| f.name.clone()).unwrap_or_else(|| "Unknown Faction".into())
+fn get_civ_name(id: Uuid, civs: &[Civilization]) -> String {
+    civs.iter().find(|f| f.id == id).map(|f| f.name.clone()).unwrap_or_else(|| "Unknown Civilization".into())
 }
 
 fn infra_label(level: InfrastructureLevel) -> &'static str {
@@ -220,7 +221,7 @@ fn infra_label(level: InfrastructureLevel) -> &'static str {
 }
 
 fn shift_disposition(galaxy: &mut GeneratedGalaxy, from: Uuid, toward: Uuid, diplomatic_delta: f32, economic_delta: f32, military_delta: f32) {
-    if let Some(faction) = galaxy.factions.iter_mut().find(|f| f.id == from) {
+    if let Some(faction) = galaxy.civilizations.iter_mut().find(|f| f.id == from) {
         if let Some(disp) = faction.relationships.get_mut(&toward) {
             disp.diplomatic = (disp.diplomatic + diplomatic_delta).clamp(-1.0, 1.0);
             disp.economic = (disp.economic + economic_delta).clamp(0.0, 1.0);
@@ -273,12 +274,12 @@ mod tests {
     fn galaxy_changes_over_time() {
         let mut galaxy = generate_galaxy(42);
         let mut rng = StdRng::seed_from_u64(42);
-        let initial_unclaimed: usize = galaxy.systems.iter().filter(|s| s.controlling_faction.is_none()).count();
+        let initial_unclaimed: usize = galaxy.systems.iter().filter(|s| s.controlling_civ.is_none()).count();
         let result = tick_galaxy(&mut galaxy, 3652.5, 0.0, &mut rng);
         assert!(!result.events.is_empty(), "10 years should produce events");
         let has_expansion = result.events.iter().any(|e| e.category == TickEventCategory::Expansion);
         if has_expansion {
-            let final_unclaimed: usize = galaxy.systems.iter().filter(|s| s.controlling_faction.is_none()).count();
+            let final_unclaimed: usize = galaxy.systems.iter().filter(|s| s.controlling_civ.is_none()).count();
             assert!(final_unclaimed < initial_unclaimed);
         }
     }
@@ -295,8 +296,8 @@ mod tests {
                 .map(|e| e.description.clone())
                 .collect();
             let ownership: Vec<String> = galaxy.systems.iter()
-                .map(|s| match s.controlling_faction {
-                    Some(fid) => get_faction_name(fid, &galaxy.factions),
+                .map(|s| match s.controlling_civ {
+                    Some(fid) => get_civ_name(fid, &galaxy.civilizations),
                     None => "None".into(),
                 })
                 .collect();

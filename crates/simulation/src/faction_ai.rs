@@ -95,24 +95,24 @@ struct Goal {
 ///
 /// Each goal's priority = base ethos weight × situational modifier.
 /// A small random factor prevents perfect predictability.
-pub fn evaluate_faction(
-    faction: &Faction,
+pub fn evaluate_civ(
+    civ: &Civilization,
     systems: &[StarSystem],
     connections: &[Connection],
-    other_factions: &[&Faction],
+    other_civs: &[&Civilization],
     rng: &mut StdRng,
 ) -> FactionAction {
     let mut goals: Vec<Goal> = Vec::new();
 
     // --- Stabilize ---
     // Urgency increases sharply as stability drops below 0.5.
-    let instability = 1.0 - faction.internal_dynamics.stability as f64;
+    let instability = 1.0 - civ.internal_dynamics.stability as f64;
     if instability > 0.3 {
         let priority = instability * 2.0 + jitter(rng);
         goals.push(Goal {
             priority,
             action: FactionAction::Stabilize {
-                faction_id: faction.id,
+                faction_id: civ.id,
             },
         });
     }
@@ -121,7 +121,7 @@ pub fn evaluate_faction(
     // Find unclaimed systems adjacent to faction territory.
     let owned_ids: Vec<Uuid> = systems
         .iter()
-        .filter(|s| s.controlling_faction == Some(faction.id))
+        .filter(|s| s.controlling_civ == Some(faction.id))
         .map(|s| s.id)
         .collect();
 
@@ -130,8 +130,8 @@ pub fn evaluate_faction(
     );
 
     if !adjacent_unclaimed.is_empty() {
-        let priority = faction.ethos.expansionist as f64 * 1.2
-            + faction.capabilities.military as f64 * 0.3
+        let priority = civ.ethos.expansionist as f64 * 1.2
+            + civ.capabilities.military as f64 * 0.3
             + jitter(rng);
 
         // Pick the most appealing target.
@@ -140,7 +140,7 @@ pub fn evaluate_faction(
         goals.push(Goal {
             priority,
             action: FactionAction::Expand {
-                faction_id: faction.id,
+                faction_id: civ.id,
                 target_system: target,
             },
         });
@@ -151,16 +151,16 @@ pub fn evaluate_faction(
     let upgradeable: Vec<Uuid> = systems
         .iter()
         .filter(|s| {
-            s.controlling_faction == Some(faction.id)
+            s.controlling_civ == Some(faction.id)
                 && can_upgrade_infrastructure(s.infrastructure_level)
         })
         .map(|s| s.id)
         .collect();
 
     if !upgradeable.is_empty() {
-        let priority = (faction.ethos.isolationist as f64 * 0.6
-            + faction.ethos.communal as f64 * 0.5
-            + faction.ethos.technocratic as f64 * 0.4)
+        let priority = (civ.ethos.isolationist as f64 * 0.6
+            + civ.ethos.communal as f64 * 0.5
+            + civ.ethos.technocratic as f64 * 0.4)
             + jitter(rng);
 
         // Prefer upgrading the lowest-infrastructure system.
@@ -169,26 +169,26 @@ pub fn evaluate_faction(
         goals.push(Goal {
             priority,
             action: FactionAction::Consolidate {
-                faction_id: faction.id,
+                faction_id: civ.id,
                 target_system: target,
             },
         });
     }
 
     // --- Diplomacy ---
-    for other in other_factions {
-        if let Some(disposition) = faction.relationships.get(&other.id) {
+    for other in other_civs {
+        if let Some(disposition) = civ.relationships.get(&other.id) {
             // More inclined to diplomacy when relations are not terrible.
             if disposition.diplomatic > -0.5 {
-                let priority = (faction.ethos.diplomatic as f64 * 0.8
-                    + faction.ethos.mercantile as f64 * 0.5)
+                let priority = (civ.ethos.diplomatic as f64 * 0.8
+                    + civ.ethos.mercantile as f64 * 0.5)
                     * (1.0 - disposition.diplomatic as f64 * 0.5)
                     + jitter(rng);
 
                 goals.push(Goal {
                     priority,
                     action: FactionAction::Diplomacy {
-                        faction_id: faction.id,
+                        faction_id: civ.id,
                         target_faction: other.id,
                     },
                 });
@@ -197,22 +197,22 @@ pub fn evaluate_faction(
     }
 
     // --- Pressure ---
-    for other in other_factions {
-        if let Some(disposition) = faction.relationships.get(&other.id) {
+    for other in other_civs {
+        if let Some(disposition) = civ.relationships.get(&other.id) {
             if disposition.diplomatic < 0.0 || disposition.military < 0.0 {
                 let tension = (-disposition.diplomatic as f64).max(0.0)
                     + (-disposition.military as f64).max(0.0);
 
-                let priority = (faction.ethos.militaristic as f64 * 0.6
-                    + faction.ethos.expansionist as f64 * 0.4)
+                let priority = (civ.ethos.militaristic as f64 * 0.6
+                    + civ.ethos.expansionist as f64 * 0.4)
                     * tension
-                    * (faction.capabilities.military as f64 * 0.5 + 0.5)
+                    * (civ.capabilities.military as f64 * 0.5 + 0.5)
                     + jitter(rng);
 
                 goals.push(Goal {
                     priority,
                     action: FactionAction::Pressure {
-                        faction_id: faction.id,
+                        faction_id: civ.id,
                         target_faction: other.id,
                     },
                 });
@@ -222,14 +222,14 @@ pub fn evaluate_faction(
 
     // --- Militarize ---
     {
-        let priority = faction.ethos.militaristic as f64 * 0.7
-            * (1.0 - faction.capabilities.military as f64 * 0.5)
+        let priority = civ.ethos.militaristic as f64 * 0.7
+            * (1.0 - civ.capabilities.military as f64 * 0.5)
             + jitter(rng);
 
         goals.push(Goal {
             priority,
             action: FactionAction::Militarize {
-                faction_id: faction.id,
+                faction_id: civ.id,
             },
         });
     }
@@ -242,7 +242,7 @@ pub fn evaluate_faction(
         .next()
         .map(|g| g.action)
         .unwrap_or(FactionAction::Idle {
-            faction_id: faction.id,
+            faction_id: civ.id,
         })
 }
 
@@ -271,7 +271,7 @@ fn find_adjacent_unclaimed(
                 && systems
                     .iter()
                     .find(|s| s.id == theirs)
-                    .map(|s| s.controlling_faction.is_none())
+                    .map(|s| s.controlling_civ.is_none())
                     .unwrap_or(false)
         };
 
@@ -378,12 +378,12 @@ mod tests {
     use rand::SeedableRng;
     use std::collections::HashMap;
 
-    fn test_faction(name: &str, id: Uuid, ethos: FactionEthos) -> Faction {
-        Faction {
+    fn test_civ(name: &str, id: Uuid, ethos: CivEthos) -> Civilization {
+        Civilization {
             id,
             name: name.into(),
             ethos,
-            capabilities: FactionCapabilities {
+            capabilities: CivCapabilities {
                 size: 0.5,
                 wealth: 0.5,
                 technology: 0.5,
@@ -394,11 +394,12 @@ mod tests {
                 stability: 0.7,
                 pressures: vec![],
             },
+            faction_ids: vec![],
         }
     }
 
-    fn expansionist_ethos() -> FactionEthos {
-        FactionEthos {
+    fn expansionist_ethos() -> CivEthos {
+        CivEthos {
             expansionist: 0.9,
             isolationist: 0.1,
             militaristic: 0.5,
@@ -410,8 +411,8 @@ mod tests {
         }
     }
 
-    fn diplomatic_ethos() -> FactionEthos {
-        FactionEthos {
+    fn diplomatic_ethos() -> CivEthos {
+        CivEthos {
             expansionist: 0.2,
             isolationist: 0.3,
             militaristic: 0.1,
@@ -430,18 +431,19 @@ mod tests {
             position: (0.0, 0.0),
             star_type: StarType::YellowDwarf,
             planetary_bodies: vec![],
-            controlling_faction: faction,
+            controlling_civ: faction,
             infrastructure_level: InfrastructureLevel::Colony,
             history: vec![],
             active_threads: vec![],
             time_factor: 1.0,
+            faction_presence: vec![],
         }
     }
 
     #[test]
     fn expansionist_faction_prefers_expansion() {
         let faction_id = Uuid::new_v4();
-        let faction = test_faction("Expanders", faction_id, expansionist_ethos());
+        let civ = test_civ("Expanders", faction_id, expansionist_ethos());
 
         let owned = test_system("Home", Some(faction_id));
         let unclaimed = test_system("Target", None);
@@ -459,8 +461,8 @@ mod tests {
         let mut expand_count = 0;
         for seed in 0..20u64 {
             let mut r = StdRng::seed_from_u64(seed);
-            let action = evaluate_faction(
-                &faction, &systems, &connections, &[], &mut r,
+            let action = evaluate_civ(
+                &civ, &systems, &connections, &[], &mut r,
             );
             if matches!(action, FactionAction::Expand { .. }) {
                 expand_count += 1;
@@ -477,8 +479,8 @@ mod tests {
     #[test]
     fn unstable_faction_prioritizes_stabilization() {
         let faction_id = Uuid::new_v4();
-        let mut faction = test_faction("Shaky", faction_id, expansionist_ethos());
-        faction.internal_dynamics.stability = 0.2;
+        let mut civ = test_civ("Shaky", faction_id, expansionist_ethos());
+        civ.internal_dynamics.stability = 0.2;
 
         let owned = test_system("Home", Some(faction_id));
         let unclaimed = test_system("Target", None);
@@ -496,8 +498,8 @@ mod tests {
         let mut stabilize_count = 0;
         for seed in 0..20u64 {
             let mut rng = StdRng::seed_from_u64(seed);
-            let action = evaluate_faction(
-                &faction, &systems, &connections, &[], &mut rng,
+            let action = evaluate_civ(
+                &civ, &systems, &connections, &[], &mut rng,
             );
             if matches!(action, FactionAction::Stabilize { .. }) {
                 stabilize_count += 1;
@@ -516,8 +518,8 @@ mod tests {
         let faction_id = Uuid::new_v4();
         let other_id = Uuid::new_v4();
 
-        let mut faction = test_faction("Diplomats", faction_id, diplomatic_ethos());
-        faction.relationships.insert(other_id, FactionDisposition {
+        let mut civ = test_civ("Diplomats", faction_id, diplomatic_ethos());
+        civ.relationships.insert(other_id, CivDisposition {
             diplomatic: 0.0,
             economic: 0.2,
             military: 0.0,
@@ -528,13 +530,13 @@ mod tests {
         let systems = vec![owned, other_system];
         let connections = vec![];
 
-        let other_faction = test_faction("Neighbors", other_id, expansionist_ethos());
+        let other_civ = test_civ("Neighbors", other_id, expansionist_ethos());
 
         let mut diplomacy_count = 0;
         for seed in 0..20u64 {
             let mut rng = StdRng::seed_from_u64(seed);
-            let action = evaluate_faction(
-                &faction, &systems, &connections, &[&other_faction], &mut rng,
+            let action = evaluate_civ(
+                &civ, &systems, &connections, &[&other_civ], &mut rng,
             );
             if matches!(action, FactionAction::Diplomacy { .. }) {
                 diplomacy_count += 1;
@@ -557,17 +559,17 @@ mod tests {
 
         let owned = StarSystem {
             id: owned_id,
-            controlling_faction: Some(faction_id),
+            controlling_civ: Some(faction_id),
             ..test_system("Owned", Some(faction_id))
         };
         let unclaimed = StarSystem {
             id: unclaimed_id,
-            controlling_faction: None,
+            controlling_civ: None,
             ..test_system("Unclaimed", None)
         };
         let far = StarSystem {
             id: far_id,
-            controlling_faction: None,
+            controlling_civ: None,
             ..test_system("Far", None)
         };
 

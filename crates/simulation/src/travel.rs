@@ -371,11 +371,12 @@ mod tests {
             position: (0.0, 0.0),
             star_type: starbound_core::galaxy::StarType::YellowDwarf,
             planetary_bodies: vec![],
-            controlling_faction: None,
+            controlling_civ: None,
             infrastructure_level: starbound_core::galaxy::InfrastructureLevel::Colony,
             history: vec![],
             active_threads: vec![],
             time_factor,
+            faction_presence: vec![],
         }
     }
 

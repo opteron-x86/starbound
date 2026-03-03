@@ -143,6 +143,7 @@ mod tests {
             crew: vec![],
             threads: vec![],
             event_log: vec![],
+            civ_standings: HashMap::new(),
         }
     }
 

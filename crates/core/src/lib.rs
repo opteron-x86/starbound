@@ -15,7 +15,7 @@ pub mod time;
 
 // Re-export the most commonly used types at crate root.
 pub use crew::CrewMember;
-pub use galaxy::{Connection, Faction, Sector, StarSystem};
+pub use galaxy::{Civilization, Connection, Faction, Sector, StarSystem};
 pub use journey::Journey;
 pub use mission::{KnowledgeNode, MissionState};
 pub use narrative::{EncounterBrief, GameEvent, Thread};

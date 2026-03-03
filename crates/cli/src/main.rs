@@ -116,8 +116,8 @@ impl GameState {
             .unwrap_or("Unknown")
     }
 
-    fn faction_name(&self, id: Uuid) -> &str {
-        self.galaxy.factions.iter()
+    fn civ_name(&self, id: Uuid) -> &str {
+        self.galaxy.civilizations.iter()
             .find(|f| f.id == id)
             .map(|f| f.name.as_str())
             .unwrap_or("Independent")
@@ -254,6 +254,7 @@ fn new_game(seed: u64) -> GameState {
         crew: create_starting_crew(),
         threads: vec![],
         event_log: vec![],
+        civ_standings: HashMap::new(),
     };
 
     let mut visit_log = HashMap::new();
@@ -277,8 +278,8 @@ fn new_game(seed: u64) -> GameState {
 
 fn display_system_info(gs: &GameState) {
     let sys = gs.current_system();
-    let faction_str = match sys.controlling_faction {
-        Some(id) => gs.faction_name(id).to_string(),
+    let faction_str = match sys.controlling_civ {
+        Some(id) => gs.civ_name(id).to_string(),
         None => "Unclaimed".into(),
     };
 

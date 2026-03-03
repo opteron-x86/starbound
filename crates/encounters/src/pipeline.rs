@@ -429,11 +429,12 @@ mod tests {
             position: (0.0, 0.0),
             star_type: StarType::YellowDwarf,
             planetary_bodies: vec![],
-            controlling_faction: faction,
+            controlling_civ: faction,
             infrastructure_level: infra,
             history: vec![],
             active_threads: vec![],
                 time_factor: 1.0,
+            faction_presence: vec![],
         }
     }
 
@@ -486,6 +487,7 @@ mod tests {
             crew,
             threads: vec![],
             event_log: vec![],
+            civ_standings: HashMap::new(),
         }
     }
 

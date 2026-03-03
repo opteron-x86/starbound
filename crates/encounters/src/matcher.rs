@@ -61,14 +61,14 @@ fn requirements_met(req: &ContextRequirements, ctx: &MatchContext) -> bool {
 
     // Faction controlled.
     if let Some(true) = req.faction_controlled {
-        if ctx.system.controlling_faction.is_none() {
+        if ctx.system.controlling_civ.is_none() {
             return false;
         }
     }
 
     // Unclaimed.
     if let Some(true) = req.unclaimed {
-        if ctx.system.controlling_faction.is_some() {
+        if ctx.system.controlling_civ.is_some() {
             return false;
         }
     }
@@ -164,11 +164,12 @@ mod tests {
             position: (0.0, 0.0),
             star_type: StarType::YellowDwarf,
             planetary_bodies: vec![],
-            controlling_faction: faction,
+            controlling_civ: faction,
             infrastructure_level: infra,
             history: vec![],
             active_threads: vec![],
                 time_factor: 1.0,
+            faction_presence: vec![],
         }
     }
 
@@ -223,6 +224,7 @@ mod tests {
             crew,
             threads: vec![],
             event_log: vec![],
+            civ_standings: HashMap::new(),
         }
     }
 

@@ -16,14 +16,14 @@ use starbound_core::time::Timestamp;
 /// Build a small but representative game state and round-trip through JSON.
 #[test]
 fn create_and_serialize_sample_game_state() {
-    // -- Factions --
+    // -- Civilizations --
     let hegemony_id = Uuid::new_v4();
     let freehold_id = Uuid::new_v4();
 
-    let hegemony = Faction {
+    let hegemony = Civilization {
         id: hegemony_id,
         name: "Terran Hegemony".into(),
-        ethos: FactionEthos {
+        ethos: CivEthos {
             expansionist: 0.8,
             isolationist: 0.1,
             militaristic: 0.7,
@@ -33,7 +33,7 @@ fn create_and_serialize_sample_game_state() {
             technocratic: 0.6,
             communal: 0.2,
         },
-        capabilities: FactionCapabilities {
+        capabilities: CivCapabilities {
             size: 0.9,
             wealth: 0.7,
             technology: 0.8,
@@ -43,7 +43,7 @@ fn create_and_serialize_sample_game_state() {
             let mut r = HashMap::new();
             r.insert(
                 freehold_id,
-                FactionDisposition {
+                CivDisposition {
                     diplomatic: -0.3,
                     economic: 0.4,
                     military: -0.2,
@@ -54,10 +54,11 @@ fn create_and_serialize_sample_game_state() {
         internal_dynamics: InternalDynamics {
             stability: 0.6,
             pressures: vec![
-                "Reform movement in outer colonies".into(),
-                "Military hardliners pushing for expansion".into(),
+                CivPressure { description: "Reform movement in outer colonies".into(), source_faction: None },
+                CivPressure { description: "Military hardliners pushing for expansion".into(), source_faction: None },
             ],
         },
+        faction_ids: vec![],
     };
 
     // -- Star Systems --
@@ -74,7 +75,7 @@ fn create_and_serialize_sample_game_state() {
             body_type: BodyType::Gaia,
             features: vec!["Birthworld".into(), "Hegemony capital".into()],
         }],
-        controlling_faction: Some(hegemony_id),
+        controlling_civ: Some(hegemony_id),
         infrastructure_level: InfrastructureLevel::Capital,
         history: vec![HistoryEntry {
             timestamp: Timestamp::zero(),
@@ -82,6 +83,7 @@ fn create_and_serialize_sample_game_state() {
         }],
         active_threads: vec![],
             time_factor: 1.0,
+        faction_presence: vec![],
     };
 
     let cygnus_gate = StarSystem {
@@ -101,11 +103,12 @@ fn create_and_serialize_sample_game_state() {
                 features: vec!["Ancient ruins reported".into()],
             },
         ],
-        controlling_faction: None,
+        controlling_civ: None,
         infrastructure_level: InfrastructureLevel::Established,
         history: vec![],
         active_threads: vec![],
             time_factor: 1.0,
+        faction_presence: vec![],
     };
 
     // -- Sector --
@@ -324,6 +327,7 @@ fn create_and_serialize_sample_game_state() {
             associated_entities: vec![sol_id, cygnus_id],
             consequences: vec!["40 galactic years elapsed during transit".into()],
         }],
+        civ_standings: HashMap::new(),
     };
 
     // -- Serialize and verify --
@@ -371,10 +375,10 @@ fn create_and_serialize_sample_game_state() {
     assert!(galaxy_json.contains("yellow_dwarf"));
     assert!(galaxy_json.contains("binary"));
 
-    let faction_json =
-        serde_json::to_string_pretty(&hegemony).expect("Faction should serialize");
-    assert!(faction_json.contains("Terran Hegemony"));
-    assert!(faction_json.contains("expansionist"));
+    let civ_json =
+        serde_json::to_string_pretty(&hegemony).expect("Civilization should serialize");
+    assert!(civ_json.contains("Terran Hegemony"));
+    assert!(civ_json.contains("expansionist"));
 
     let sector_json =
         serde_json::to_string_pretty(&sector).expect("Sector should serialize");

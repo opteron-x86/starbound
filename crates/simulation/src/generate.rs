@@ -1,7 +1,7 @@
 // file: crates/simulation/src/generate.rs
 //! Galaxy generation — deterministic from a seed.
 //!
-//! One sector, ten systems, two factions. Enough to validate
+//! One sector, ten systems, two civilizations. Enough to validate
 //! the core loop. Expansion comes later.
 
 use rand::prelude::*;
@@ -15,7 +15,7 @@ use starbound_core::time::Timestamp;
 pub struct GeneratedGalaxy {
     pub sector: Sector,
     pub systems: Vec<StarSystem>,
-    pub factions: Vec<Faction>,
+    pub civilizations: Vec<Civilization>,
     pub connections: Vec<Connection>,
 }
 
@@ -35,8 +35,8 @@ const SYSTEM_NAMES: [&str; 10] = [
 pub fn generate_galaxy(seed: u64) -> GeneratedGalaxy {
     let mut rng = StdRng::seed_from_u64(seed);
 
-    let factions = generate_factions(&mut rng);
-    let systems = generate_systems(&mut rng, &factions);
+    let civilizations = generate_civilizations(&mut rng);
+    let systems = generate_systems(&mut rng, &civilizations);
     let connections = generate_connections(&systems, &mut rng);
 
     let sector = Sector {
@@ -52,19 +52,19 @@ pub fn generate_galaxy(seed: u64) -> GeneratedGalaxy {
     GeneratedGalaxy {
         sector,
         systems,
-        factions,
+        civilizations,
         connections,
     }
 }
 
-fn generate_factions(rng: &mut StdRng) -> Vec<Faction> {
+fn generate_civilizations(rng: &mut StdRng) -> Vec<Civilization> {
     let hegemony_id = Uuid::new_v4();
     let freehold_id = Uuid::new_v4();
 
-    let hegemony = Faction {
+    let hegemony = Civilization {
         id: hegemony_id,
         name: "Terran Hegemony".into(),
-        ethos: FactionEthos {
+        ethos: CivEthos {
             expansionist: 0.7,
             isolationist: 0.1,
             militaristic: 0.6,
@@ -74,7 +74,7 @@ fn generate_factions(rng: &mut StdRng) -> Vec<Faction> {
             technocratic: 0.7,
             communal: 0.2,
         },
-        capabilities: FactionCapabilities {
+        capabilities: CivCapabilities {
             size: 0.8,
             wealth: 0.7,
             technology: 0.8,
@@ -84,7 +84,7 @@ fn generate_factions(rng: &mut StdRng) -> Vec<Faction> {
             let mut r = HashMap::new();
             r.insert(
                 freehold_id,
-                FactionDisposition {
+                CivDisposition {
                     diplomatic: -0.2,
                     economic: 0.3,
                     military: -0.1,
@@ -95,16 +95,17 @@ fn generate_factions(rng: &mut StdRng) -> Vec<Faction> {
         internal_dynamics: InternalDynamics {
             stability: 0.6,
             pressures: vec![
-                "Outer colony autonomy movements gaining support".into(),
-                "Military faction pushing for Freehold containment".into(),
+                CivPressure { description: "Outer colony autonomy movements gaining support".into(), source_faction: None },
+                CivPressure { description: "Military faction pushing for Freehold containment".into(), source_faction: None },
             ],
         },
+        faction_ids: vec![],
     };
 
-    let freehold = Faction {
+    let freehold = Civilization {
         id: freehold_id,
         name: "The Freehold Compact".into(),
-        ethos: FactionEthos {
+        ethos: CivEthos {
             expansionist: 0.3,
             isolationist: 0.5,
             militaristic: 0.3,
@@ -114,7 +115,7 @@ fn generate_factions(rng: &mut StdRng) -> Vec<Faction> {
             technocratic: 0.4,
             communal: 0.7,
         },
-        capabilities: FactionCapabilities {
+        capabilities: CivCapabilities {
             size: 0.4,
             wealth: 0.6,
             technology: 0.5,
@@ -124,7 +125,7 @@ fn generate_factions(rng: &mut StdRng) -> Vec<Faction> {
             let mut r = HashMap::new();
             r.insert(
                 hegemony_id,
-                FactionDisposition {
+                CivDisposition {
                     diplomatic: -0.2,
                     economic: 0.3,
                     military: -0.1,
@@ -135,9 +136,10 @@ fn generate_factions(rng: &mut StdRng) -> Vec<Faction> {
         internal_dynamics: InternalDynamics {
             stability: 0.7,
             pressures: vec![
-                "Debate over accepting Hegemony trade terms".into(),
+                CivPressure { description: "Debate over accepting Hegemony trade terms".into(), source_faction: None },
             ],
         },
+        faction_ids: vec![],
     };
 
     // Shuffle order so faction generation isn't always deterministic by position.
@@ -148,10 +150,10 @@ fn generate_factions(rng: &mut StdRng) -> Vec<Faction> {
     }
 }
 
-fn generate_systems(rng: &mut StdRng, factions: &[Faction]) -> Vec<StarSystem> {
-    // Find faction IDs by name (order may be shuffled).
-    let hegemony_id = factions.iter().find(|f| f.name == "Terran Hegemony").unwrap().id;
-    let freehold_id = factions.iter().find(|f| f.name == "The Freehold Compact").unwrap().id;
+fn generate_systems(rng: &mut StdRng, civs: &[Civilization]) -> Vec<StarSystem> {
+    // Find civ IDs by name (order may be shuffled).
+    let hegemony_id = civs.iter().find(|f| f.name == "Terran Hegemony").unwrap().id;
+    let freehold_id = civs.iter().find(|f| f.name == "The Freehold Compact").unwrap().id;
 
     let star_types = [
         StarType::YellowDwarf,
@@ -181,8 +183,8 @@ fn generate_systems(rng: &mut StdRng, factions: &[Faction]) -> Vec<StarSystem> {
         (25.0, 7.0),   // Lament — edge of known space
     ];
 
-    // Faction assignments: some Hegemony, some Freehold, some unclaimed.
-    let faction_assignments: [Option<usize>; 10] = [
+    // Civ assignments: some Hegemony, some Freehold, some unclaimed.
+    let civ_assignments: [Option<usize>; 10] = [
         Some(0), // Meridian → Hegemony
         None,    // Cygnus Gate → contested
         Some(0), // Voss → Hegemony
@@ -195,7 +197,7 @@ fn generate_systems(rng: &mut StdRng, factions: &[Faction]) -> Vec<StarSystem> {
         None,    // Lament → unclaimed
     ];
 
-    let faction_ids = [hegemony_id, freehold_id];
+    let civ_ids = [hegemony_id, freehold_id];
 
     let infrastructure_levels = [
         InfrastructureLevel::Capital,
@@ -246,7 +248,7 @@ fn generate_systems(rng: &mut StdRng, factions: &[Faction]) -> Vec<StarSystem> {
             base_positions[i].1 + jitter_y,
         );
 
-        let controlling_faction = faction_assignments[i].map(|idx| faction_ids[idx]);
+        let controlling_civ = civ_assignments[i].map(|idx| civ_ids[idx]);
 
         let planets = generate_planets(SYSTEM_NAMES[i], star_types[i], rng);
 
@@ -265,11 +267,12 @@ fn generate_systems(rng: &mut StdRng, factions: &[Faction]) -> Vec<StarSystem> {
             position: pos,
             star_type: star_types[i],
             planetary_bodies: planets,
-            controlling_faction,
+            controlling_civ,
             infrastructure_level: infrastructure_levels[i],
             history,
             active_threads: vec![],
             time_factor: time_factors[i],
+            faction_presence: vec![],
         });
     }
 
@@ -415,7 +418,7 @@ mod tests {
         let g2 = generate_galaxy(42);
 
         assert_eq!(g1.systems.len(), 10);
-        assert_eq!(g1.factions.len(), 2);
+        assert_eq!(g1.civilizations.len(), 2);
         assert_eq!(g1.systems.len(), g2.systems.len());
 
         // Same seed → same system names in same order.
@@ -436,19 +439,19 @@ mod tests {
     }
 
     #[test]
-    fn faction_assignments_are_sensible() {
+    fn civ_assignments_are_sensible() {
         let galaxy = generate_galaxy(42);
-        let hegemony = galaxy.factions.iter().find(|f| f.name == "Terran Hegemony").unwrap();
-        let freehold = galaxy.factions.iter().find(|f| f.name == "The Freehold Compact").unwrap();
+        let hegemony = galaxy.civilizations.iter().find(|f| f.name == "Terran Hegemony").unwrap();
+        let freehold = galaxy.civilizations.iter().find(|f| f.name == "The Freehold Compact").unwrap();
 
         let hegemony_systems: Vec<_> = galaxy.systems.iter()
-            .filter(|s| s.controlling_faction == Some(hegemony.id))
+            .filter(|s| s.controlling_civ == Some(hegemony.id))
             .collect();
         let freehold_systems: Vec<_> = galaxy.systems.iter()
-            .filter(|s| s.controlling_faction == Some(freehold.id))
+            .filter(|s| s.controlling_civ == Some(freehold.id))
             .collect();
         let unclaimed: Vec<_> = galaxy.systems.iter()
-            .filter(|s| s.controlling_faction.is_none())
+            .filter(|s| s.controlling_civ.is_none())
             .collect();
 
         assert_eq!(hegemony_systems.len(), 2, "Hegemony should control 2 systems");

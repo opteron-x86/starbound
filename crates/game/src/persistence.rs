@@ -61,7 +61,7 @@ impl SaveFile {
                 pos_x               REAL NOT NULL,
                 pos_y               REAL NOT NULL,
                 star_type           TEXT NOT NULL,
-                controlling_faction TEXT,
+                controlling_civ TEXT,
                 infrastructure      TEXT NOT NULL,
                 data_json           TEXT NOT NULL
             );
@@ -86,8 +86,8 @@ impl SaveFile {
                 data_json   TEXT NOT NULL
             );
 
-            CREATE INDEX IF NOT EXISTS idx_systems_faction
-                ON star_systems(controlling_faction);
+            CREATE INDEX IF NOT EXISTS idx_systems_civ
+                ON star_systems(controlling_civ);
             CREATE INDEX IF NOT EXISTS idx_systems_sector
                 ON star_systems(sector_id);
             ",
@@ -109,12 +109,12 @@ impl SaveFile {
 
     pub fn save_system(&self, system: &StarSystem, sector_id: Option<Uuid>) -> SqlResult<()> {
         let json = serde_json::to_string(system).expect("StarSystem serialization");
-        let faction_str = system.controlling_faction.map(|id| id.to_string());
+        let civ_str = system.controlling_civ.map(|id| id.to_string());
         let sector_str = sector_id.map(|id| id.to_string());
         self.conn.execute(
             "INSERT OR REPLACE INTO star_systems
                 (id, name, sector_id, pos_x, pos_y, star_type,
-                 controlling_faction, infrastructure, data_json)
+                 controlling_civ, infrastructure, data_json)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 system.id.to_string(),
@@ -123,7 +123,7 @@ impl SaveFile {
                 system.position.0,
                 system.position.1,
                 system.star_type.to_string(),
-                faction_str,
+                civ_str,
                 system.infrastructure_level.to_string(),
                 json,
             ],
@@ -131,11 +131,11 @@ impl SaveFile {
         Ok(())
     }
 
-    pub fn save_faction(&self, faction: &Faction) -> SqlResult<()> {
-        let json = serde_json::to_string(faction).expect("Faction serialization");
+    pub fn save_civilization(&self, civ: &Civilization) -> SqlResult<()> {
+        let json = serde_json::to_string(civ).expect("Civilization serialization");
         self.conn.execute(
             "INSERT OR REPLACE INTO factions (id, name, data_json) VALUES (?1, ?2, ?3)",
-            params![faction.id.to_string(), faction.name, json],
+            params![civ.id.to_string(), civ.name, json],
         )?;
         Ok(())
     }
@@ -188,15 +188,15 @@ impl SaveFile {
         }
     }
 
-    pub fn load_all_factions(&self) -> SqlResult<Vec<Faction>> {
+    pub fn load_all_civilizations(&self) -> SqlResult<Vec<Civilization>> {
         let mut stmt = self.conn.prepare("SELECT data_json FROM factions")?;
-        let factions = stmt
+        let civs = stmt
             .query_map([], |row| {
                 let json: String = row.get(0)?;
-                Ok(serde_json::from_str(&json).expect("Faction deserialization"))
+                Ok(serde_json::from_str(&json).expect("Civilization deserialization"))
             })?
             .collect::<SqlResult<Vec<_>>>()?;
-        Ok(factions)
+        Ok(civs)
     }
 
     pub fn load_all_connections(&self) -> SqlResult<Vec<starbound_core::galaxy::Connection>> {
@@ -286,14 +286,14 @@ impl SaveFile {
         &self,
         sector: &Sector,
         systems: &[StarSystem],
-        factions: &[Faction],
+        civilizations: &[Civilization],
         connections: &[starbound_core::galaxy::Connection],
     ) -> SqlResult<()> {
         self.conn.execute_batch("BEGIN")?;
 
         self.save_sector(sector)?;
-        for faction in factions {
-            self.save_faction(faction)?;
+        for civ in civilizations {
+            self.save_civilization(civ)?;
         }
         for system in systems {
             self.save_system(system, Some(sector.id))?;
@@ -329,19 +329,19 @@ mod tests {
         save.save_galaxy(
             &galaxy.sector,
             &galaxy.systems,
-            &galaxy.factions,
+            &galaxy.civilizations,
             &galaxy.connections,
         )
         .expect("save galaxy");
 
         // Load everything back.
         let systems = save.load_all_systems().expect("load systems");
-        let factions = save.load_all_factions().expect("load factions");
+        let civs = save.load_all_civilizations().expect("load civilizations");
         let connections = save.load_all_connections().expect("load connections");
         let sectors = save.load_all_sectors().expect("load sectors");
 
         assert_eq!(systems.len(), 10);
-        assert_eq!(factions.len(), 2);
+        assert_eq!(civs.len(), 2);
         assert_eq!(connections.len(), galaxy.connections.len());
         assert_eq!(sectors.len(), 1);
         assert_eq!(sectors[0].name, "The Near Reach");
@@ -349,7 +349,7 @@ mod tests {
         // Verify a specific system round-trips correctly.
         let meridian = systems.iter().find(|s| s.name == "Meridian").expect("Meridian exists");
         assert_eq!(meridian.star_type, StarType::YellowDwarf);
-        assert!(meridian.controlling_faction.is_some());
+        assert!(meridian.controlling_civ.is_some());
 
         // Verify connections for a specific system.
         let meridian_conns = save.load_connections_for(meridian.id).expect("load connections");
@@ -374,7 +374,7 @@ mod tests {
         save.save_galaxy(
             &galaxy.sector,
             &galaxy.systems,
-            &galaxy.factions,
+            &galaxy.civilizations,
             &galaxy.connections,
         )
         .expect("save galaxy");
@@ -429,6 +429,7 @@ mod tests {
             }],
             threads: vec![],
             event_log: vec![],
+            civ_standings: HashMap::new(),
         };
 
         save.save_journey(&journey).expect("save journey");
@@ -453,7 +454,7 @@ mod tests {
             save.save_galaxy(
                 &galaxy.sector,
                 &galaxy.systems,
-                &galaxy.factions,
+                &galaxy.civilizations,
                 &galaxy.connections,
             )
             .expect("save");

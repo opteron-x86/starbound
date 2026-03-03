@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::crew::CrewMember;
+use crate::galaxy::CivStanding;
 use crate::mission::MissionState;
 use crate::narrative::{GameEvent, Thread};
 use crate::ship::Ship;
@@ -26,4 +29,7 @@ pub struct Journey {
     pub threads: Vec<Thread>,
     /// The event log — what has happened, in order.
     pub event_log: Vec<GameEvent>,
+    /// Player's standing with each civilization, keyed by civ ID.
+    /// Initialized when the player first enters a civ's territory.
+    pub civ_standings: HashMap<Uuid, CivStanding>,
 }
