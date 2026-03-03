@@ -1,0 +1,505 @@
+[
+  {
+    "id": "arrival_quiet_station",
+    "encounter_type": "contextual",
+    "tone": "melancholy",
+    "context_requirements": {
+      "infrastructure_min": "outpost",
+      "time_since_last_visit_galactic_years_min": 20.0
+    },
+    "text": "The docking clamps engage with a sound you almost remember. The station looks the same from outside — same silhouette against the starfield, same running lights cycling through their pattern. But the frequency is different. Someone changed the timing.\n\nInside, the corridors have been repainted. The old murals are gone, covered by something cleaner and less interesting. A directory board lists businesses you don't recognize. The air recyclers have a different smell — not unpleasant, just not the one you knew.\n\nA maintenance worker glances at your ship registry, then at you, then back at the registry. She doesn't say anything. She just nods, slowly, and goes back to her work.\n\nYou're listed in the station's historical records, probably. A name from before she was born.",
+    "choices": [
+      {
+        "label": "Ask about the old businesses",
+        "mechanical_effect": "gather_local_history",
+        "tone_note": "Nostalgia. The player is reaching for something that isn't there."
+      },
+      {
+        "label": "Head to the trade board",
+        "mechanical_effect": "open_trade",
+        "tone_note": "Pragmatic. Moving forward."
+      },
+      {
+        "label": "Find the historical records",
+        "mechanical_effect": "search_records",
+        "tone_note": "Looking for evidence you were here. That it mattered."
+      },
+      {
+        "label": "Return to the ship",
+        "mechanical_effect": "depart",
+        "tone_note": "Some places you can't go back to."
+      }
+    ]
+  },
+  {
+    "id": "distress_signal",
+    "encounter_type": "novel",
+    "tone": "tense",
+    "context_requirements": {},
+    "text": "Your comms officer adjusts her console twice before saying anything.\n\n\"Signal. Automated distress beacon, standard Hegemony format. But the encoding is... old. This protocol was deprecated decades ago.\"\n\nThe signal resolves into coordinates — a point in the outer system, near the gas giant's third moon. No ship appears on sensors. Just the signal, repeating patiently in a language nobody uses anymore.\n\nIt could be a ship that's been drifting since before you left your last port. It could be a lure. It could be someone who's been waiting a very long time for help that was never coming.",
+    "choices": [
+      {
+        "label": "Investigate the coordinates",
+        "mechanical_effect": "investigate_signal",
+        "tone_note": "Committing. Whatever it is, you'll know."
+      },
+      {
+        "label": "Scan from here first",
+        "mechanical_effect": "long_range_scan",
+        "tone_note": "Cautious. Information before commitment."
+      },
+      {
+        "label": "Log it and move on",
+        "mechanical_effect": "log_and_ignore",
+        "tone_note": "You can't save everyone. You learned that a long time ago."
+      }
+    ]
+  },
+  {
+    "id": "trader_at_dock",
+    "encounter_type": "mundane",
+    "tone": "mundane",
+    "context_requirements": {
+      "infrastructure_min": "colony"
+    },
+    "text": "A freighter captain catches you at the docking bay airlock. She's got the look of someone who's been waiting for any ship to pull in — tired, caffeinated, leaning against a cargo loader like it's the only thing keeping her upright.\n\n\"You heading rimward? I've got medical supplies that were supposed to go to Thornfield three months ago. Contractor fell through. I can't make the run myself — engine coil's shot. Pay's decent. Nothing fancy, just getting boxes from here to there.\"\n\nShe slides a manifest across. Standard pharmaceuticals, sealed crates. The kind of cargo that's straightforward until it isn't.",
+    "choices": [
+      {
+        "label": "Accept the job",
+        "mechanical_effect": "accept_cargo_mission",
+        "tone_note": "Honest work. Straightforward. Probably."
+      },
+      {
+        "label": "Ask why the contractor fell through",
+        "mechanical_effect": "investigate_cargo",
+        "tone_note": "Trust but verify."
+      },
+      {
+        "label": "Decline politely",
+        "mechanical_effect": "decline",
+        "tone_note": "Not your problem."
+      }
+    ]
+  },
+  {
+    "id": "empty_system_arrival",
+    "encounter_type": "contextual",
+    "tone": "quiet",
+    "context_requirements": {
+      "infrastructure_max": "none"
+    },
+    "text": "Nothing.\n\nA red dwarf and its handful of frozen worlds. No signals. No stations. No evidence that anything with a pulse has ever been here. Your sensors sweep the system and come back with data that amounts to a shrug.\n\nYour navigator marks the system as surveyed and adds it to the charts. Another dot on a map that's mostly empty space. The star looks old and tired and very far from anything that matters.\n\nThe ship hums around you. The crew goes about their routines. Outside the viewport, the galaxy continues not to notice you.",
+    "choices": [
+      {
+        "label": "Run a detailed survey anyway",
+        "mechanical_effect": "detailed_scan",
+        "tone_note": "Thoroughness for its own sake. Or maybe hoping to find something."
+      },
+      {
+        "label": "Sit with the quiet for a while",
+        "mechanical_effect": "rest",
+        "tone_note": "Sometimes the emptiness is the point."
+      },
+      {
+        "label": "Plot the next jump",
+        "mechanical_effect": "open_navigation",
+        "tone_note": "Keep moving. Standing still in the void gets uncomfortable."
+      }
+    ]
+  },
+  {
+    "id": "fuel_merchant_desperate",
+    "encounter_type": "contextual",
+    "tone": "tense",
+    "context_requirements": {
+      "infrastructure_min": "outpost",
+      "fuel_below_fraction": 0.3
+    },
+    "text": "The fuel depot is operational but the prices on the board make your quartermaster wince audibly.\n\n\"Supply chain issues,\" the depot manager says, not looking up from his console. \"The Hegemony rerouted the tanker convoys six months ago. Something about security concerns. So now we get fuel when we get fuel, and we charge what the market will bear.\"\n\nHe looks at your ship's registration. Looks at your fuel gauge readout on his screen.\n\n\"Looks like the market will bear quite a lot, in your case.\"",
+    "choices": [
+      {
+        "label": "Pay the inflated price",
+        "mechanical_effect": "buy_fuel_expensive",
+        "tone_note": "You don't have a choice and you both know it."
+      },
+      {
+        "label": "Negotiate",
+        "mechanical_effect": "negotiate_fuel",
+        "tone_note": "Worth trying. Dignity costs nothing."
+      },
+      {
+        "label": "Ask about alternative fuel sources",
+        "mechanical_effect": "seek_alternatives",
+        "tone_note": "There's always another way. Usually a worse one."
+      },
+      {
+        "label": "Buy only what you need to reach the next system",
+        "mechanical_effect": "buy_fuel_minimum",
+        "tone_note": "Calculated risk. Hope the next port is cheaper."
+      }
+    ]
+  },
+  {
+    "id": "ancient_structure",
+    "encounter_type": "novel",
+    "tone": "wonder",
+    "context_requirements": {
+      "infrastructure_max": "outpost",
+      "tags": ["ancient"]
+    },
+    "text": "It doesn't show up on sensors until you're almost on top of it.\n\nA structure, orbiting the outermost planet at a distance that shouldn't be stable. No power readings. No heat signature. But it's there — angular, enormous, made of something your sensors can't identify. The material doesn't reflect light the way anything should. It's like looking at a hole in the shape of architecture.\n\nYour science officer pulls up comparative databases and comes back with nothing. No known civilization has built with this material. No record of this structure in any survey.\n\nIt's been here longer than anyone has been looking.\n\nThe crew is quiet. Everyone finds a reason to be near a viewport.",
+    "choices": [
+      {
+        "label": "Approach and attempt to dock",
+        "mechanical_effect": "dock_ancient",
+        "tone_note": "Awe overriding caution. This is why you're out here."
+      },
+      {
+        "label": "Send a probe first",
+        "mechanical_effect": "probe_ancient",
+        "tone_note": "Fascination with restraint."
+      },
+      {
+        "label": "Record everything and keep your distance",
+        "mechanical_effect": "observe_ancient",
+        "tone_note": "Some things you document. Some things you don't touch."
+      },
+      {
+        "label": "Leave immediately",
+        "mechanical_effect": "flee",
+        "tone_note": "Fear. The smart kind."
+      }
+    ]
+  },
+  {
+    "id": "faction_checkpoint",
+    "encounter_type": "contextual",
+    "tone": "tense",
+    "context_requirements": {
+      "faction_controlled": true,
+      "infrastructure_min": "colony"
+    },
+    "text": "Two patrol ships slide into formation around you before your comms officer can even open a channel.\n\n\"Vessel, you are entering controlled space. Transmit registration, cargo manifest, and crew roster. Do not deviate from your current heading.\"\n\nThe voice is professional but flat — someone who says this sentence forty times a shift. Your ship's registration is valid, probably. Your cargo is legal, mostly. Your crew roster is accurate, as far as anyone knows.\n\nThe patrol ships match your speed exactly. Patient. Unhurried. They have nowhere else to be.",
+    "choices": [
+      {
+        "label": "Comply fully — transmit everything",
+        "mechanical_effect": "comply_checkpoint",
+        "tone_note": "Nothing to hide. Or at least nothing they'll find."
+      },
+      {
+        "label": "Comply but ask questions",
+        "mechanical_effect": "comply_and_probe",
+        "tone_note": "Cooperative but not submissive."
+      },
+      {
+        "label": "Transmit registration only — cite independent vessel rights",
+        "mechanical_effect": "partial_comply",
+        "tone_note": "Principled. Possibly stupid."
+      }
+    ]
+  },
+  {
+    "id": "derelict_encounter",
+    "encounter_type": "novel",
+    "tone": "melancholy",
+    "context_requirements": {},
+    "text": "The ship is dead. No power, no atmosphere, turning slowly end over end in a decaying orbit. Your sensors read the hull markings — a freighter, civilian registration, last port of call unknown.\n\nThe damage isn't weapons fire. It's neglect. Systems failed one by one over what looks like months. The logs, if any survived, might tell the story. Or they might just be a list of things that stopped working, ending mid-sentence.\n\nSomeone lived here once. Flew this ship, ate meals in that galley, slept in those quarters. Chose a heading and opened the throttle and believed they were going somewhere that mattered.\n\nYour engineer says it might have salvageable parts. Your navigator says nothing.",
+    "choices": [
+      {
+        "label": "Board and search for survivors or logs",
+        "mechanical_effect": "board_derelict",
+        "tone_note": "Obligation. Or curiosity wearing the mask of obligation."
+      },
+      {
+        "label": "Salvage what you can",
+        "mechanical_effect": "salvage_derelict",
+        "tone_note": "Practical. The dead don't need engine parts."
+      },
+      {
+        "label": "Log the position and leave it",
+        "mechanical_effect": "log_and_ignore",
+        "tone_note": "A grave marker in coordinates."
+      }
+    ]
+  },
+  {
+    "id": "trade_hub_bustle",
+    "encounter_type": "mundane",
+    "tone": "mundane",
+    "context_requirements": {
+      "infrastructure_min": "hub"
+    },
+    "text": "The station is alive with traffic. Cargo haulers queue for docking clearance. Merchants argue prices in three languages over open channels. A food vendor has set up a stall in the docking bay concourse, and the smell of something fried and heavily spiced cuts through the recycled air.\n\nYour quartermaster is already compiling a shopping list. Your engineer is scanning the parts vendors. Someone on the crew — you're not sure who — has already left the ship.\n\nFor a few hours, the universe feels small and human and manageable. There are prices and schedules and people complaining about the docking fees. It's almost like being somewhere normal.",
+    "choices": [
+      {
+        "label": "Resupply and trade",
+        "mechanical_effect": "open_trade",
+        "tone_note": "The mundane business of staying alive."
+      },
+      {
+        "label": "Look for work on the job boards",
+        "mechanical_effect": "check_jobs",
+        "tone_note": "Credits make the galaxy go around."
+      },
+      {
+        "label": "Let the crew have shore leave",
+        "mechanical_effect": "shore_leave",
+        "tone_note": "They need it. You might too."
+      },
+      {
+        "label": "Ask around for news and rumors",
+        "mechanical_effect": "gather_intel",
+        "tone_note": "What's changed while you were in transit?"
+      }
+    ]
+  },
+  {
+    "id": "crew_quiet_moment",
+    "encounter_type": "crew_dynamic",
+    "tone": "quiet",
+    "context_requirements": {
+      "crew_min": 2
+    },
+    "text": "You find two of your crew in the observation lounge during the night watch. They've turned the lights down and are sitting in the glow of the starfield. One of them has a cup of something that stopped being hot a while ago. The other is just looking out.\n\nThey don't stop talking when you enter, which means either they trust you or they've stopped caring about rank. One of them is telling a story about a place they used to live. Details you haven't heard before — a street, a neighbor, the sound rain made on a particular roof.\n\nThe story doesn't have an ending. It just trails off into the hum of the ship.",
+    "choices": [
+      {
+        "label": "Sit down and listen",
+        "mechanical_effect": "crew_bond",
+        "tone_note": "Being present. Not as the captain, just as someone who's here."
+      },
+      {
+        "label": "Share something of your own",
+        "mechanical_effect": "captain_opens_up",
+        "tone_note": "Vulnerability. Rare from the person who makes the decisions."
+      },
+      {
+        "label": "Leave them to it",
+        "mechanical_effect": "pass",
+        "tone_note": "Some moments aren't for you."
+      }
+    ]
+  },
+  {
+    "id": "damaged_and_limping",
+    "encounter_type": "contextual",
+    "tone": "urgent",
+    "context_requirements": {
+      "hull_below": 0.5
+    },
+    "text": "The damage report is getting longer.\n\nYour engineer reads it out in a flat voice that means things are bad enough to skip the sugar-coating. Hull breach in section four, sealed but not repaired. Port sensor array offline. Water recycler running at sixty percent. Life support is fine for now, which is the kind of reassurance that only matters because someone felt the need to say it.\n\n\"We can keep flying,\" she says. \"I wouldn't recommend keeping flying.\"\n\nThe nearest station is on the charts. Whether it still exists is a different question. Whether it has the parts you need is another one after that.",
+    "choices": [
+      {
+        "label": "Head for the nearest station",
+        "mechanical_effect": "navigate_to_repairs",
+        "tone_note": "Survival instinct. Get somewhere with walls that hold."
+      },
+      {
+        "label": "Attempt field repairs with what we have",
+        "mechanical_effect": "field_repair",
+        "tone_note": "Making do. It's what you're good at."
+      },
+      {
+        "label": "Press on — we'll deal with it later",
+        "mechanical_effect": "ignore_damage",
+        "tone_note": "Stubbornness. Or maybe the destination matters more than the ship."
+      }
+    ]
+  },
+  {
+    "id": "star_observation",
+    "encounter_type": "contextual",
+    "tone": "quiet",
+    "context_requirements": {},
+    "text": "Between jumps, with nothing demanding your attention, you find yourself on the observation deck.\n\nThe star you're orbiting is unremarkable. A main sequence yellow, not unlike the one that warmed whatever world you came from. The light takes eight minutes to reach the inner planets and then keeps going forever, carrying information about this moment to places that won't receive it for millennia.\n\nYou're in that light now. A tiny perturbation in the data. If someone with a powerful enough telescope pointed it here in a thousand years, they might detect the faintest wobble — evidence that something was here. That something passed through.\n\nYour navigator pings you about the next heading. The moment dissolves.",
+    "choices": [
+      {
+        "label": "Take a moment longer",
+        "mechanical_effect": "rest",
+        "tone_note": "The rare luxury of having nowhere urgent to be."
+      },
+      {
+        "label": "Make a log entry about the view",
+        "mechanical_effect": "write_log",
+        "tone_note": "Preserving something that doesn't need preserving."
+      },
+      {
+        "label": "Head to the bridge",
+        "mechanical_effect": "open_navigation",
+        "tone_note": "Back to work. Stars don't pay the fuel bills."
+      }
+    ]
+  },
+  {
+    "id": "smuggler_proposition",
+    "encounter_type": "novel",
+    "tone": "tense",
+    "context_requirements": {
+      "infrastructure_min": "outpost"
+    },
+    "text": "He finds you in the kind of bar that exists in every station — bad lighting, cheap drinks, nobody asking questions. He sits down without being invited and doesn't order anything.\n\n\"Your ship. It's fast enough and it's not flagged. I have cargo that needs to cross the border. Not weapons, not narcotics — I'm not stupid. Data cores. Research data. Proprietary stuff that belongs to people who'd rather it didn't leave their jurisdiction.\"\n\nHe slides a number across the table. It's a lot of money. Enough to keep you fueled for months.\n\n\"The people I'm taking this from won't miss it for weeks. The people I'm delivering it to will make sure it never gets traced back. Clean transaction. Everybody wins.\"\n\nNobody ever says 'everybody wins' when everybody actually wins.",
+    "choices": [
+      {
+        "label": "Hear him out fully before deciding",
+        "mechanical_effect": "investigate_smuggler",
+        "tone_note": "Information costs nothing. Commitment costs everything."
+      },
+      {
+        "label": "Accept the job",
+        "mechanical_effect": "accept_smuggling",
+        "tone_note": "The money is real. The risk is abstract. For now."
+      },
+      {
+        "label": "Decline",
+        "mechanical_effect": "decline",
+        "tone_note": "Principles. Or maybe just caution."
+      },
+      {
+        "label": "Walk away without a word",
+        "mechanical_effect": "depart",
+        "tone_note": "Not even worth a conversation."
+      }
+    ]
+  },
+  {
+    "id": "abandoned_colony",
+    "encounter_type": "contextual",
+    "tone": "melancholy",
+    "context_requirements": {
+      "infrastructure_min": "outpost",
+      "infrastructure_max": "colony"
+    },
+    "text": "The colony is there on sensors — structures, power grid, atmospheric processors — but nobody answers the hail.\n\nFrom orbit, the settlement looks intact. Buildings standing, roads visible, landing pad clear. But there are no lights. No heat signatures. No electromagnetic noise of a living community — no broadcasts, no chatter, no machines running their daily cycles.\n\nThe atmospheric processors are still working, slowly, on automatic. They'll keep going for years without maintenance. The air will be breathable for anyone who arrives. But nobody is arriving and nobody is breathing it.\n\nThe colony logs, if they still exist down there, might explain where everyone went. Or they might just stop, mid-entry, on an ordinary day.",
+    "choices": [
+      {
+        "label": "Land and investigate",
+        "mechanical_effect": "explore_colony",
+        "tone_note": "Walking through someone else's abandoned life."
+      },
+      {
+        "label": "Scan for survivors from orbit",
+        "mechanical_effect": "orbital_scan",
+        "tone_note": "Hope tempered by distance."
+      },
+      {
+        "label": "Mark it on the charts and move on",
+        "mechanical_effect": "log_and_ignore",
+        "tone_note": "You can't help the absent. But you can note they were here."
+      }
+    ]
+  },
+  {
+    "id": "strange_signal_deep",
+    "encounter_type": "novel",
+    "tone": "wonder",
+    "context_requirements": {
+      "infrastructure_max": "outpost"
+    },
+    "text": "It's not a distress call and it's not a beacon. Your comms officer can't classify it because it doesn't fit any classification.\n\nThe signal is mathematical — that much is clear. Repeating sequences with internal structure, prime number intervals, nested patterns that resolve and then complicate. It's coming from deep in the outer system, past the last planetary orbit, from a point in space where nothing should be.\n\n\"It's not random,\" your science officer says, unnecessarily. \"And it's not any encoding I recognize.\"\n\nThe signal has been broadcasting for a while. Your sensors can estimate power output, and at this level, whatever is generating it has been running for a long time. Centuries, minimum.\n\nPatient. Unhurried. Waiting for someone to listen.",
+    "choices": [
+      {
+        "label": "Follow the signal to its source",
+        "mechanical_effect": "investigate_signal",
+        "tone_note": "This is the kind of thing you crossed light-years to find."
+      },
+      {
+        "label": "Record and analyze from here",
+        "mechanical_effect": "analyze_signal",
+        "tone_note": "Understanding before approaching."
+      },
+      {
+        "label": "Transmit a response",
+        "mechanical_effect": "respond_signal",
+        "tone_note": "Bold. Possibly reckless. Undeniably human."
+      },
+      {
+        "label": "Note the coordinates and continue",
+        "mechanical_effect": "log_and_ignore",
+        "tone_note": "Not everything that calls to you needs answering. Not today."
+      }
+    ]
+  },
+  {
+    "id": "refueling_stop",
+    "encounter_type": "mundane",
+    "tone": "mundane",
+    "context_requirements": {
+      "infrastructure_min": "outpost"
+    },
+    "text": "The refueling station is exactly what it looks like: a few tanks, a docking arm, and someone who sells fuel. No bar, no trade board, no reason to stay longer than it takes to fill the tanks.\n\nThe attendant has the manner of a person who's been alone with machines for too long. She talks to the fuel pumps while she works. She tells your ship it's a good ship. She asks the docking clamps how they're feeling today.\n\nWhen she notices you listening, she shrugs. \"Company's company.\"\n\nThe fuel is reasonably priced. The solitude is free.",
+    "choices": [
+      {
+        "label": "Fuel up and chat for a bit",
+        "mechanical_effect": "buy_fuel_and_talk",
+        "tone_note": "A small kindness in a large void."
+      },
+      {
+        "label": "Just fuel, thanks",
+        "mechanical_effect": "buy_fuel",
+        "tone_note": "Transaction complete. Moving on."
+      },
+      {
+        "label": "Ask if she's heard any news from the sector",
+        "mechanical_effect": "gather_intel",
+        "tone_note": "People in quiet places hear things that busy people miss."
+      }
+    ]
+  },
+  {
+    "id": "pirate_warning",
+    "encounter_type": "contextual",
+    "tone": "tense",
+    "context_requirements": {
+      "unclaimed": true
+    },
+    "text": "A ship drops out of the sensor noise about thirty thousand kilometers off your port side. Small, fast, no transponder. It's not approaching. It's matching your heading at a careful distance.\n\nYour comms officer shakes her head — no hails, no identification, no response to your queries. Just a ship, sitting in your wake, watching.\n\nAnother contact appears on sensors. Same profile. Starboard side.\n\n\"They're not hiding,\" your security officer says. \"They want us to know they're there.\"\n\nA message arrives. Text only, no voice. Three words: DUMP YOUR CARGO.",
+    "choices": [
+      {
+        "label": "Comply — jettison cargo",
+        "mechanical_effect": "jettison_cargo",
+        "tone_note": "Survival over pride. Cargo can be replaced."
+      },
+      {
+        "label": "Ignore the message and hold course",
+        "mechanical_effect": "hold_course",
+        "tone_note": "Calling the bluff. Or forcing the hand."
+      },
+      {
+        "label": "Open a channel — try to negotiate",
+        "mechanical_effect": "negotiate_pirates",
+        "tone_note": "Words before weapons."
+      },
+      {
+        "label": "Run — full burn for the nearest system",
+        "mechanical_effect": "flee",
+        "tone_note": "Discretion. The better part of not dying."
+      }
+    ]
+  },
+  {
+    "id": "colony_generations",
+    "encounter_type": "contextual",
+    "tone": "wonder",
+    "context_requirements": {
+      "infrastructure_min": "colony",
+      "time_since_last_visit_galactic_years_min": 50.0
+    },
+    "text": "The colony has grown.\n\nLast time you were here — your time, months ago; their time, generations — it was a cluster of prefabs and determination. Now there's a city. Not a large city, not by any standard that matters, but a real one. Streets with names. A school. Arguments about zoning.\n\nA delegation meets you at the landing pad. They're formal, a little nervous. You recognize the family resemblance in the lead official — the jaw, the way she stands. Her grandmother stood in this same spot when it was bare soil and hope.\n\nThere's a monument near the landing pad. A plaque with names on it. Founders. You recognize some of them.\n\nThe official follows your gaze. \"We teach about the early days in school,\" she says. \"The children think it's ancient history.\"",
+    "choices": [
+      {
+        "label": "Tell her about the founders you knew",
+        "mechanical_effect": "share_history",
+        "tone_note": "Living memory offered to people who only have records."
+      },
+      {
+        "label": "Ask to see how the colony has changed",
+        "mechanical_effect": "tour_colony",
+        "tone_note": "Seeing what time builds when you're not watching."
+      },
+      {
+        "label": "Conduct your business and move on",
+        "mechanical_effect": "open_trade",
+        "tone_note": "You've learned not to linger in places that moved on without you."
+      }
+    ]
+  }
+]

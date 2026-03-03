@@ -1,0 +1,472 @@
+// file: crates/game/src/persistence.rs
+//! SQLite persistence layer.
+//!
+//! The save game IS a SQLite file. Galaxy state lives in normalized
+//! tables (queryable by the simulation and encounter pipeline).
+//! The journey (player + crew + threads) is stored as a JSON document
+//! — it's complex, changes shape as the game evolves, and is always
+//! loaded in full.
+//!
+//! Design principle: galaxy state is the world's truth, queried often.
+//! Journey state is the player's truth, loaded once per session.
+
+use std::path::Path;
+
+use rusqlite::{params, Connection, Result as SqlResult};
+use uuid::Uuid;
+
+use starbound_core::galaxy::*;
+use starbound_core::journey::Journey;
+
+/// A handle to an open save file.
+pub struct SaveFile {
+    conn: Connection,
+}
+
+impl SaveFile {
+    /// Create a new save file at the given path and initialize the schema.
+    pub fn create(path: &Path) -> SqlResult<Self> {
+        let conn = Connection::open(path)?;
+        let save = Self { conn };
+        save.init_schema()?;
+        Ok(save)
+    }
+
+    /// Open an existing save file.
+    pub fn open(path: &Path) -> SqlResult<Self> {
+        let conn = Connection::open(path)?;
+        Ok(Self { conn })
+    }
+
+    /// Open an in-memory database (for tests).
+    pub fn in_memory() -> SqlResult<Self> {
+        let conn = Connection::open_in_memory()?;
+        let save = Self { conn };
+        save.init_schema()?;
+        Ok(save)
+    }
+
+    fn init_schema(&self) -> SqlResult<()> {
+        self.conn.execute_batch(
+            "
+            CREATE TABLE IF NOT EXISTS sectors (
+                id          TEXT PRIMARY KEY,
+                data_json   TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS star_systems (
+                id                  TEXT PRIMARY KEY,
+                name                TEXT NOT NULL,
+                sector_id           TEXT,
+                pos_x               REAL NOT NULL,
+                pos_y               REAL NOT NULL,
+                star_type           TEXT NOT NULL,
+                controlling_faction TEXT,
+                infrastructure      TEXT NOT NULL,
+                data_json           TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS factions (
+                id          TEXT PRIMARY KEY,
+                name        TEXT NOT NULL,
+                data_json   TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS connections (
+                system_a    TEXT NOT NULL,
+                system_b    TEXT NOT NULL,
+                distance_ly REAL NOT NULL,
+                route_type  TEXT NOT NULL,
+                data_json   TEXT NOT NULL,
+                PRIMARY KEY (system_a, system_b)
+            );
+
+            CREATE TABLE IF NOT EXISTS journey (
+                id          INTEGER PRIMARY KEY CHECK (id = 1),
+                data_json   TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_systems_faction
+                ON star_systems(controlling_faction);
+            CREATE INDEX IF NOT EXISTS idx_systems_sector
+                ON star_systems(sector_id);
+            ",
+        )
+    }
+
+    // -------------------------------------------------------------------
+    // Galaxy writes
+    // -------------------------------------------------------------------
+
+    pub fn save_sector(&self, sector: &Sector) -> SqlResult<()> {
+        let json = serde_json::to_string(sector).expect("Sector serialization");
+        self.conn.execute(
+            "INSERT OR REPLACE INTO sectors (id, data_json) VALUES (?1, ?2)",
+            params![sector.id.to_string(), json],
+        )?;
+        Ok(())
+    }
+
+    pub fn save_system(&self, system: &StarSystem, sector_id: Option<Uuid>) -> SqlResult<()> {
+        let json = serde_json::to_string(system).expect("StarSystem serialization");
+        let faction_str = system.controlling_faction.map(|id| id.to_string());
+        let sector_str = sector_id.map(|id| id.to_string());
+        self.conn.execute(
+            "INSERT OR REPLACE INTO star_systems
+                (id, name, sector_id, pos_x, pos_y, star_type,
+                 controlling_faction, infrastructure, data_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                system.id.to_string(),
+                system.name,
+                sector_str,
+                system.position.0,
+                system.position.1,
+                system.star_type.to_string(),
+                faction_str,
+                system.infrastructure_level.to_string(),
+                json,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn save_faction(&self, faction: &Faction) -> SqlResult<()> {
+        let json = serde_json::to_string(faction).expect("Faction serialization");
+        self.conn.execute(
+            "INSERT OR REPLACE INTO factions (id, name, data_json) VALUES (?1, ?2, ?3)",
+            params![faction.id.to_string(), faction.name, json],
+        )?;
+        Ok(())
+    }
+
+    pub fn save_connection(&self, conn: &starbound_core::galaxy::Connection) -> SqlResult<()> {
+        let json = serde_json::to_string(conn).expect("Connection serialization");
+        // Store with smaller UUID first for consistent ordering.
+        let (a, b) = ordered_pair(conn.system_a, conn.system_b);
+        self.conn.execute(
+            "INSERT OR REPLACE INTO connections
+                (system_a, system_b, distance_ly, route_type, data_json)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                a.to_string(),
+                b.to_string(),
+                conn.distance_ly,
+                conn.route_type.to_string(),
+                json,
+            ],
+        )?;
+        Ok(())
+    }
+
+    // -------------------------------------------------------------------
+    // Galaxy reads
+    // -------------------------------------------------------------------
+
+    pub fn load_all_systems(&self) -> SqlResult<Vec<StarSystem>> {
+        let mut stmt = self.conn.prepare("SELECT data_json FROM star_systems")?;
+        let systems = stmt
+            .query_map([], |row| {
+                let json: String = row.get(0)?;
+                Ok(serde_json::from_str(&json).expect("StarSystem deserialization"))
+            })?
+            .collect::<SqlResult<Vec<_>>>()?;
+        Ok(systems)
+    }
+
+    pub fn load_system(&self, id: Uuid) -> SqlResult<Option<StarSystem>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT data_json FROM star_systems WHERE id = ?1")?;
+        let mut rows = stmt.query_map(params![id.to_string()], |row| {
+            let json: String = row.get(0)?;
+            Ok(serde_json::from_str(&json).expect("StarSystem deserialization"))
+        })?;
+        match rows.next() {
+            Some(row) => Ok(Some(row?)),
+            None => Ok(None),
+        }
+    }
+
+    pub fn load_all_factions(&self) -> SqlResult<Vec<Faction>> {
+        let mut stmt = self.conn.prepare("SELECT data_json FROM factions")?;
+        let factions = stmt
+            .query_map([], |row| {
+                let json: String = row.get(0)?;
+                Ok(serde_json::from_str(&json).expect("Faction deserialization"))
+            })?
+            .collect::<SqlResult<Vec<_>>>()?;
+        Ok(factions)
+    }
+
+    pub fn load_all_connections(&self) -> SqlResult<Vec<starbound_core::galaxy::Connection>> {
+        let mut stmt = self.conn.prepare("SELECT data_json FROM connections")?;
+        let conns = stmt
+            .query_map([], |row| {
+                let json: String = row.get(0)?;
+                Ok(serde_json::from_str(&json).expect("Connection deserialization"))
+            })?
+            .collect::<SqlResult<Vec<_>>>()?;
+        Ok(conns)
+    }
+
+    pub fn load_sector(&self, id: Uuid) -> SqlResult<Option<Sector>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT data_json FROM sectors WHERE id = ?1")?;
+        let mut rows = stmt.query_map(params![id.to_string()], |row| {
+            let json: String = row.get(0)?;
+            Ok(serde_json::from_str(&json).expect("Sector deserialization"))
+        })?;
+        match rows.next() {
+            Some(row) => Ok(Some(row?)),
+            None => Ok(None),
+        }
+    }
+
+    pub fn load_all_sectors(&self) -> SqlResult<Vec<Sector>> {
+        let mut stmt = self.conn.prepare("SELECT data_json FROM sectors")?;
+        let sectors = stmt
+            .query_map([], |row| {
+                let json: String = row.get(0)?;
+                Ok(serde_json::from_str(&json).expect("Sector deserialization"))
+            })?
+            .collect::<SqlResult<Vec<_>>>()?;
+        Ok(sectors)
+    }
+
+    /// Find systems connected to a given system, with distances.
+    pub fn load_connections_for(&self, system_id: Uuid) -> SqlResult<Vec<starbound_core::galaxy::Connection>> {
+        let id_str = system_id.to_string();
+        let mut stmt = self.conn.prepare(
+            "SELECT data_json FROM connections WHERE system_a = ?1 OR system_b = ?1",
+        )?;
+        let conns = stmt
+            .query_map(params![id_str], |row| {
+                let json: String = row.get(0)?;
+                Ok(serde_json::from_str(&json).expect("Connection deserialization"))
+            })?
+            .collect::<SqlResult<Vec<_>>>()?;
+        Ok(conns)
+    }
+
+    // -------------------------------------------------------------------
+    // Journey (player state)
+    // -------------------------------------------------------------------
+
+    pub fn save_journey(&self, journey: &Journey) -> SqlResult<()> {
+        let json = serde_json::to_string(journey).expect("Journey serialization");
+        self.conn.execute(
+            "INSERT OR REPLACE INTO journey (id, data_json) VALUES (1, ?1)",
+            params![json],
+        )?;
+        Ok(())
+    }
+
+    pub fn load_journey(&self) -> SqlResult<Option<Journey>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT data_json FROM journey WHERE id = 1")?;
+        let mut rows = stmt.query_map([], |row| {
+            let json: String = row.get(0)?;
+            Ok(serde_json::from_str(&json).expect("Journey deserialization"))
+        })?;
+        match rows.next() {
+            Some(row) => Ok(Some(row?)),
+            None => Ok(None),
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // Bulk save (convenience for galaxy generation)
+    // -------------------------------------------------------------------
+
+    /// Save an entire generated galaxy in a single transaction.
+    pub fn save_galaxy(
+        &self,
+        sector: &Sector,
+        systems: &[StarSystem],
+        factions: &[Faction],
+        connections: &[starbound_core::galaxy::Connection],
+    ) -> SqlResult<()> {
+        self.conn.execute_batch("BEGIN")?;
+
+        self.save_sector(sector)?;
+        for faction in factions {
+            self.save_faction(faction)?;
+        }
+        for system in systems {
+            self.save_system(system, Some(sector.id))?;
+        }
+        for conn in connections {
+            self.save_connection(conn)?;
+        }
+
+        self.conn.execute_batch("COMMIT")?;
+        Ok(())
+    }
+}
+
+fn ordered_pair(a: Uuid, b: Uuid) -> (Uuid, Uuid) {
+    if a.to_string() <= b.to_string() {
+        (a, b)
+    } else {
+        (b, a)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use starbound_simulation::generate::generate_galaxy;
+
+    #[test]
+    fn round_trip_galaxy_through_sqlite() {
+        let galaxy = generate_galaxy(42);
+        let save = SaveFile::in_memory().expect("create in-memory db");
+
+        // Save everything.
+        save.save_galaxy(
+            &galaxy.sector,
+            &galaxy.systems,
+            &galaxy.factions,
+            &galaxy.connections,
+        )
+        .expect("save galaxy");
+
+        // Load everything back.
+        let systems = save.load_all_systems().expect("load systems");
+        let factions = save.load_all_factions().expect("load factions");
+        let connections = save.load_all_connections().expect("load connections");
+        let sectors = save.load_all_sectors().expect("load sectors");
+
+        assert_eq!(systems.len(), 10);
+        assert_eq!(factions.len(), 2);
+        assert_eq!(connections.len(), galaxy.connections.len());
+        assert_eq!(sectors.len(), 1);
+        assert_eq!(sectors[0].name, "The Near Reach");
+
+        // Verify a specific system round-trips correctly.
+        let meridian = systems.iter().find(|s| s.name == "Meridian").expect("Meridian exists");
+        assert_eq!(meridian.star_type, StarType::YellowDwarf);
+        assert!(meridian.controlling_faction.is_some());
+
+        // Verify connections for a specific system.
+        let meridian_conns = save.load_connections_for(meridian.id).expect("load connections");
+        assert!(!meridian_conns.is_empty(), "Meridian should have connections");
+
+        // Verify individual system load.
+        let loaded = save.load_system(meridian.id).expect("load one").expect("exists");
+        assert_eq!(loaded.name, "Meridian");
+    }
+
+    #[test]
+    fn round_trip_journey_through_sqlite() {
+        use std::collections::HashMap;
+        use starbound_core::crew::*;
+        use starbound_core::mission::*;
+        use starbound_core::ship::*;
+        use starbound_core::time::Timestamp;
+
+        let galaxy = generate_galaxy(42);
+        let save = SaveFile::in_memory().expect("create in-memory db");
+
+        save.save_galaxy(
+            &galaxy.sector,
+            &galaxy.systems,
+            &galaxy.factions,
+            &galaxy.connections,
+        )
+        .expect("save galaxy");
+
+        let start_system = galaxy.systems[0].id;
+
+        let journey = Journey {
+            ship: Ship {
+                name: "The Quiet Reach".into(),
+                hull_condition: 0.9,
+                fuel: 80.0,
+                fuel_capacity: 100.0,
+                cargo: HashMap::new(),
+                cargo_capacity: 50,
+                modules: ShipModules {
+                    engine: Module::standard("Kessler-IV Sublight Drive"),
+                    sensors: Module::standard("Broadband Array"),
+                    comms: Module::standard("Standard Ansible Relay"),
+                    weapons: Module::standard("Point Defense Grid"),
+                    life_support: Module::standard("Closed-Loop Atmospheric"),
+                },
+            },
+            current_system: start_system,
+            time: Timestamp::zero(),
+            resources: 5000.0,
+            mission: MissionState {
+                mission_type: MissionType::Search,
+                core_truth: "The signal is a warning.".into(),
+                knowledge_nodes: vec![],
+            },
+            crew: vec![CrewMember {
+                id: Uuid::new_v4(),
+                name: "Lena Vasquez".into(),
+                role: CrewRole::Navigator,
+                drives: PersonalityDrives {
+                    security: 0.3,
+                    freedom: 0.5,
+                    purpose: 0.7,
+                    connection: 0.6,
+                    knowledge: 0.8,
+                    justice: 0.4,
+                },
+                trust: Trust::starting_crew(),
+                relationships: HashMap::new(),
+                background: "Former cartographer.".into(),
+                state: CrewState {
+                    mood: Mood::Determined,
+                    stress: 0.2,
+                    active_concerns: vec![],
+                },
+                origin: CrewOrigin::Starting,
+            }],
+            threads: vec![],
+            event_log: vec![],
+        };
+
+        save.save_journey(&journey).expect("save journey");
+
+        let loaded = save.load_journey().expect("load").expect("exists");
+        assert_eq!(loaded.ship.name, "The Quiet Reach");
+        assert_eq!(loaded.current_system, start_system);
+        assert_eq!(loaded.crew.len(), 1);
+        assert_eq!(loaded.crew[0].name, "Lena Vasquez");
+    }
+
+    #[test]
+    fn save_file_on_disk() {
+        let galaxy = generate_galaxy(99);
+        let path = std::env::temp_dir().join("starbound_test.db");
+
+        // Clean up from any previous run.
+        let _ = std::fs::remove_file(&path);
+
+        {
+            let save = SaveFile::create(&path).expect("create file");
+            save.save_galaxy(
+                &galaxy.sector,
+                &galaxy.systems,
+                &galaxy.factions,
+                &galaxy.connections,
+            )
+            .expect("save");
+        }
+
+        // Reopen and verify.
+        {
+            let save = SaveFile::open(&path).expect("reopen");
+            let systems = save.load_all_systems().expect("load");
+            assert_eq!(systems.len(), 10);
+        }
+
+        // Clean up.
+        let _ = std::fs::remove_file(&path);
+    }
+}

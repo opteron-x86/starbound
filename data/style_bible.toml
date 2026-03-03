@@ -1,0 +1,35 @@
+# Starbound Style Bible
+# Included in every LLM prompt. Defines the game's voice.
+
+[voice]
+core_feeling = "Awe tinged with loneliness. The feeling between wonder and melancholy."
+tone = "Quiet and restrained. Trust the player to feel things without being told to feel them."
+
+[crew_dialogue]
+principle = "Sounds like actual people."
+examples = [
+    "Trailing off mid-thought.",
+    "Mundane observations that carry weight.",
+    "Important things buried in casual conversation.",
+    "Jokes that aren't very funny.",
+]
+
+[descriptions]
+principle = "Evocative but incomplete. Describe what you perceive, not what things are."
+do = "The structure fills your viewport and you still can't see the edges."
+dont = "The structure is enormous."
+
+[alien_communication]
+principle = "Resists full translation. Partial understanding."
+note = "The most interesting aliens are the ones you almost understand."
+
+[found_text]
+principle = "Fragmentary. You never find the whole story."
+note = "Partial translations are more haunting than complete ones."
+
+[pacing]
+principle = "A slow-burn film you're directing."
+rhythm = "Calm → arrival → accumulation → engagement → consequences → departure → exhale"
+
+[test_question]
+question = "When a player lies in bed after playing, are they thinking about loot and levels, or about their navigator's face when she realized the colony was gone?"

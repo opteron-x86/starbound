@@ -1,0 +1,12 @@
+[package]
+name = "starbound-simulation"
+version = "0.1.0"
+edition = "2021"
+description = "Galaxy simulation — time mechanics, faction behavior, world state"
+
+[dependencies]
+starbound-core = { path = "../core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+rand = { workspace = true }

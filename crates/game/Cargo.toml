@@ -1,0 +1,16 @@
+# file: crates/game/Cargo.toml
+[package]
+name = "starbound-game"
+version = "0.1.0"
+edition = "2021"
+description = "Game orchestration — main loop, state management, save/load"
+
+[dependencies]
+starbound-core = { path = "../core" }
+starbound-simulation = { path = "../simulation" }
+starbound-encounters = { path = "../encounters" }
+starbound-llm = { path = "../llm" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+rusqlite = { workspace = true }

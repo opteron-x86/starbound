@@ -1,0 +1,12 @@
+[package]
+name = "starbound-encounters"
+version = "0.1.0"
+edition = "2021"
+description = "Encounter pipeline — context filtering, thread weaving, seed library"
+
+[dependencies]
+starbound-core = { path = "../core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+rand = { workspace = true }

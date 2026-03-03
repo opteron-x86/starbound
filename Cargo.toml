@@ -1,0 +1,20 @@
+# file: Cargo.toml
+[workspace]
+members = [
+    "crates/core",
+    "crates/simulation",
+    "crates/encounters",
+    "crates/llm",
+    "crates/game",
+    "crates/cli",
+]
+resolver = "2"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "=1.7.0", features = ["v4", "serde"] }
+getrandom = "=0.2.15"
+strum = { version = "0.26", features = ["derive"] }
+rand = "0.8"
+rusqlite = { version = "0.31", features = ["bundled"] }
