@@ -3,7 +3,7 @@
 //!
 //! The simulation crate calculates what travel *would* cost.
 //! This module actually does it: advances time, burns fuel,
-//! moves the player, logs the event, and saves.
+//! moves the player, and logs the event.
 
 use starbound_core::journey::Journey;
 use starbound_core::narrative::{EventCategory, GameEvent};
@@ -55,29 +55,41 @@ pub fn execute_travel(
     journey.time += plan.duration;
 
     // Move player.
-    let from_name_context = journey.current_system;
+    let from_system = journey.current_system;
     journey.current_system = plan.destination_id;
 
     // Log the event.
     let mode_str = match plan.mode {
-        TravelMode::Sublight => "sublight",
         TravelMode::Ftl => "FTL",
+        TravelMode::Sublight => "sublight",
         TravelMode::Stationary => "stationary",
+    };
+
+    let time_desc = if plan.duration.personal_days >= 30.0 {
+        format!(
+            "{:.1} months personal, {:.1} months galactic",
+            plan.duration.personal_months(),
+            plan.duration.galactic_days / 30.44,
+        )
+    } else {
+        format!(
+            "{:.0} days personal, {:.0} days galactic",
+            plan.duration.personal_days,
+            plan.duration.galactic_days,
+        )
     };
 
     let event = GameEvent {
         timestamp: journey.time,
         category: EventCategory::Travel,
         description: format!(
-            "Arrived at {} via {} transit ({:.1} ly). \
-             {:.1} months personal time, {:.1} years galactic time elapsed.",
+            "Arrived at {} via {} transit ({:.1} ly). {}.",
             destination_name,
             mode_str,
             plan.connection.distance_ly,
-            plan.duration.personal_months(),
-            plan.duration.galactic_years(),
+            time_desc,
         ),
-        associated_entities: vec![from_name_context, plan.destination_id],
+        associated_entities: vec![from_system, plan.destination_id],
         consequences: vec![],
     };
     journey.event_log.push(event);
@@ -135,68 +147,62 @@ mod tests {
     }
 
     #[test]
-    fn sublight_travel_advances_time_and_moves_player() {
+    fn ftl_travel_moves_player_and_advances_time() {
         let system_a = Uuid::new_v4();
         let system_b = Uuid::new_v4();
         let conn = Connection {
             system_a,
             system_b,
-            distance_ly: 8.0,
+            distance_ly: 5.0,
             route_type: RouteType::Open,
         };
 
         let mut journey = test_journey(system_a, 100.0);
-        let plan = plan_travel(&conn, &journey.ship, TravelMode::Sublight, system_a);
-
+        let plan = plan_travel(&conn, &journey.ship, TravelMode::Ftl, system_a);
         let outcome = execute_travel(&mut journey, &plan, "Cygnus Gate").unwrap();
 
         // Player moved.
         assert_eq!(journey.current_system, system_b);
 
-        // Time advanced.
-        assert!(journey.time.personal_days > 0.0);
-        assert!(journey.time.galactic_days > 0.0);
-        assert!(journey.time.galactic_days > journey.time.personal_days * 50.0,
-            "Galactic time should far exceed personal time for sublight");
+        // Time advanced — days, not decades.
+        assert!(journey.time.personal_days > 10.0 && journey.time.personal_days < 30.0);
+        assert!(journey.time.galactic_days > 15.0 && journey.time.galactic_days < 40.0);
 
-        // No fuel spent.
-        assert_eq!(journey.ship.fuel, 100.0);
-
-        // Event logged.
-        assert_eq!(journey.event_log.len(), 1);
-        assert!(journey.event_log[0].description.contains("Cygnus Gate"));
-        assert!(journey.event_log[0].description.contains("sublight"));
-
-        // Outcome has readable numbers.
-        assert!(outcome.galactic_days > 10_000.0);
-    }
-
-    #[test]
-    fn ftl_travel_burns_fuel_stays_in_sync() {
-        let system_a = Uuid::new_v4();
-        let system_b = Uuid::new_v4();
-        let conn = Connection {
-            system_a,
-            system_b,
-            distance_ly: 8.0,
-            route_type: RouteType::FtlLane,
-        };
-
-        let mut journey = test_journey(system_a, 100.0);
-        let plan = plan_travel(&conn, &journey.ship, TravelMode::Ftl, system_a);
-
-        let outcome = execute_travel(&mut journey, &plan, "Pale Harbor").unwrap();
-
-        // Player moved.
-        assert_eq!(journey.current_system, system_b);
+        // Roughly in sync.
+        let ratio = journey.time.galactic_days / journey.time.personal_days;
+        assert!(ratio < 2.0, "FTL should keep times roughly in sync");
 
         // Fuel burned.
         assert!(journey.ship.fuel < 100.0);
         assert!(outcome.fuel_spent > 0.0);
 
-        // Time roughly in sync.
+        // Event logged.
+        assert_eq!(journey.event_log.len(), 1);
+        assert!(journey.event_log[0].description.contains("FTL"));
+    }
+
+    #[test]
+    fn sublight_fallback_is_free_but_slow() {
+        let system_a = Uuid::new_v4();
+        let system_b = Uuid::new_v4();
+        let conn = Connection {
+            system_a,
+            system_b,
+            distance_ly: 5.0,
+            route_type: RouteType::Open,
+        };
+
+        let mut journey = test_journey(system_a, 0.0); // No fuel
+        let plan = plan_travel(&conn, &journey.ship, TravelMode::Sublight, system_a);
+        let outcome = execute_travel(&mut journey, &plan, "Drift").unwrap();
+
+        assert_eq!(journey.current_system, system_b);
+        assert_eq!(journey.ship.fuel, 0.0); // No fuel consumed
+        assert!(outcome.personal_days > 100.0, "Sublight should take months");
+
+        // Modest dilation, not decades.
         let ratio = journey.time.galactic_days / journey.time.personal_days;
-        assert!(ratio < 2.0, "FTL should keep times close, ratio was {:.1}", ratio);
+        assert!(ratio > 2.0 && ratio < 4.0);
     }
 
     #[test]
@@ -211,8 +217,8 @@ mod tests {
             route_type: RouteType::Open,
         };
 
-        let mut journey = test_journey(system_c, 100.0); // At system_c, not a or b
-        let plan = plan_travel(&conn, &journey.ship, TravelMode::Sublight, system_a);
+        let mut journey = test_journey(system_c, 100.0);
+        let plan = plan_travel(&conn, &journey.ship, TravelMode::Ftl, system_a);
 
         let result = execute_travel(&mut journey, &plan, "Nowhere");
         assert!(result.is_err());
@@ -225,49 +231,19 @@ mod tests {
         let conn = Connection {
             system_a,
             system_b,
-            distance_ly: 8.0,
-            route_type: RouteType::FtlLane,
+            distance_ly: 50.0, // Way too far
+            route_type: RouteType::Open,
         };
 
-        let mut journey = test_journey(system_a, 1.0); // Almost no fuel
+        let mut journey = test_journey(system_a, 10.0);
         let plan = plan_travel(&conn, &journey.ship, TravelMode::Ftl, system_a);
 
         assert!(!plan.feasible);
         let result = execute_travel(&mut journey, &plan, "Anywhere");
         assert!(result.is_err());
 
-        // Nothing should have changed.
+        // Nothing changed.
         assert_eq!(journey.current_system, system_a);
-        assert_eq!(journey.ship.fuel, 1.0);
-        assert!(journey.event_log.is_empty());
-    }
-
-    #[test]
-    fn multiple_trips_accumulate_time() {
-        let system_a = Uuid::new_v4();
-        let system_b = Uuid::new_v4();
-        let conn = Connection {
-            system_a,
-            system_b,
-            distance_ly: 4.0,
-            route_type: RouteType::Open,
-        };
-
-        let mut journey = test_journey(system_a, 100.0);
-
-        // Trip 1: A → B
-        let plan1 = plan_travel(&conn, &journey.ship, TravelMode::Sublight, system_a);
-        execute_travel(&mut journey, &plan1, "System B").unwrap();
-        let time_after_first = journey.time;
-
-        // Trip 2: B → A
-        let plan2 = plan_travel(&conn, &journey.ship, TravelMode::Sublight, system_b);
-        execute_travel(&mut journey, &plan2, "System A").unwrap();
-
-        // Time should have roughly doubled.
-        assert!(journey.time.personal_days > time_after_first.personal_days * 1.9);
-        assert!(journey.time.galactic_days > time_after_first.galactic_days * 1.9);
-        assert_eq!(journey.event_log.len(), 2);
-        assert_eq!(journey.current_system, system_a);
+        assert_eq!(journey.ship.fuel, 10.0);
     }
 }

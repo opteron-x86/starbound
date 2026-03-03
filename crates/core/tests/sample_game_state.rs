@@ -81,6 +81,7 @@ fn create_and_serialize_sample_game_state() {
             description: "Origin of the Terran Hegemony".into(),
         }],
         active_threads: vec![],
+            time_factor: 1.0,
     };
 
     let cygnus_gate = StarSystem {
@@ -104,6 +105,7 @@ fn create_and_serialize_sample_game_state() {
         infrastructure_level: InfrastructureLevel::Established,
         history: vec![],
         active_threads: vec![],
+            time_factor: 1.0,
     };
 
     // -- Sector --

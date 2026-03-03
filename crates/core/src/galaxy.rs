@@ -1,3 +1,6 @@
+// file: crates/core/src/galaxy.rs
+//! Galaxy data types — star systems, sectors, connections, factions.
+
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -26,6 +29,19 @@ pub struct StarSystem {
     pub history: Vec<HistoryEntry>,
     /// Thread IDs from the narrative ledger that are active here.
     pub active_threads: Vec<Uuid>,
+    /// Temporal distortion factor for this system.
+    ///
+    /// 1.0 = normal time (a day here is a day everywhere).
+    /// Higher values mean time passes faster outside while you're
+    /// docked here. A system with factor 5.0 means one personal
+    /// day costs five galactic days.
+    ///
+    /// Most settled systems are 1.0. Neutron stars, black holes,
+    /// and anomalous systems at the edge of known space have
+    /// higher factors. The mission leads toward increasingly
+    /// distorted space — the further you push, the more time
+    /// you sacrifice.
+    pub time_factor: f64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Display, EnumString)]
@@ -112,11 +128,12 @@ pub struct Connection {
 pub enum RouteType {
     /// Standard travel lane.
     Open,
-    /// Established, well-trafficked corridor.
+    /// Established, well-trafficked corridor. Slightly faster.
     Corridor,
-    /// Dangerous — pirates, radiation, anomalies.
+    /// Dangerous — pirates, radiation, anomalies. Slower.
     Hazardous,
-    /// FTL-capable route (faction-controlled, expensive, or rare).
+    /// Legacy: FTL-capable route. Now treated as Corridor.
+    /// Kept for serialization compatibility.
     FtlLane,
 }
 

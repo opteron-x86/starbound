@@ -1,27 +1,17 @@
 // file: crates/simulation/src/generate.rs
-//! Galaxy generation for the Phase 1 prototype.
+//! Galaxy generation — deterministic from a seed.
 //!
-//! Creates a single sector ("The Near Reach") with ten star systems,
-//! two factions, and connections between nearby systems. The layout
-//! is semi-random: systems are scattered across a region with some
-//! structure, and connections form based on proximity with a few
-//! long-range corridors.
-//!
-//! The generator takes a seed for reproducibility — same seed,
-//! same galaxy. This matters for debugging and for the design doc's
-//! requirement that the simulation be deterministic given a seed.
+//! One sector, ten systems, two factions. Enough to validate
+//! the core loop. Expansion comes later.
 
+use rand::prelude::*;
 use std::collections::HashMap;
-
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
 use uuid::Uuid;
 
 use starbound_core::galaxy::*;
 use starbound_core::time::Timestamp;
 
-/// Everything the generator produces — a complete starting galaxy.
-#[derive(Debug, Clone)]
+/// The output of galaxy generation — everything needed to start a game.
 pub struct GeneratedGalaxy {
     pub sector: Sector,
     pub systems: Vec<StarSystem>,
@@ -29,7 +19,6 @@ pub struct GeneratedGalaxy {
     pub connections: Vec<Connection>,
 }
 
-/// System names — evocative, varied, suggesting history.
 const SYSTEM_NAMES: [&str; 10] = [
     "Meridian",
     "Cygnus Gate",
@@ -43,7 +32,6 @@ const SYSTEM_NAMES: [&str; 10] = [
     "Lament",
 ];
 
-/// Generate a complete starting galaxy from a seed.
 pub fn generate_galaxy(seed: u64) -> GeneratedGalaxy {
     let mut rng = StdRng::seed_from_u64(seed);
 
@@ -222,6 +210,31 @@ fn generate_systems(rng: &mut StdRng, factions: &[Faction]) -> Vec<StarSystem> {
         InfrastructureLevel::None,
     ];
 
+    // Time distortion factors — tied to star type and narrative role.
+    //
+    // Settled space is normal. Frontier gets weird. The edge is dangerous.
+    // The mission leads toward Lament; every step further costs more time.
+    //
+    // Factor | Feel
+    // -------|------
+    //   1.0  | Normal — a day is a day. Your Marco Polo circuit.
+    //   1.5  | Mild drift — spend a week, lose 10 days. Noticeable.
+    //   2.0  | Frontier weird — a week costs two weeks elsewhere.
+    //   8.0  | Serious — a week costs nearly two months. Plan carefully.
+    //  25.0  | Extreme — a week costs half a year. The granddaughter moment.
+    let time_factors: [f64; 10] = [
+        1.0,    // Meridian — Hegemony capital, stable yellow dwarf
+        1.0,    // Cygnus Gate — trade hub, binary but well-studied
+        1.0,    // Voss — Hegemony colony, normal red dwarf
+        1.0,    // Thornfield — Freehold, normal red dwarf
+        1.0,    // Pale Harbor — Freehold capital, blue giant but compensated
+        1.5,    // Acheron — frontier outpost, white dwarf, mild drift
+        1.0,    // Sunhollow — Freehold border, normal yellow dwarf
+        2.0,    // Drift — unclaimed frontier, red dwarf near a dense remnant
+        8.0,    // Kessler's Remnant — neutron star, serious distortion
+        25.0,   // Lament — anomalous, extreme distortion, edge of known space
+    ];
+
     let mut systems = Vec::with_capacity(10);
 
     for i in 0..10 {
@@ -256,6 +269,7 @@ fn generate_systems(rng: &mut StdRng, factions: &[Faction]) -> Vec<StarSystem> {
             infrastructure_level: infrastructure_levels[i],
             history,
             active_threads: vec![],
+            time_factor: time_factors[i],
         });
     }
 
@@ -451,5 +465,28 @@ mod tests {
         let pos_differ = g1.systems.iter().zip(g2.systems.iter())
             .any(|(a, b)| a.position != b.position);
         assert!(pos_differ, "Different seeds should produce different positions");
+    }
+
+    #[test]
+    fn time_factors_assigned_correctly() {
+        let galaxy = generate_galaxy(42);
+
+        // Settled systems should be normal time.
+        let meridian = galaxy.systems.iter().find(|s| s.name == "Meridian").unwrap();
+        assert_eq!(meridian.time_factor, 1.0);
+
+        let cygnus = galaxy.systems.iter().find(|s| s.name == "Cygnus Gate").unwrap();
+        assert_eq!(cygnus.time_factor, 1.0);
+
+        // Frontier should have mild distortion.
+        let acheron = galaxy.systems.iter().find(|s| s.name == "Acheron").unwrap();
+        assert!(acheron.time_factor > 1.0, "Acheron should have time distortion");
+
+        // Edge systems should have serious distortion.
+        let kessler = galaxy.systems.iter().find(|s| s.name == "Kessler's Remnant").unwrap();
+        assert!(kessler.time_factor >= 8.0, "Kessler's Remnant should have serious distortion");
+
+        let lament = galaxy.systems.iter().find(|s| s.name == "Lament").unwrap();
+        assert!(lament.time_factor >= 25.0, "Lament should have extreme distortion");
     }
 }

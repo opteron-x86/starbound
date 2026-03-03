@@ -433,6 +433,7 @@ mod tests {
             infrastructure_level: infra,
             history: vec![],
             active_threads: vec![],
+                time_factor: 1.0,
         }
     }
 

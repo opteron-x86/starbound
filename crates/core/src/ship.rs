@@ -1,3 +1,6 @@
+// file: crates/core/src/ship.rs
+//! Ship data types — the player's home, identity, and persistent companion.
+
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
@@ -11,7 +14,8 @@ pub struct Ship {
     pub name: String,
     /// 0.0 = destroyed, 1.0 = pristine.
     pub hull_condition: f32,
-    /// Arbitrary fuel units. Travel consumes fuel; running out is bad.
+    /// Arbitrary fuel units. FTL travel consumes fuel; running out
+    /// means limping on sublight — slow and costly in time.
     pub fuel: f32,
     pub fuel_capacity: f32,
     /// Named cargo items with quantities.
@@ -54,14 +58,23 @@ impl Module {
 }
 
 /// How the ship is currently traveling (or not).
+///
+/// FTL is the standard mode of interstellar travel. Every ship has
+/// a drive; fuel is the constraint, not the technology. Sublight is
+/// the emergency fallback — your drive is damaged or you can't
+/// afford fuel. It's slow and has modest time dilation (3:1 ratio),
+/// but it won't strand you forever.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Display, EnumString)]
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum TravelMode {
     /// Docked or in orbit. No time cost.
     Stationary,
-    /// Free and safe, but decades pass in the galaxy.
-    Sublight,
-    /// Expensive, rare, dangerous — but keeps you in sync.
+    /// Standard FTL transit. Costs fuel, takes days to weeks.
+    /// Personal and galactic time stay roughly in sync.
     Ftl,
+    /// Emergency sublight. Free but slow — weeks to months per
+    /// light-year. Modest time dilation (~3:1 galactic/personal).
+    /// Used when the FTL drive is damaged or fuel is depleted.
+    Sublight,
 }
