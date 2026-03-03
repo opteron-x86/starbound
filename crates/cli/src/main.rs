@@ -29,6 +29,7 @@ use starbound_simulation::generate::{generate_galaxy, GeneratedGalaxy};
 use starbound_simulation::travel::{describe_plan, plan_all_routes, TravelPlan};
 
 use starbound_game::travel::execute_travel;
+use starbound_game::consequences::{resolve_effects, apply_effects};
 
 // ---------------------------------------------------------------------------
 // Display helpers
@@ -389,6 +390,54 @@ fn display_mission(gs: &GameState) {
     }
 }
 
+fn display_threads(gs: &GameState) {
+    display_header("Thread Ledger");
+
+    let open_threads: Vec<&starbound_core::narrative::Thread> = gs.journey.threads.iter()
+        .filter(|t| t.resolution == starbound_core::narrative::ResolutionState::Open
+            || t.resolution == starbound_core::narrative::ResolutionState::Partial)
+        .collect();
+
+    let resolved_threads: Vec<&starbound_core::narrative::Thread> = gs.journey.threads.iter()
+        .filter(|t| t.resolution == starbound_core::narrative::ResolutionState::Resolved
+            || t.resolution == starbound_core::narrative::ResolutionState::Transformed)
+        .collect();
+
+    if open_threads.is_empty() && resolved_threads.is_empty() {
+        println!("  No threads yet. Your story is just beginning.");
+        return;
+    }
+
+    if !open_threads.is_empty() {
+        println!("\n  Open threads:");
+        for thread in &open_threads {
+            let tension_bar = tension_display(thread.tension);
+            let age_gy = (gs.journey.time.galactic_days - thread.created_at.galactic_days) / 365.25;
+            println!("  {} [{}] {}", tension_bar, thread.thread_type, thread.description);
+            if age_gy > 1.0 {
+                println!("      ({:.0} galactic years old)", age_gy);
+            }
+        }
+    }
+
+    if !resolved_threads.is_empty() {
+        println!("\n  Resolved:");
+        for thread in resolved_threads.iter().rev().take(5) {
+            println!("  ✓ [{}] {}", thread.thread_type, thread.description);
+        }
+        if resolved_threads.len() > 5 {
+            println!("    ... and {} more.", resolved_threads.len() - 5);
+        }
+    }
+}
+
+/// Visual tension indicator.
+fn tension_display(tension: f32) -> String {
+    let filled = (tension * 5.0).round() as usize;
+    let empty = 5 - filled.min(5);
+    format!("[{}{}]", "█".repeat(filled), "░".repeat(empty))
+}
+
 // ---------------------------------------------------------------------------
 // Title screen and intro
 // ---------------------------------------------------------------------------
@@ -460,7 +509,7 @@ fn game_loop(gs: &mut GameState) {
         println!("\n  What do you do?");
         println!("  1) Travel        2) Crew");
         println!("  3) Mission       4) Log");
-        println!("  5) Quit");
+        println!("  5) Threads       6) Quit");
         println!();
 
         let choice = prompt("  > ");
@@ -479,7 +528,11 @@ fn game_loop(gs: &mut GameState) {
                 display_event_log(gs);
                 pause();
             }
-            "5" | "q" | "quit" => {
+            "5" | "threads" => {
+                display_threads(gs);
+                pause();
+            }
+            "6" | "q" | "quit" => {
                 println!("\n  The galaxy continues without you.\n");
                 break;
             }
@@ -611,7 +664,51 @@ fn execute_travel_and_arrive(gs: &mut GameState, plan: &TravelPlan, dest_name: &
                 .min(event.choices.len().saturating_sub(1));
 
             let chosen = &event.choices[choice_idx];
-            println!("\n  > {}", chosen.label);
+
+            // --- Day 8: Resolve and apply consequences ---
+            let effects = resolve_effects(&chosen.mechanical_effect, &gs.journey);
+            let report = apply_effects(
+                &effects,
+                &mut gs.journey,
+                &format!("{}: {}", event.id, chosen.label),
+            );
+
+            // Display what happened.
+            clear_screen();
+            display_header("Consequences");
+            println!();
+
+            // Show the choice made.
+            for line in wrap_text(&format!("You chose: {}", chosen.label), 60) {
+                println!("  {}", line);
+            }
+            println!();
+
+            // Show the narrative outcome.
+            if !report.log_entry.is_empty() {
+                for line in wrap_text(&report.log_entry, 60) {
+                    println!("  {}", line);
+                }
+                println!();
+            }
+
+            // Show mechanical changes (subtle — the player should feel these
+            // through the game state, but during Phase 1 we show them).
+            if !report.changes.is_empty() {
+                println!("{}", THIN_DIVIDER);
+                for change in &report.changes {
+                    println!("  · {}", change);
+                }
+            }
+
+            // Note new threads.
+            if report.threads_spawned > 0 {
+                println!();
+                println!("  {} new thread{} in the ledger.",
+                    report.threads_spawned,
+                    if report.threads_spawned == 1 { "" } else { "s" },
+                );
+            }
 
             pause();
         }
@@ -629,7 +726,7 @@ fn execute_travel_and_arrive(gs: &mut GameState, plan: &TravelPlan, dest_name: &
 
             pause();
         }
-    }
+    }   
 }
 
 // ---------------------------------------------------------------------------
