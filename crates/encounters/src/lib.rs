@@ -7,3 +7,4 @@ pub mod seed_event;
 pub mod library;
 pub mod matcher;
 pub mod pipeline;
+pub mod templates;

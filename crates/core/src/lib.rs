@@ -5,21 +5,25 @@
 //! thread ledger, mission state, and the dual-timeline system that
 //! makes everything tick.
 
+pub mod contract;
 pub mod crew;
 pub mod galaxy;
 pub mod journey;
 pub mod mission;
 pub mod narrative;
+pub mod npc;
 pub mod reputation;
 pub mod ship;
 pub mod time;
 
 // Re-export the most commonly used types at crate root.
+pub use contract::Contract;
 pub use crew::CrewMember;
 pub use galaxy::{Civilization, Connection, Faction, Sector, StarSystem};
 pub use journey::Journey;
 pub use mission::{KnowledgeNode, MissionState};
 pub use narrative::{EncounterBrief, GameEvent, Thread};
+pub use npc::Npc;
 pub use reputation::PlayerProfile;
 pub use ship::Ship;
 pub use time::Timestamp;

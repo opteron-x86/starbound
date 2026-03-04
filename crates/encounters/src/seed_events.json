@@ -11,23 +11,64 @@
     "choices": [
       {
         "label": "Ask about the old businesses",
-        "mechanical_effect": "gather_local_history",
-        "tone_note": "Nostalgia. The player is reaching for something that isn't there."
+        "tone_note": "Nostalgia. The player is reaching for something that isn't there.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Spoke to locals about the station's history. Names and dates that connect to a time before you arrived here last."
+          },
+          {
+            "type": "narrative",
+            "text": "Learned what changed. It was everything."
+          }
+        ]
       },
       {
         "label": "Head to the trade board",
-        "mechanical_effect": "open_trade",
-        "tone_note": "Pragmatic. Moving forward."
+        "tone_note": "Pragmatic. Moving forward.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": 15.0
+          },
+          {
+            "type": "resources",
+            "delta": -40.0
+          },
+          {
+            "type": "hull",
+            "delta": 0.05
+          },
+          {
+            "type": "narrative",
+            "text": "Resupplied. The ship feels a little more whole."
+          }
+        ]
       },
       {
         "label": "Find the historical records",
-        "mechanical_effect": "search_records",
-        "tone_note": "Looking for evidence you were here. That it mattered."
+        "tone_note": "Looking for evidence you were here. That it mattered.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Found your name in the station's historical records. You were here. That much is documented."
+          },
+          {
+            "type": "narrative",
+            "text": "The records confirmed what you already knew. You passed through here once, when it meant something different."
+          }
+        ]
       },
       {
         "label": "Return to the ship",
-        "mechanical_effect": "depart",
-        "tone_note": "Some places you can't go back to."
+        "tone_note": "Some places you can't go back to.",
+        "effects": [
+          {
+            "type": "pass"
+          }
+        ]
       }
     ]
   },
@@ -40,18 +81,55 @@
     "choices": [
       {
         "label": "Investigate the coordinates",
-        "mechanical_effect": "investigate_signal",
-        "tone_note": "Committing. Whatever it is, you'll know."
+        "tone_note": "Committing. Whatever it is, you'll know.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -5.0
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.1
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Investigated the signal source. Found something \u2014 wreckage, or a beacon, or something stranger. The data needs analysis."
+          },
+          {
+            "type": "narrative",
+            "text": "Followed the signal. What you found raises more questions than it answers."
+          }
+        ]
       },
       {
         "label": "Scan from here first",
-        "mechanical_effect": "long_range_scan",
-        "tone_note": "Cautious. Information before commitment."
+        "tone_note": "Cautious. Information before commitment.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -2.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Long-range scan of the signal source reveals metallic mass, no power signature, and an age estimate that doesn't match anything in the records."
+          },
+          {
+            "type": "narrative",
+            "text": "Scanned from a safe distance. The data is strange but useful."
+          }
+        ]
       },
       {
         "label": "Log it and move on",
-        "mechanical_effect": "log_and_ignore",
-        "tone_note": "You can't save everyone. You learned that a long time ago."
+        "tone_note": "You can't save everyone. You learned that a long time ago.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "Noted the coordinates. Moved on."
+          }
+        ]
       }
     ]
   },
@@ -66,18 +144,52 @@
     "choices": [
       {
         "label": "Accept the job",
-        "mechanical_effect": "accept_cargo_mission",
-        "tone_note": "Honest work. Straightforward. Probably."
+        "tone_note": "Honest work. Straightforward. Probably.",
+        "effects": [
+          {
+            "type": "resources",
+            "delta": 50.0
+          },
+          {
+            "type": "add_cargo",
+            "item": "Medical supplies (Thornfield delivery)",
+            "quantity": 3
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "debt",
+            "description": "Accepted a cargo run to Thornfield \u2014 medical supplies, straightforward delivery. Someone is waiting."
+          },
+          {
+            "type": "narrative",
+            "text": "Loaded the cargo. Another obligation, another reason to keep moving."
+          }
+        ]
       },
       {
         "label": "Ask why the contractor fell through",
-        "mechanical_effect": "investigate_cargo",
-        "tone_note": "Trust but verify."
+        "tone_note": "Trust but verify.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Asked questions about the cargo job. The contractor fell through because the route passes near restricted space. The captain didn't mention that part."
+          },
+          {
+            "type": "narrative",
+            "text": "Dug a little deeper. Found a reason to be cautious."
+          }
+        ]
       },
       {
         "label": "Decline politely",
-        "mechanical_effect": "decline",
-        "tone_note": "Not your problem."
+        "tone_note": "Not your problem.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "You declined. Life goes on."
+          }
+        ]
       }
     ]
   },
@@ -88,22 +200,45 @@
     "context_requirements": {
       "infrastructure_max": "none"
     },
-    "text": "Nothing.\n\nA red dwarf and its handful of frozen worlds. No signals. No stations. No evidence that anything with a pulse has ever been here. Your sensors sweep the system and come back with data that amounts to a shrug.\n\nYour navigator marks the system as surveyed and adds it to the charts. Another dot on a map that's mostly empty space. The star looks old and tired and very far from anything that matters.\n\nThe ship hums around you. The crew goes about their routines. Outside the viewport, the galaxy continues not to notice you.",
+    "text": "Nothing.\n\nA red dwarf at {system.name} and its handful of frozen worlds. No signals. No stations. No evidence that anything with a pulse has ever been here. Your sensors sweep the system and come back with data that amounts to a shrug.\n\nYour navigator marks the system as surveyed and adds it to the charts. Another dot on a map that's mostly empty space. The star looks old and tired and very far from anything that matters.\n\nThe ship hums around you. The crew goes about their routines. Outside the viewport, the galaxy continues not to notice you.",
     "choices": [
       {
         "label": "Run a detailed survey anyway",
-        "mechanical_effect": "detailed_scan",
-        "tone_note": "Thoroughness for its own sake. Or maybe hoping to find something."
+        "tone_note": "Thoroughness for its own sake. Or maybe hoping to find something.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "The survey picked up something faint \u2014 a signal signature that doesn't match any known source."
+          },
+          {
+            "type": "narrative",
+            "text": "Thorough scan completed. Found more than expected."
+          }
+        ]
       },
       {
         "label": "Sit with the quiet for a while",
-        "mechanical_effect": "rest",
-        "tone_note": "Sometimes the emptiness is the point."
+        "tone_note": "Sometimes the emptiness is the point.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": -0.05
+          },
+          {
+            "type": "narrative",
+            "text": "Took a moment. The universe waited."
+          }
+        ]
       },
       {
         "label": "Plot the next jump",
-        "mechanical_effect": "open_navigation",
-        "tone_note": "Keep moving. Standing still in the void gets uncomfortable."
+        "tone_note": "Keep moving. Standing still in the void gets uncomfortable.",
+        "effects": [
+          {
+            "type": "pass"
+          }
+        ]
       }
     ]
   },
@@ -119,23 +254,76 @@
     "choices": [
       {
         "label": "Pay the inflated price",
-        "mechanical_effect": "buy_fuel_expensive",
-        "tone_note": "You don't have a choice and you both know it."
+        "tone_note": "You don't have a choice and you both know it.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": 35.0
+          },
+          {
+            "type": "resources",
+            "delta": -90.0
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.05
+          },
+          {
+            "type": "narrative",
+            "text": "Paid through the nose, but the tanks are fuller."
+          }
+        ]
       },
       {
         "label": "Negotiate",
-        "mechanical_effect": "negotiate_fuel",
-        "tone_note": "Worth trying. Dignity costs nothing."
+        "tone_note": "Worth trying. Dignity costs nothing.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": 25.0
+          },
+          {
+            "type": "resources",
+            "delta": -40.0
+          },
+          {
+            "type": "narrative",
+            "text": "Talked the price down. Not cheap, but fair enough."
+          }
+        ]
       },
       {
         "label": "Ask about alternative fuel sources",
-        "mechanical_effect": "seek_alternatives",
-        "tone_note": "There's always another way. Usually a worse one."
+        "tone_note": "There's always another way. Usually a worse one.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Heard about an alternative fuel source \u2014 unorthodox, possibly dangerous, worth investigating."
+          },
+          {
+            "type": "narrative",
+            "text": "No fuel today, but a lead on something interesting."
+          }
+        ]
       },
       {
         "label": "Buy only what you need to reach the next system",
-        "mechanical_effect": "buy_fuel_minimum",
-        "tone_note": "Calculated risk. Hope the next port is cheaper."
+        "tone_note": "Calculated risk. Hope the next port is cheaper.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": 10.0
+          },
+          {
+            "type": "resources",
+            "delta": -25.0
+          },
+          {
+            "type": "narrative",
+            "text": "Just enough to reach the next port. Hopefully."
+          }
+        ]
       }
     ]
   },
@@ -153,23 +341,79 @@
     "choices": [
       {
         "label": "Approach and attempt to dock",
-        "mechanical_effect": "dock_ancient",
-        "tone_note": "Awe overriding caution. This is why you're out here."
+        "tone_note": "Awe overriding caution. This is why you're out here.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": 0.15
+          },
+          {
+            "type": "crew_mood",
+            "mood": "inspired",
+            "all": true
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Docked with an ancient structure of unknown origin. The interior defies easy description. Sensors recorded data that will take weeks to analyze."
+          },
+          {
+            "type": "trust_professional",
+            "delta": 0.05
+          },
+          {
+            "type": "narrative",
+            "text": "You went inside. What you found will take time to understand."
+          }
+        ]
       },
       {
         "label": "Send a probe first",
-        "mechanical_effect": "probe_ancient",
-        "tone_note": "Fascination with restraint."
+        "tone_note": "Fascination with restraint.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Probe returned data from the ancient structure. Partial readings \u2014 enough to confirm it's artificial, not enough to explain it."
+          },
+          {
+            "type": "narrative",
+            "text": "The probe came back. Most of the data is incomprehensible."
+          }
+        ]
       },
       {
         "label": "Record everything and keep your distance",
-        "mechanical_effect": "observe_ancient",
-        "tone_note": "Some things you document. Some things you don't touch."
+        "tone_note": "Some things you document. Some things you don't touch.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Recorded external observations of an ancient structure. Detailed but distant."
+          },
+          {
+            "type": "narrative",
+            "text": "Documented everything from a safe distance."
+          }
+        ]
       },
       {
         "label": "Leave immediately",
-        "mechanical_effect": "flee",
-        "tone_note": "Fear. The smart kind."
+        "tone_note": "Fear. The smart kind.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -10.0
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.1
+          },
+          {
+            "type": "narrative",
+            "text": "Burned hard and got clear. Cost fuel, saved everything else."
+          }
+        ]
       }
     ]
   },
@@ -181,22 +425,55 @@
       "faction_controlled": true,
       "infrastructure_min": "colony"
     },
-    "text": "Two patrol ships slide into formation around you before your comms officer can even open a channel.\n\n\"Vessel, you are entering controlled space. Transmit registration, cargo manifest, and crew roster. Do not deviate from your current heading.\"\n\nThe voice is professional but flat \u2014 someone who says this sentence forty times a shift. Your ship's registration is valid, probably. Your cargo is legal, mostly. Your crew roster is accurate, as far as anyone knows.\n\nThe patrol ships match your speed exactly. Patient. Unhurried. They have nowhere else to be.",
+    "text": "Two {faction.name} patrol ships slide into formation around you before your comms officer can even open a channel.\n\n\"Vessel, you are entering controlled space. Transmit registration, cargo manifest, and crew roster. Do not deviate from your current heading.\"\n\nThe voice is professional but flat \u2014 someone who says this sentence forty times a shift. Your ship's registration is valid, probably. Your cargo is legal, mostly. Your crew roster is accurate, as far as anyone knows.\n\nThe patrol ships match your speed exactly. Patient. Unhurried. They have nowhere else to be.",
     "choices": [
       {
         "label": "Comply fully \u2014 transmit everything",
-        "mechanical_effect": "comply_checkpoint",
-        "tone_note": "Nothing to hide. Or at least nothing they'll find."
+        "tone_note": "Nothing to hide. Or at least nothing they'll find.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "Inspection passed without incident."
+          }
+        ]
       },
       {
         "label": "Comply but ask questions",
-        "mechanical_effect": "comply_and_probe",
-        "tone_note": "Cooperative but not submissive."
+        "tone_note": "Cooperative but not submissive.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "The checkpoint officer mentioned something interesting \u2014 increased patrols, a missing ship, a restricted zone that wasn't restricted last year."
+          },
+          {
+            "type": "narrative",
+            "text": "Complied and asked questions. Learned something worth knowing."
+          }
+        ]
       },
       {
         "label": "Transmit registration only \u2014 cite independent vessel rights",
-        "mechanical_effect": "partial_comply",
-        "tone_note": "Principled. Possibly stupid."
+        "tone_note": "Principled. Possibly stupid.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": 0.05
+          },
+          {
+            "type": "trust_ideological",
+            "delta": 0.05
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "grudge",
+            "description": "Cited independent vessel rights at a faction checkpoint. They let you through, but they remembered your ship."
+          },
+          {
+            "type": "narrative",
+            "text": "Stood on principle. Made an impression. Not sure what kind."
+          }
+        ]
       }
     ]
   },
@@ -209,18 +486,59 @@
     "choices": [
       {
         "label": "Board and search for survivors or logs",
-        "mechanical_effect": "board_derelict",
-        "tone_note": "Obligation. Or curiosity wearing the mask of obligation."
+        "tone_note": "Obligation. Or curiosity wearing the mask of obligation.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": 0.1
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Found something on the derelict \u2014 a log fragment, a name, a heading. Someone was looking for the same signal."
+          },
+          {
+            "type": "narrative",
+            "text": "The derelict held no survivors, but it held a story."
+          }
+        ]
       },
       {
         "label": "Salvage what you can",
-        "mechanical_effect": "salvage_derelict",
-        "tone_note": "Practical. The dead don't need engine parts."
+        "tone_note": "Practical. The dead don't need engine parts.",
+        "effects": [
+          {
+            "type": "hull",
+            "delta": 0.1
+          },
+          {
+            "type": "repair_module",
+            "module": "engine",
+            "amount": 0.1
+          },
+          {
+            "type": "resources",
+            "delta": 50.0
+          },
+          {
+            "type": "crew_mood",
+            "mood": "determined"
+          },
+          {
+            "type": "narrative",
+            "text": "Stripped what was useful. Practical. Necessary."
+          }
+        ]
       },
       {
         "label": "Log the position and leave it",
-        "mechanical_effect": "log_and_ignore",
-        "tone_note": "A grave marker in coordinates."
+        "tone_note": "A grave marker in coordinates.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "Noted the coordinates. Moved on."
+          }
+        ]
       }
     ]
   },
@@ -235,23 +553,78 @@
     "choices": [
       {
         "label": "Resupply and trade",
-        "mechanical_effect": "open_trade",
-        "tone_note": "The mundane business of staying alive."
+        "tone_note": "The mundane business of staying alive.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": 15.0
+          },
+          {
+            "type": "resources",
+            "delta": -40.0
+          },
+          {
+            "type": "hull",
+            "delta": 0.05
+          },
+          {
+            "type": "narrative",
+            "text": "Resupplied. The ship feels a little more whole."
+          }
+        ]
       },
       {
         "label": "Look for work on the job boards",
-        "mechanical_effect": "check_jobs",
-        "tone_note": "Credits make the galaxy go around."
+        "tone_note": "Credits make the galaxy go around.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "debt",
+            "description": "Took a contract \u2014 delivery, investigation, or escort. Someone is counting on you now."
+          },
+          {
+            "type": "narrative",
+            "text": "Found work. The kind that keeps the tanks full."
+          }
+        ]
       },
       {
         "label": "Let the crew have shore leave",
-        "mechanical_effect": "shore_leave",
-        "tone_note": "They need it. You might too."
+        "tone_note": "They need it. You might too.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": -0.2
+          },
+          {
+            "type": "resources",
+            "delta": -30.0
+          },
+          {
+            "type": "crew_mood",
+            "mood": "hopeful",
+            "all": true
+          },
+          {
+            "type": "narrative",
+            "text": "The crew dispersed into the station. Came back lighter."
+          }
+        ]
       },
       {
         "label": "Ask around for news and rumors",
-        "mechanical_effect": "gather_intel",
-        "tone_note": "What's changed while you were in transit?"
+        "tone_note": "What's changed while you were in transit?",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Picked up rumors \u2014 faction movements, missing ships, a place that used to be safe and isn't anymore."
+          },
+          {
+            "type": "narrative",
+            "text": "Listened to the local talk. Filed it away."
+          }
+        ]
       }
     ]
   },
@@ -266,18 +639,61 @@
     "choices": [
       {
         "label": "Sit down and listen",
-        "mechanical_effect": "crew_bond",
-        "tone_note": "Being present. Not as the captain, just as someone who's here."
+        "tone_note": "Being present. Not as the captain, just as someone who's here.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": -0.1
+          },
+          {
+            "type": "trust_personal",
+            "delta": 0.05
+          },
+          {
+            "type": "crew_mood",
+            "mood": "content"
+          },
+          {
+            "type": "narrative",
+            "text": "Sat with the crew. Listened. Was present."
+          }
+        ]
       },
       {
         "label": "Share something of your own",
-        "mechanical_effect": "captain_opens_up",
-        "tone_note": "Vulnerability. Rare from the person who makes the decisions."
+        "tone_note": "Vulnerability. Rare from the person who makes the decisions.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": -0.1
+          },
+          {
+            "type": "trust_personal",
+            "delta": 0.1
+          },
+          {
+            "type": "trust_ideological",
+            "delta": 0.03
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "relationship",
+            "description": "Shared something personal with the crew. The walls are a little thinner now."
+          },
+          {
+            "type": "narrative",
+            "text": "You told them something true. It cost you nothing and everything."
+          }
+        ]
       },
       {
         "label": "Leave them to it",
-        "mechanical_effect": "pass",
-        "tone_note": "Some moments aren't for you."
+        "tone_note": "Some moments aren't for you.",
+        "effects": [
+          {
+            "type": "pass"
+          }
+        ]
       }
     ]
   },
@@ -292,18 +708,70 @@
     "choices": [
       {
         "label": "Head for the nearest station",
-        "mechanical_effect": "navigate_to_repairs",
-        "tone_note": "Survival instinct. Get somewhere with walls that hold."
+        "tone_note": "Survival instinct. Get somewhere with walls that hold.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "Set course for the nearest repair facility."
+          },
+          {
+            "type": "add_concern",
+            "text": "Heading for repairs \u2014 hull integrity critical."
+          }
+        ]
       },
       {
         "label": "Attempt field repairs with what we have",
-        "mechanical_effect": "field_repair",
-        "tone_note": "Making do. It's what you're good at."
+        "tone_note": "Making do. It's what you're good at.",
+        "effects": [
+          {
+            "type": "hull",
+            "delta": 0.15
+          },
+          {
+            "type": "repair_module",
+            "module": "sensors",
+            "amount": 0.15
+          },
+          {
+            "type": "resources",
+            "delta": -20.0
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.05
+          },
+          {
+            "type": "trust_professional",
+            "delta": 0.05
+          },
+          {
+            "type": "narrative",
+            "text": "Jury-rigged repairs. Holding together, for now."
+          }
+        ]
       },
       {
         "label": "Press on \u2014 we'll deal with it later",
-        "mechanical_effect": "ignore_damage",
-        "tone_note": "Stubbornness. Or maybe the destination matters more than the ship."
+        "tone_note": "Stubbornness. Or maybe the destination matters more than the ship.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": 0.1
+          },
+          {
+            "type": "trust_professional",
+            "delta": -0.05
+          },
+          {
+            "type": "crew_mood",
+            "mood": "anxious"
+          },
+          {
+            "type": "narrative",
+            "text": "Pressed on despite the damage. The crew noticed."
+          }
+        ]
       }
     ]
   },
@@ -312,22 +780,40 @@
     "encounter_type": "contextual",
     "tone": "quiet",
     "context_requirements": {},
-    "text": "Between jumps, with nothing demanding your attention, you find yourself on the observation deck.\n\nThe star you're orbiting is unremarkable. A main sequence yellow, not unlike the one that warmed whatever world you came from. The light takes eight minutes to reach the inner planets and then keeps going forever, carrying information about this moment to places that won't receive it for millennia.\n\nYou're in that light now. A tiny perturbation in the data. If someone with a powerful enough telescope pointed it here in a thousand years, they might detect the faintest wobble \u2014 evidence that something was here. That something passed through.\n\nYour navigator pings you about the next heading. The moment dissolves.",
+    "text": "In orbit around {system.name}, with nothing demanding your attention, you find yourself on the observation deck.\n\nThe star you're orbiting is unremarkable. A main sequence yellow, not unlike the one that warmed whatever world you came from. The light takes eight minutes to reach the inner planets and then keeps going forever, carrying information about this moment to places that won't receive it for millennia.\n\nYou're in that light now. A tiny perturbation in the data. If someone with a powerful enough telescope pointed it here in a thousand years, they might detect the faintest wobble \u2014 evidence that something was here. That something passed through.\n\nYour navigator pings you about the next heading. The moment dissolves.",
     "choices": [
       {
         "label": "Take a moment longer",
-        "mechanical_effect": "rest",
-        "tone_note": "The rare luxury of having nowhere urgent to be."
+        "tone_note": "The rare luxury of having nowhere urgent to be.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": -0.05
+          },
+          {
+            "type": "narrative",
+            "text": "Took a moment. The universe waited."
+          }
+        ]
       },
       {
         "label": "Make a log entry about the view",
-        "mechanical_effect": "write_log",
-        "tone_note": "Preserving something that doesn't need preserving."
+        "tone_note": "Preserving something that doesn't need preserving.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "Added an entry to the log. Preserving what matters."
+          }
+        ]
       },
       {
         "label": "Head to the bridge",
-        "mechanical_effect": "open_navigation",
-        "tone_note": "Back to work. Stars don't pay the fuel bills."
+        "tone_note": "Back to work. Stars don't pay the fuel bills.",
+        "effects": [
+          {
+            "type": "pass"
+          }
+        ]
       }
     ]
   },
@@ -342,23 +828,69 @@
     "choices": [
       {
         "label": "Hear him out fully before deciding",
-        "mechanical_effect": "investigate_smuggler",
-        "tone_note": "Information costs nothing. Commitment costs everything."
+        "tone_note": "Information costs nothing. Commitment costs everything.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "The smuggler's operation is small but professional. The data cores contain proprietary research \u2014 genomic data, possibly valuable, definitely stolen."
+          },
+          {
+            "type": "narrative",
+            "text": "Heard him out. The details make it harder to say no, not easier."
+          }
+        ]
       },
       {
         "label": "Accept the job",
-        "mechanical_effect": "accept_smuggling",
-        "tone_note": "The money is real. The risk is abstract. For now."
+        "tone_note": "The money is real. The risk is abstract. For now.",
+        "effects": [
+          {
+            "type": "resources",
+            "delta": 200.0
+          },
+          {
+            "type": "add_cargo",
+            "item": "Sealed containers (unknown contents)",
+            "quantity": 5
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.1
+          },
+          {
+            "type": "trust_ideological",
+            "delta": -0.05
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "debt",
+            "description": "Carrying unknown cargo across a faction border. Someone is expecting delivery."
+          },
+          {
+            "type": "narrative",
+            "text": "Took the job. Didn't ask what's in the containers."
+          }
+        ]
       },
       {
         "label": "Decline",
-        "mechanical_effect": "decline",
-        "tone_note": "Principles. Or maybe just caution."
+        "tone_note": "Principles. Or maybe just caution.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "You declined. Life goes on."
+          }
+        ]
       },
       {
         "label": "Walk away without a word",
-        "mechanical_effect": "depart",
-        "tone_note": "Not even worth a conversation."
+        "tone_note": "Not even worth a conversation.",
+        "effects": [
+          {
+            "type": "pass"
+          }
+        ]
       }
     ]
   },
@@ -374,18 +906,51 @@
     "choices": [
       {
         "label": "Land and investigate",
-        "mechanical_effect": "explore_colony",
-        "tone_note": "Walking through someone else's abandoned life."
+        "tone_note": "Walking through someone else's abandoned life.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": 0.1
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Explored the abandoned colony. Logs stop mid-entry. No signs of violence, no signs of evacuation. People just... stopped being here."
+          },
+          {
+            "type": "narrative",
+            "text": "Walked through empty streets. The silence had weight."
+          }
+        ]
       },
       {
         "label": "Scan for survivors from orbit",
-        "mechanical_effect": "orbital_scan",
-        "tone_note": "Hope tempered by distance."
+        "tone_note": "Hope tempered by distance.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -1.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Orbital scan of the abandoned colony shows intact infrastructure, working atmosphere processors, and no biological signatures. Whatever happened, it wasn't structural failure."
+          },
+          {
+            "type": "narrative",
+            "text": "Scanned from orbit. The colony is intact. Just empty."
+          }
+        ]
       },
       {
         "label": "Mark it on the charts and move on",
-        "mechanical_effect": "log_and_ignore",
-        "tone_note": "You can't help the absent. But you can note they were here."
+        "tone_note": "You can't help the absent. But you can note they were here.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "Noted the coordinates. Moved on."
+          }
+        ]
       }
     ]
   },
@@ -400,23 +965,86 @@
     "choices": [
       {
         "label": "Follow the signal to its source",
-        "mechanical_effect": "investigate_signal",
-        "tone_note": "This is the kind of thing you crossed light-years to find."
+        "tone_note": "This is the kind of thing you crossed light-years to find.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -5.0
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.1
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Investigated the signal source. Found something \u2014 wreckage, or a beacon, or something stranger. The data needs analysis."
+          },
+          {
+            "type": "narrative",
+            "text": "Followed the signal. What you found raises more questions than it answers."
+          }
+        ]
       },
       {
         "label": "Record and analyze from here",
-        "mechanical_effect": "analyze_signal",
-        "tone_note": "Understanding before approaching."
+        "tone_note": "Understanding before approaching.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -3.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Signal analysis reveals nested mathematical structures \u2014 prime sequences, fractal patterns, and something that might be a coordinate system. It's not random. It's not any known encoding."
+          },
+          {
+            "type": "narrative",
+            "text": "Spent hours on the analysis. The signal is deliberate, ancient, and patient."
+          }
+        ],
+        "follows": {
+          "event_id": "signal_echo_arrival",
+          "delay": "next_arrival"
+        }
       },
       {
         "label": "Transmit a response",
-        "mechanical_effect": "respond_signal",
-        "tone_note": "Bold. Possibly reckless. Undeniably human."
+        "tone_note": "Bold. Possibly reckless. Undeniably human.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -2.0
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.15
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Transmitted a response to the unknown signal. The signal paused for three seconds \u2014 the first interruption in centuries of repetition \u2014 then resumed with a new pattern."
+          },
+          {
+            "type": "narrative",
+            "text": "You spoke into the void. Something heard you."
+          }
+        ],
+        "follows": {
+          "event_id": "signal_echo_arrival",
+          "delay": "next_arrival"
+        }
       },
       {
         "label": "Note the coordinates and continue",
-        "mechanical_effect": "log_and_ignore",
-        "tone_note": "Not everything that calls to you needs answering. Not today."
+        "tone_note": "Not everything that calls to you needs answering. Not today.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "Noted the coordinates. Moved on."
+          }
+        ]
       }
     ]
   },
@@ -431,18 +1059,54 @@
     "choices": [
       {
         "label": "Fuel up and chat for a bit",
-        "mechanical_effect": "buy_fuel_and_talk",
-        "tone_note": "A small kindness in a large void."
+        "tone_note": "A small kindness in a large void.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": 20.0
+          },
+          {
+            "type": "resources",
+            "delta": -30.0
+          },
+          {
+            "type": "crew_stress",
+            "delta": -0.05
+          },
+          {
+            "type": "narrative",
+            "text": "A small kindness at a quiet refueling stop."
+          }
+        ]
       },
       {
         "label": "Just fuel, thanks",
-        "mechanical_effect": "buy_fuel",
-        "tone_note": "Transaction complete. Moving on."
+        "tone_note": "Transaction complete. Moving on.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": 20.0
+          },
+          {
+            "type": "resources",
+            "delta": -30.0
+          }
+        ]
       },
       {
         "label": "Ask if she's heard any news from the sector",
-        "mechanical_effect": "gather_intel",
-        "tone_note": "People in quiet places hear things that busy people miss."
+        "tone_note": "People in quiet places hear things that busy people miss.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Picked up rumors \u2014 faction movements, missing ships, a place that used to be safe and isn't anymore."
+          },
+          {
+            "type": "narrative",
+            "text": "Listened to the local talk. Filed it away."
+          }
+        ]
       }
     ]
   },
@@ -457,23 +1121,85 @@
     "choices": [
       {
         "label": "Comply \u2014 jettison cargo",
-        "mechanical_effect": "jettison_cargo",
-        "tone_note": "Survival over pride. Cargo can be replaced."
+        "tone_note": "Survival over pride. Cargo can be replaced.",
+        "effects": [
+          {
+            "type": "jettison_cargo"
+          },
+          {
+            "type": "crew_mood",
+            "mood": "anxious"
+          },
+          {
+            "type": "narrative",
+            "text": "Cargo jettisoned. The pirates took it and vanished."
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "grudge",
+            "description": "Lost cargo to pirates in unclaimed space. The crew remembers."
+          }
+        ]
       },
       {
         "label": "Ignore the message and hold course",
-        "mechanical_effect": "hold_course",
-        "tone_note": "Calling the bluff. Or forcing the hand."
+        "tone_note": "Calling the bluff. Or forcing the hand.",
+        "effects": [
+          {
+            "type": "hull",
+            "delta": -0.1
+          },
+          {
+            "type": "damage_module",
+            "module": "engine",
+            "amount": 0.1
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.15
+          },
+          {
+            "type": "narrative",
+            "text": "They fired a warning shot that wasn't entirely a warning. Hull took a hit, but they broke off."
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "grudge",
+            "description": "Faced down pirates and survived. They know your ship now."
+          }
+        ]
       },
       {
         "label": "Open a channel \u2014 try to negotiate",
-        "mechanical_effect": "negotiate_pirates",
-        "tone_note": "Words before weapons."
+        "tone_note": "Words before weapons.",
+        "effects": [
+          {
+            "type": "resources",
+            "delta": -100.0
+          },
+          {
+            "type": "narrative",
+            "text": "Negotiated a 'transit fee.' Everyone pretended it wasn't extortion."
+          }
+        ]
       },
       {
         "label": "Run \u2014 full burn for the nearest system",
-        "mechanical_effect": "flee",
-        "tone_note": "Discretion. The better part of not dying."
+        "tone_note": "Discretion. The better part of not dying.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -10.0
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.1
+          },
+          {
+            "type": "narrative",
+            "text": "Burned hard and got clear. Cost fuel, saved everything else."
+          }
+        ]
       }
     ]
   },
@@ -485,22 +1211,66 @@
       "infrastructure_min": "colony",
       "time_since_last_visit_galactic_years_min": 50.0
     },
-    "text": "The colony has grown.\n\nLast time you were here \u2014 your time, months ago; their time, generations \u2014 it was a cluster of prefabs and determination. Now there's a city. Not a large city, not by any standard that matters, but a real one. Streets with names. A school. Arguments about zoning.\n\nA delegation meets you at the landing pad. They're formal, a little nervous. You recognize the family resemblance in the lead official \u2014 the jaw, the way she stands. Her grandmother stood in this same spot when it was bare soil and hope.\n\nThere's a monument near the landing pad. A plaque with names on it. Founders. You recognize some of them.\n\nThe official follows your gaze. \"We teach about the early days in school,\" she says. \"The children think it's ancient history.\"",
+    "text": "The colony at {system.name} has grown.\n\nLast time you were here \u2014 your time, months ago; their time, generations \u2014 it was a cluster of prefabs and determination. Now there's a city. Not a large city, not by any standard that matters, but a real one. Streets with names. A school. Arguments about zoning.\n\nA delegation meets you at the landing pad. They're formal, a little nervous. You recognize the family resemblance in the lead official \u2014 the jaw, the way she stands. Her grandmother stood in this same spot when it was bare soil and hope.\n\nThere's a monument near the landing pad. A plaque with names on it. Founders. You recognize some of them.\n\nThe official follows your gaze. \"We teach about the early days in school,\" she says. \"The children think it's ancient history.\"",
     "choices": [
       {
         "label": "Tell her about the founders you knew",
-        "mechanical_effect": "share_history",
-        "tone_note": "Living memory offered to people who only have records."
+        "tone_note": "Living memory offered to people who only have records.",
+        "effects": [
+          {
+            "type": "trust_personal",
+            "delta": 0.1
+          },
+          {
+            "type": "crew_stress",
+            "delta": -0.05
+          },
+          {
+            "type": "narrative",
+            "text": "Told her stories about people she'd only read about. Her eyes were bright. Yours were not."
+          }
+        ]
       },
       {
         "label": "Ask to see how the colony has changed",
-        "mechanical_effect": "tour_colony",
-        "tone_note": "Seeing what time builds when you're not watching."
+        "tone_note": "Seeing what time builds when you're not watching.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": -0.05
+          },
+          {
+            "type": "crew_mood",
+            "mood": "inspired",
+            "all": true
+          },
+          {
+            "type": "narrative",
+            "text": "They showed you the city. The school, the market, the park they named after someone you once knew."
+          }
+        ]
       },
       {
         "label": "Conduct your business and move on",
-        "mechanical_effect": "open_trade",
-        "tone_note": "You've learned not to linger in places that moved on without you."
+        "tone_note": "You've learned not to linger in places that moved on without you.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": 15.0
+          },
+          {
+            "type": "resources",
+            "delta": -40.0
+          },
+          {
+            "type": "hull",
+            "delta": 0.05
+          },
+          {
+            "type": "narrative",
+            "text": "Resupplied. The ship feels a little more whole."
+          }
+        ]
       }
     ]
   },
@@ -517,18 +1287,59 @@
     "choices": [
       {
         "label": "Accept the Guild's rates \u2014 business is business",
-        "mechanical_effect": "guild_preferred_rates",
-        "tone_note": "Pragmatic. The galaxy runs on deals like this."
+        "tone_note": "Pragmatic. The galaxy runs on deals like this.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": 30.0
+          },
+          {
+            "type": "resources",
+            "delta": -50.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "debt",
+            "description": "Accepted Corridor Guild preferred rates. They'll remember \u2014 and they'll expect reciprocity."
+          },
+          {
+            "type": "narrative",
+            "text": "Signed on with the Guild's network. Good prices. Strings attached."
+          }
+        ]
       },
       {
         "label": "Buy fuel at the inflated independent rate instead",
-        "mechanical_effect": "buy_fuel_independent",
-        "tone_note": "Principle has a price. You can afford it today."
+        "tone_note": "Principle has a price. You can afford it today.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": 20.0
+          },
+          {
+            "type": "resources",
+            "delta": -80.0
+          },
+          {
+            "type": "narrative",
+            "text": "Paid more than you had to. The independent seller looked grateful."
+          }
+        ]
       },
       {
         "label": "Ask what 'comprehensive' means, exactly",
-        "mechanical_effect": "guild_probe_network",
-        "tone_note": "Curiosity. Every network has edges worth knowing."
+        "tone_note": "Curiosity. Every network has edges worth knowing.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "The Corridor Guild's logistics network extends further than official records suggest. They know shipping routes, cargo manifests, and who's moving what \u2014 including near the frontier."
+          },
+          {
+            "type": "narrative",
+            "text": "Learned more than the Guild rep intended to share."
+          }
+        ]
       }
     ]
   },
@@ -545,18 +1356,48 @@
     "choices": [
       {
         "label": "Copy the data and leave the chip where you found it",
-        "mechanical_effect": "lattice_copy_intel",
-        "tone_note": "Take the knowledge, leave no trace."
+        "tone_note": "Take the knowledge, leave no trace.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Copied data from a Lattice dead drop. Coordinates, a name, and a warning: someone else knows about the signal."
+          },
+          {
+            "type": "narrative",
+            "text": "Took the knowledge. Left no trace."
+          }
+        ]
       },
       {
         "label": "Take the chip \u2014 if it was meant for you, you'll need it",
-        "mechanical_effect": "lattice_take_chip",
-        "tone_note": "If they wanted to reach you, now they know they did."
+        "tone_note": "If they wanted to reach you, now they know they did.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Took a Lattice dead drop chip. The coordinates and name might be useful. Taking the chip means they know you found it."
+          },
+          {
+            "type": "add_cargo",
+            "item": "Lattice data chip",
+            "quantity": 1
+          },
+          {
+            "type": "narrative",
+            "text": "Pocketed the chip. Someone will notice it's gone."
+          }
+        ]
       },
       {
         "label": "Destroy it \u2014 you don't need shadow network complications",
-        "mechanical_effect": "lattice_destroy",
-        "tone_note": "Some doors you don't open."
+        "tone_note": "Some doors you don't open.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "Crushed the chip under your boot. Some connections aren't worth making."
+          }
+        ]
       }
     ]
   },
@@ -572,23 +1413,75 @@
     "choices": [
       {
         "label": "Yes. Tell me everything.",
-        "mechanical_effect": "quiet_star_listen",
-        "tone_note": "Awe and hunger. This is what the edges of the map are for."
+        "tone_note": "Awe and hunger. This is what the edges of the map are for.",
+        "effects": [
+          {
+            "type": "crew_mood",
+            "mood": "inspired",
+            "all": true
+          },
+          {
+            "type": "crew_stress",
+            "delta": -0.05
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "The Order describes patterns in the time distortion \u2014 rhythmic fluctuations that correlate with the signal's frequency. They believe the distortion and the signal share a source."
+          },
+          {
+            "type": "narrative",
+            "text": "Listened. What they described changes the shape of everything."
+          }
+        ]
       },
       {
         "label": "What do you know about the signal?",
-        "mechanical_effect": "quiet_star_ask_signal",
-        "tone_note": "Direct. The mission pulls at you even here."
+        "tone_note": "Direct. The mission pulls at you even here.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "The Order has been tracking the signal independently. Their data suggests the source is deep in distorted space \u2014 somewhere time runs so slowly it might as well have stopped."
+          },
+          {
+            "type": "narrative",
+            "text": "They know about the signal. They've been listening longer than you have."
+          }
+        ]
       },
       {
         "label": "Join the vigil for a time \u2014 listen for yourself",
-        "mechanical_effect": "quiet_star_join",
-        "tone_note": "Patience. Some things you have to hear firsthand."
+        "tone_note": "Patience. Some things you have to hear firsthand.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": -0.1
+          },
+          {
+            "type": "crew_mood",
+            "mood": "hopeful",
+            "all": true
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Spent time in the vigil, listening at the edge of distorted space. Something was there \u2014 not a sound exactly, but a structure in the silence."
+          },
+          {
+            "type": "narrative",
+            "text": "Sat in the quiet. Heard something. Can't explain what."
+          }
+        ]
       },
       {
         "label": "Thank them and move on",
-        "mechanical_effect": "pass",
-        "tone_note": "Respect without commitment. Not everyone who listens hears."
+        "tone_note": "Respect without commitment. Not everyone who listens hears.",
+        "effects": [
+          {
+            "type": "pass"
+          }
+        ]
       }
     ]
   },
@@ -605,23 +1498,72 @@
     "choices": [
       {
         "label": "Pay for repairs \u2014 credits",
-        "mechanical_effect": "ashfall_repair_credits",
-        "tone_note": "Clean transaction. Worth the price for hull integrity."
+        "tone_note": "Clean transaction. Worth the price for hull integrity.",
+        "effects": [
+          {
+            "type": "hull",
+            "delta": 0.2
+          },
+          {
+            "type": "repair_module",
+            "module": "engine",
+            "amount": 0.15
+          },
+          {
+            "type": "resources",
+            "delta": -120.0
+          },
+          {
+            "type": "narrative",
+            "text": "Professional work. No questions asked. Hull integrity restored."
+          }
+        ]
       },
       {
         "label": "Offer to trade cargo for repair work",
-        "mechanical_effect": "ashfall_repair_trade",
-        "tone_note": "Barter economy. Out here, flexibility matters."
+        "tone_note": "Barter economy. Out here, flexibility matters.",
+        "effects": [
+          {
+            "type": "hull",
+            "delta": 0.15
+          },
+          {
+            "type": "repair_module",
+            "module": "engine",
+            "amount": 0.1
+          },
+          {
+            "type": "jettison_cargo"
+          },
+          {
+            "type": "narrative",
+            "text": "Traded cargo for repairs. Fair deal, out where fair is relative."
+          }
+        ]
       },
       {
         "label": "Ask what else they can do besides repairs",
-        "mechanical_effect": "ashfall_probe_services",
-        "tone_note": "Curiosity about what lives at the edges."
+        "tone_note": "Curiosity about what lives at the edges.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Ashfall Salvage runs more than a repair shop \u2014 they move people, cargo, and information across borders the official routes don't cross. The frontier has its own economy."
+          },
+          {
+            "type": "narrative",
+            "text": "Asked around. The frontier has layers you hadn't seen."
+          }
+        ]
       },
       {
         "label": "Too risky \u2014 leave",
-        "mechanical_effect": "pass",
-        "tone_note": "Paranoia is a survival trait."
+        "tone_note": "Paranoia is a survival trait.",
+        "effects": [
+          {
+            "type": "pass"
+          }
+        ]
       }
     ]
   },
@@ -634,22 +1576,47 @@
       "faction_min_strength": 0.5,
       "faction_controlled": true
     },
-    "text": "The cruiser drops in three kilometers off your bow, close enough to read the hull markings with your eyes. Hegemony Military Command. Not patrol boats this time \u2014 a proper warship, running a sweep.\n\nYour comms light up before you can react. \"Independent vessel, you are in a security zone. Cut engines and prepare for inspection. This is not a request.\"\n\nThe officer who boards is thorough, professional, and takes her time. She scans cargo, checks crew manifests against a database you can't see, and lingers over your navigation logs.\n\n\"You've been spending time near the frontier,\" she notes. Not a question. \"Lot of traffic headed that way lately. Most of it doesn't come back the same.\"\n\nShe pauses on something in your logs. You can't see what.\n\n\"You're clear. For now. But Captain \u2014 be careful what you go looking for out there.\"",
+    "text": "A {civ.name} cruiser drops in three kilometers off your bow, close enough to read the hull markings with your eyes. Hegemony Military Command. Not patrol boats this time \u2014 a proper warship, running a sweep.\n\nYour comms light up before you can react. \"Independent vessel, you are in a security zone. Cut engines and prepare for inspection. This is not a request.\"\n\nThe officer who boards is thorough, professional, and takes her time. She scans cargo, checks crew manifests against a database you can't see, and lingers over your navigation logs.\n\n\"You've been spending time near the frontier,\" she notes. Not a question. \"Lot of traffic headed that way lately. Most of it doesn't come back the same.\"\n\nShe pauses on something in your logs. You can't see what.\n\n\"You're clear. For now. But Captain \u2014 be careful what you go looking for out there.\"",
     "choices": [
       {
         "label": "Ask what she means about traffic not coming back the same",
-        "mechanical_effect": "military_probe_intel",
-        "tone_note": "The warning is the interesting part."
+        "tone_note": "The warning is the interesting part.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "The military officer let slip that ships returning from deep-frontier distorted space show anomalous navigation log corruption. Hegemony Command is tracking it."
+          },
+          {
+            "type": "narrative",
+            "text": "She said more than she meant to. Or exactly as much as she intended."
+          }
+        ]
       },
       {
         "label": "Comply silently \u2014 don't invite further scrutiny",
-        "mechanical_effect": "comply_checkpoint",
-        "tone_note": "Endure the process. Say nothing memorable."
+        "tone_note": "Endure the process. Say nothing memorable.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "Inspection passed without incident."
+          }
+        ]
       },
       {
         "label": "Ask about restricted zones near your planned route",
-        "mechanical_effect": "military_ask_routes",
-        "tone_note": "Practical. Use the encounter to plan ahead."
+        "tone_note": "Practical. Use the encounter to plan ahead.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Learned that Hegemony Military Command has designated certain frontier routes as restricted \u2014 specifically near systems with high time distortion. They're not saying why."
+          },
+          {
+            "type": "narrative",
+            "text": "Restricted zones. Near the frontier. Near the signal. That's not a coincidence."
+          }
+        ]
       }
     ]
   },
@@ -665,18 +1632,57 @@
     "choices": [
       {
         "label": "Sit and listen \u2014 spacers always know something useful",
-        "mechanical_effect": "spacers_listen",
-        "tone_note": "The network matters. These people are the galaxy's memory."
+        "tone_note": "The network matters. These people are the galaxy's memory.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": -0.05
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "The spacer's network has noticed unusual shipping pattern changes \u2014 routes being rerouted around certain frontier systems, contracts drying up near distorted space."
+          },
+          {
+            "type": "narrative",
+            "text": "Bought a round. Heard three rumors. Two of them might even be true."
+          }
+        ]
       },
       {
         "label": "Ask about the favor first",
-        "mechanical_effect": "spacers_favor",
-        "tone_note": "Practical. Know the cost before you accept the gift."
+        "tone_note": "Practical. Know the cost before you accept the gift.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "debt",
+            "description": "The spacer needs a message delivered to a contact at a frontier system. Simple job, he says. Spacers don't ask for favors unless the official channels won't work."
+          },
+          {
+            "type": "add_cargo",
+            "item": "Sealed message tube (Spacers' Collective)",
+            "quantity": 1
+          },
+          {
+            "type": "narrative",
+            "text": "Took the job. A message, a destination, and a handshake."
+          }
+        ]
       },
       {
         "label": "Check the job board instead \u2014 you'll find your own leads",
-        "mechanical_effect": "check_jobs",
-        "tone_note": "Self-reliance. You don't owe anyone conversation."
+        "tone_note": "Self-reliance. You don't owe anyone conversation.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "debt",
+            "description": "Took a contract \u2014 delivery, investigation, or escort. Someone is counting on you now."
+          },
+          {
+            "type": "narrative",
+            "text": "Found work. The kind that keeps the tanks full."
+          }
+        ]
       }
     ]
   },
@@ -693,18 +1699,50 @@
     "choices": [
       {
         "label": "Reply \u2014 you need every advantage you can get",
-        "mechanical_effect": "lattice_accept_broker",
-        "tone_note": "The shadows have something you need. The cost is being known by them."
+        "tone_note": "The shadows have something you need. The cost is being known by them.",
+        "effects": [
+          {
+            "type": "resources",
+            "delta": -100.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Established a channel with a Lattice intelligence broker. They have information about the signal and faction movements near distorted space. The relationship is transactional \u2014 for now."
+          },
+          {
+            "type": "narrative",
+            "text": "Made contact with the shadows. They had exactly what you needed."
+          }
+        ]
       },
       {
         "label": "Reply but negotiate terms first",
-        "mechanical_effect": "lattice_negotiate",
-        "tone_note": "Interest, but on your terms. Show them you're not desperate."
+        "tone_note": "Interest, but on your terms. Show them you're not desperate.",
+        "effects": [
+          {
+            "type": "resources",
+            "delta": -60.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Negotiated limited terms with a Lattice broker. They provided partial intelligence \u2014 enough to be useful, not enough to feel comfortable."
+          },
+          {
+            "type": "narrative",
+            "text": "Bargained them down. They respected the counter-offer."
+          }
+        ]
       },
       {
         "label": "Let the timer expire",
-        "mechanical_effect": "pass",
-        "tone_note": "Silence is an answer too. They'll understand."
+        "tone_note": "Silence is an answer too. They'll understand.",
+        "effects": [
+          {
+            "type": "pass"
+          }
+        ]
       }
     ]
   },
@@ -720,18 +1758,52 @@
     "choices": [
       {
         "label": "What is the question?",
-        "mechanical_effect": "quiet_star_mission_clue",
-        "tone_note": "The mission tightens. This is real. This matters."
+        "tone_note": "The mission tightens. This is real. This matters.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "The pilgrim described the signal as a question \u2014 mathematical, patient, waiting for comprehension. The pattern she drew matches nothing in human mathematics, but your science officer thinks it resembles a topology proof."
+          },
+          {
+            "type": "crew_mood",
+            "mood": "inspired"
+          },
+          {
+            "type": "narrative",
+            "text": "The pattern burns in your mind. It means something. You almost understand."
+          }
+        ]
       },
       {
         "label": "Record the pattern she drew \u2014 analyze it later",
-        "mechanical_effect": "quiet_star_record_pattern",
-        "tone_note": "Collect the evidence. Trust the science over the mysticism."
+        "tone_note": "Collect the evidence. Trust the science over the mysticism.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Recorded the pattern the pilgrim drew on the viewport. Analysis pending, but initial comparison suggests non-human mathematical notation."
+          },
+          {
+            "type": "narrative",
+            "text": "Captured the image. Science will find what faith can't."
+          }
+        ]
       },
       {
         "label": "How did you know about our mission?",
-        "mechanical_effect": "quiet_star_how_know",
-        "tone_note": "Suspicion and wonder in equal measure."
+        "tone_note": "Suspicion and wonder in equal measure.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "The pilgrim knew about the mission \u2014 claims the Order has contacts who share information about signal-seekers. Unclear whether this means allies or surveillance."
+          },
+          {
+            "type": "narrative",
+            "text": "She smiled. 'The distortion tells us who is listening.' Make of that what you will."
+          }
+        ]
       }
     ]
   },
@@ -754,18 +1826,44 @@
     "choices": [
       {
         "label": "Trade at standard rates",
-        "mechanical_effect": "resources:200;buy_supplies",
-        "tone_note": "Routine, efficient. The mundane machinery of survival."
+        "tone_note": "Routine, efficient. The mundane machinery of survival.",
+        "effects": [
+          {
+            "type": "resources",
+            "delta": 200.0
+          },
+          {
+            "type": "supplies",
+            "delta": 30.0
+          },
+          {
+            "type": "resources",
+            "delta": -25.0
+          }
+        ]
       },
       {
         "label": "Push for better terms",
-        "mechanical_effect": "resources:350;crew_stress:0.05",
-        "tone_note": "A negotiation that leaves both sides slightly unsatisfied \u2014 the best kind."
+        "tone_note": "A negotiation that leaves both sides slightly unsatisfied \u2014 the best kind.",
+        "effects": [
+          {
+            "type": "resources",
+            "delta": 350.0
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.05
+          }
+        ]
       },
       {
         "label": "Browse and leave without buying",
-        "mechanical_effect": "pass",
-        "tone_note": "Sometimes you just need to see what's available."
+        "tone_note": "Sometimes you just need to see what's available.",
+        "effects": [
+          {
+            "type": "pass"
+          }
+        ]
       }
     ]
   },
@@ -785,18 +1883,60 @@
     "choices": [
       {
         "label": "Trade carefully \u2014 inspect everything",
-        "mechanical_effect": "resources:100;buy_supplies",
-        "tone_note": "Cautious but fair. Two ships passing in the dark."
+        "tone_note": "Cautious but fair. Two ships passing in the dark.",
+        "effects": [
+          {
+            "type": "resources",
+            "delta": 100.0
+          },
+          {
+            "type": "supplies",
+            "delta": 30.0
+          },
+          {
+            "type": "resources",
+            "delta": -25.0
+          }
+        ]
       },
       {
         "label": "Buy everything they have at a premium",
-        "mechanical_effect": "resources:-200;buy_supplies;buy_supplies;fuel:15",
-        "tone_note": "Desperation or opportunity \u2014 hard to tell the difference out here."
+        "tone_note": "Desperation or opportunity \u2014 hard to tell the difference out here.",
+        "effects": [
+          {
+            "type": "resources",
+            "delta": -200.0
+          },
+          {
+            "type": "supplies",
+            "delta": 30.0
+          },
+          {
+            "type": "resources",
+            "delta": -25.0
+          },
+          {
+            "type": "supplies",
+            "delta": 30.0
+          },
+          {
+            "type": "resources",
+            "delta": -25.0
+          },
+          {
+            "type": "fuel",
+            "delta": 15.0
+          }
+        ]
       },
       {
         "label": "Decline and move on",
-        "mechanical_effect": "pass",
-        "tone_note": "Trust is expensive. You can't afford it today."
+        "tone_note": "Trust is expensive. You can't afford it today.",
+        "effects": [
+          {
+            "type": "pass"
+          }
+        ]
       }
     ]
   },
@@ -819,18 +1959,55 @@
     "choices": [
       {
         "label": "Deploy probes and analyze at safe distance",
-        "mechanical_effect": "fuel:-5;spawn_thread:mystery:Anomaly readings suggest deliberate structure \u2014 someone or something built this;narrative:The data streams back slowly, each packet stranger than the last.",
-        "tone_note": "Careful, methodical wonder. The awe of the careful mind."
+        "tone_note": "Careful, methodical wonder. The awe of the careful mind.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -5.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Anomaly readings suggest deliberate structure \u2014 someone or something built this"
+          },
+          {
+            "type": "narrative",
+            "text": "The data streams back slowly, each packet stranger than the last."
+          }
+        ]
       },
       {
         "label": "Move closer for direct sensor readings",
-        "mechanical_effect": "fuel:-3;hull:-0.05;spawn_thread:mystery:Direct exposure to the anomaly revealed something your instruments can barely describe;crew_stress:0.1",
-        "tone_note": "Reckless curiosity. The readings are extraordinary. The cost might be too."
+        "tone_note": "Reckless curiosity. The readings are extraordinary. The cost might be too.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -3.0
+          },
+          {
+            "type": "hull",
+            "delta": -0.05
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Direct exposure to the anomaly revealed something your instruments can barely describe"
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.1
+          }
+        ]
       },
       {
         "label": "Log the coordinates and move on",
-        "mechanical_effect": "narrative:You mark the anomaly on your charts. Some mysteries keep.",
-        "tone_note": "Restraint. Not every door needs to be opened."
+        "tone_note": "Restraint. Not every door needs to be opened.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "You mark the anomaly on your charts. Some mysteries keep."
+          }
+        ]
       }
     ]
   },
@@ -852,18 +2029,51 @@
     "choices": [
       {
         "label": "Send an away team to explore",
-        "mechanical_effect": "crew_stress:0.08;spawn_thread:mystery:The ruin contained writing in a language your systems can almost parse;narrative:The team returns hours later, quiet and carrying samples.",
-        "tone_note": "The weight of deep time. Walking through someone else's abandoned home."
+        "tone_note": "The weight of deep time. Walking through someone else's abandoned home.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": 0.08
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "The ruin contained writing in a language your systems can almost parse"
+          },
+          {
+            "type": "narrative",
+            "text": "The team returns hours later, quiet and carrying samples."
+          }
+        ]
       },
       {
         "label": "Scan remotely \u2014 don't risk the crew",
-        "mechanical_effect": "fuel:-3;narrative:Remote scans reveal architectural details but miss whatever the builders left inside.",
-        "tone_note": "Prudent. But some things can only be understood up close."
+        "tone_note": "Prudent. But some things can only be understood up close.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -3.0
+          },
+          {
+            "type": "narrative",
+            "text": "Remote scans reveal architectural details but miss whatever the builders left inside."
+          }
+        ]
       },
       {
         "label": "Salvage what you can from the exterior",
-        "mechanical_effect": "resources:150;cargo:ancient_fragment:1",
-        "tone_note": "Practical. The dead don't need their possessions. Probably."
+        "tone_note": "Practical. The dead don't need their possessions. Probably.",
+        "effects": [
+          {
+            "type": "resources",
+            "delta": 150.0
+          },
+          {
+            "type": "add_cargo",
+            "item": "ancient_fragment",
+            "quantity": 1
+          }
+        ]
       }
     ]
   },
@@ -884,18 +2094,55 @@
     "choices": [
       {
         "label": "Full repair \u2014 fix everything",
-        "mechanical_effect": "resources:-300;hull:0.3;repair_module:engine:0.3;repair_module:sensors:0.2",
-        "tone_note": "Expensive but thorough. The ship deserves it."
+        "tone_note": "Expensive but thorough. The ship deserves it.",
+        "effects": [
+          {
+            "type": "resources",
+            "delta": -300.0
+          },
+          {
+            "type": "hull",
+            "delta": 0.3
+          },
+          {
+            "type": "repair_module",
+            "module": "engine",
+            "amount": 0.3
+          },
+          {
+            "type": "repair_module",
+            "module": "sensors",
+            "amount": 0.2
+          }
+        ]
       },
       {
         "label": "Hull only \u2014 patch what's critical",
-        "mechanical_effect": "resources:-100;hull:0.2",
-        "tone_note": "Triage. Spend where it matters most."
+        "tone_note": "Triage. Spend where it matters most.",
+        "effects": [
+          {
+            "type": "resources",
+            "delta": -100.0
+          },
+          {
+            "type": "hull",
+            "delta": 0.2
+          }
+        ]
       },
       {
         "label": "Just the diagnostics \u2014 your engineer will handle the rest",
-        "mechanical_effect": "resources:-25;narrative:The technician's diagnostic reveals problems your own scans missed. Knowledge is worth something.",
-        "tone_note": "Frugal. Your crew can do the work; you just needed the blueprint."
+        "tone_note": "Frugal. Your crew can do the work; you just needed the blueprint.",
+        "effects": [
+          {
+            "type": "resources",
+            "delta": -25.0
+          },
+          {
+            "type": "narrative",
+            "text": "The technician's diagnostic reveals problems your own scans missed. Knowledge is worth something."
+          }
+        ]
       }
     ]
   },
@@ -915,18 +2162,236 @@
     "choices": [
       {
         "label": "Focus on astronomical data \u2014 star composition, orbital mechanics",
-        "mechanical_effect": "fuel:-2;narrative:The scan reveals detailed stellar data. Your navigator updates the charts with new precision.",
-        "tone_note": "The quiet satisfaction of knowing where you are in the universe."
+        "tone_note": "The quiet satisfaction of knowing where you are in the universe.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -2.0
+          },
+          {
+            "type": "narrative",
+            "text": "The scan reveals detailed stellar data. Your navigator updates the charts with new precision."
+          }
+        ]
       },
       {
         "label": "Scan for signals \u2014 artificial emissions, distress calls, anything deliberate",
-        "mechanical_effect": "fuel:-2;spawn_thread:clue:Long-range signal scan detected a repeating pattern from the outer system;narrative:The scan picks up something. Faint, regular, and definitely not natural.",
-        "tone_note": "Listening for voices in the dark. Sometimes the dark answers."
+        "tone_note": "Listening for voices in the dark. Sometimes the dark answers.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -2.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "clue",
+            "description": "Long-range signal scan detected a repeating pattern from the outer system"
+          },
+          {
+            "type": "narrative",
+            "text": "The scan picks up something. Faint, regular, and definitely not natural."
+          }
+        ]
       },
       {
         "label": "Quick sweep \u2014 don't waste the fuel",
-        "mechanical_effect": "fuel:-1;narrative:A cursory scan. Nothing obvious. But obvious things are rarely what matter.",
-        "tone_note": "Impatient, practical. There's somewhere else to be."
+        "tone_note": "Impatient, practical. There's somewhere else to be.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -1.0
+          },
+          {
+            "type": "narrative",
+            "text": "A cursory scan. Nothing obvious. But obvious things are rarely what matter."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "derelict_boarding",
+    "encounter_type": "novel",
+    "tone": "tense",
+    "context_requirements": {},
+    "text": "Sensors pick up a hull drifting in the outer reaches of {system.name}. No power signature. No beacon. The design is unfamiliar \u2014 not Hegemony, not colonial. Something older.\n\n{crew.random.name} runs a structural scan. \"Intact enough to board. Atmosphere's gone, but the hull geometry suggests cargo bays amidships. Could be worth a look.\"\n\nThe {ship.name} pulls alongside. Through the viewport, the derelict's surface is pitted but unbreached. Whatever killed this ship, it wasn't weapons fire.",
+    "choices": [
+      {
+        "label": "Suit up and board",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -3.0
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.05
+          },
+          {
+            "type": "narrative",
+            "text": "Crossed the gap. The airlock opened easier than it should have."
+          }
+        ],
+        "tone_note": "Commitment. Whatever's in there, you'll see it firsthand.",
+        "follows": {
+          "event_id": "derelict_boarding_interior",
+          "delay": "immediate"
+        }
+      },
+      {
+        "label": "Send a remote probe instead",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -1.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Probe footage from an unidentified derelict near {system.name}. The interior was dark. The probe lost signal after four minutes."
+          },
+          {
+            "type": "narrative",
+            "text": "The probe's feed cut out deep inside the ship. The last frame showed an open door that shouldn't have been open."
+          }
+        ],
+        "tone_note": "Cautious. You'll know less, but you'll be safe."
+      },
+      {
+        "label": "Mark the coordinates and move on",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Unidentified derelict catalogued near {system.name}. Never boarded."
+          },
+          {
+            "type": "narrative",
+            "text": "Filed the location. Someone else's mystery."
+          }
+        ],
+        "tone_note": "Pragmatic. Not every door needs to be opened."
+      }
+    ]
+  },
+  {
+    "id": "derelict_boarding_interior",
+    "encounter_type": "contextual",
+    "tone": "wonder",
+    "context_requirements": {},
+    "text": "The interior is wrong in ways that take a moment to register.\n\nThe corridors are the right shape for a ship \u2014 functional, braced, designed for people to move through. But the proportions are off. Ceilings too high. Doorways too wide. The handholds along the walls are spaced for someone with longer arms.\n\nDeeper in, you find what might be a bridge. The consoles are dark but intact. There's writing on the bulkheads \u2014 dense, layered script in a language your translator doesn't recognize. Not because it's corrupted. Because it was never in the database.\n\n{crew.random.name} finds something on what might be the captain's station. A small object, dense and warm to the touch even through suit gloves. It pulses faintly when held.",
+    "choices": [
+      {
+        "label": "Take the object back to the ship",
+        "effects": [
+          {
+            "type": "add_cargo",
+            "item": "Unknown artifact (derelict)",
+            "quantity": 1
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Recovered a pulsing artifact from an alien derelict. It responds to proximity. It might be responding to us."
+          },
+          {
+            "type": "crew_mood",
+            "mood": "anxious",
+            "all": true
+          },
+          {
+            "type": "narrative",
+            "text": "Brought it aboard. It's in the cargo bay now, pulsing steadily. No one sleeps well that first night."
+          }
+        ],
+        "tone_note": "Acquisitive. Curious. Maybe unwise."
+      },
+      {
+        "label": "Document everything but leave it",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Thorough scans of an alien derelict's interior. Script samples. Architectural measurements. Left the artifact in place."
+          },
+          {
+            "type": "trust_professional",
+            "delta": 0.05
+          },
+          {
+            "type": "narrative",
+            "text": "Recorded everything. Touched nothing. The professional choice, and the crew respects it."
+          }
+        ],
+        "tone_note": "Disciplined. The data matters more than the trophy."
+      },
+      {
+        "label": "Try to activate the consoles",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": 0.1
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Attempted to activate alien bridge consoles. Something responded. Brief burst of power through the derelict \u2014 lights, sounds in frequencies that hurt. Then silence. The ship's orientation shifted three degrees toward the galactic core."
+          },
+          {
+            "type": "damage_module",
+            "module": "sensors",
+            "amount": 0.15
+          },
+          {
+            "type": "narrative",
+            "text": "For two seconds, the ship was alive. Whatever it showed you in that moment, you can't quite remember. But you know it was pointing somewhere."
+          }
+        ],
+        "tone_note": "Bold. Reckless. The kind of thing that changes trajectories."
+      }
+    ]
+  },
+  {
+    "id": "signal_echo_arrival",
+    "encounter_type": "contextual",
+    "tone": "quiet",
+    "context_requirements": {},
+    "text": "As the {ship.name} drops out of FTL at {system.name}, {crew.random.name} looks up from the comms console with an expression you can't read.\n\n\"That signal. The one we recorded. It's here too.\"\n\nNot the same signal \u2014 the same structure. The same mathematical backbone, the same nested prime sequences. But the content is different. As if the signal at the last system was a question, and this one is part of the answer.\n\nIt's been waiting here. It might have been waiting everywhere.",
+    "choices": [
+      {
+        "label": "Cross-reference the two signals",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Two instances of the same signal structure at different systems. Cross-referencing reveals a spatial pattern \u2014 the signals form a bearing. Something is triangulating."
+          },
+          {
+            "type": "crew_mood",
+            "mood": "determined",
+            "all": false
+          },
+          {
+            "type": "narrative",
+            "text": "The math resolves into a direction. Not a location yet. But a direction."
+          }
+        ],
+        "tone_note": "Analytical. The pieces are connecting."
+      },
+      {
+        "label": "Record it and stay focused on the mission",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Second instance of the unknown signal recorded at {system.name}. Pattern is spreading. Not investigating further."
+          },
+          {
+            "type": "narrative",
+            "text": "Added to the file. The file is getting thick."
+          }
+        ],
+        "tone_note": "Disciplined. But it's getting harder to ignore."
       }
     ]
   }

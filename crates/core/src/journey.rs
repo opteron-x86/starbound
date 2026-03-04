@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::contract::Contract;
 use crate::crew::CrewMember;
 use crate::galaxy::CivStanding;
 use crate::mission::MissionState;
@@ -36,4 +37,7 @@ pub struct Journey {
     /// The player's emergent behavioral profile — derived from actions.
     #[serde(default)]
     pub profile: PlayerProfile,
+    /// Active contracts the player has accepted.
+    #[serde(default)]
+    pub active_contracts: Vec<Contract>,
 }

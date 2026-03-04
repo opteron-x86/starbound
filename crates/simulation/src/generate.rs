@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use starbound_core::galaxy::*;
+use starbound_core::npc::Npc;
 use starbound_core::time::Timestamp;
 
 use crate::templates;
@@ -20,6 +21,7 @@ pub struct GeneratedGalaxy {
     pub civilizations: Vec<Civilization>,
     pub factions: Vec<Faction>,
     pub connections: Vec<Connection>,
+    pub npcs: Vec<Npc>,
 }
 
 const SYSTEM_NAMES: [&str; 10] = [
@@ -53,6 +55,9 @@ pub fn generate_galaxy(seed: u64) -> GeneratedGalaxy {
     // Populate faction_presence on every system.
     assign_faction_presence(&mut systems, &factions, &civilizations);
 
+    // Generate economy profiles for inhabited systems.
+    assign_system_economies(&mut systems, &factions, &mut rng);
+
     let num_civs = civilizations.len();
     let sector_desc = match num_civs {
         2 => "The first settled systems beyond the homeworld. \
@@ -73,12 +78,15 @@ pub fn generate_galaxy(seed: u64) -> GeneratedGalaxy {
         system_ids: systems.iter().map(|s| s.id).collect(),
     };
 
+    let npcs = generate_npcs(&systems, &factions, &mut rng);
+
     GeneratedGalaxy {
         sector,
         systems,
         civilizations,
         factions,
         connections,
+        npcs,
     }
 }
 
@@ -1109,6 +1117,7 @@ fn generate_systems(rng: &mut StdRng, civs: &[Civilization]) -> Vec<StarSystem> 
             active_threads: vec![],
             time_factor: time_factors[i],
             faction_presence: vec![],
+            economy: None,
         });
     }
 
@@ -1249,6 +1258,306 @@ fn roman_numeral(n: usize) -> &'static str {
         5 => "V",
         _ => "VI",
     }
+}
+
+// ===========================================================================
+// Economy generation
+// ===========================================================================
+
+/// Economy archetypes based on infrastructure and planet composition.
+/// Each archetype defines production/consumption biases.
+#[derive(Debug, Clone, Copy)]
+enum EconomyArchetype {
+    /// Agricultural world — produces food, consumes manufactured goods.
+    Agricultural,
+    /// Mining/extraction — produces raw materials, consumes food and medical.
+    Extraction,
+    /// Manufacturing hub — produces manufactured goods, consumes raw materials.
+    Manufacturing,
+    /// Trade hub — moderate everything, low volatility.
+    TradeHub,
+    /// Military outpost — consumes heavily, produces little.
+    Military,
+    /// Frontier — limited everything, high volatility.
+    Frontier,
+}
+
+/// Assign economy profiles to inhabited systems (Outpost+).
+fn assign_system_economies(
+    systems: &mut [StarSystem],
+    factions: &[Faction],
+    rng: &mut StdRng,
+) {
+    for system in systems.iter_mut() {
+        let infra = system.infrastructure_level;
+        if infra == InfrastructureLevel::None {
+            continue;
+        }
+
+        // Pick archetype based on infrastructure + randomness.
+        let archetype = match infra {
+            InfrastructureLevel::Outpost => {
+                // Outposts are frontier or extraction.
+                if rng.gen_bool(0.6) {
+                    EconomyArchetype::Frontier
+                } else {
+                    EconomyArchetype::Extraction
+                }
+            }
+            InfrastructureLevel::Colony => {
+                // Colonies specialize.
+                *[EconomyArchetype::Agricultural, EconomyArchetype::Extraction,
+                  EconomyArchetype::Manufacturing]
+                    .choose(rng).unwrap()
+            }
+            InfrastructureLevel::Established => {
+                // Established systems lean toward manufacturing or trade.
+                *[EconomyArchetype::Manufacturing, EconomyArchetype::TradeHub,
+                  EconomyArchetype::Agricultural]
+                    .choose(rng).unwrap()
+            }
+            InfrastructureLevel::Hub => EconomyArchetype::TradeHub,
+            InfrastructureLevel::Capital => {
+                // Capitals are trade hubs or manufacturing centers.
+                if rng.gen_bool(0.5) {
+                    EconomyArchetype::TradeHub
+                } else {
+                    EconomyArchetype::Manufacturing
+                }
+            }
+            InfrastructureLevel::None => unreachable!(),
+        };
+
+        // Check if military faction dominance shifts the archetype.
+        let has_strong_military = system.faction_presence.iter().any(|fp| {
+            fp.strength >= 0.6
+                && factions.iter()
+                    .find(|f| f.id == fp.faction_id)
+                    .map(|f| f.category == FactionCategory::Military)
+                    .unwrap_or(false)
+        });
+        let archetype = if has_strong_military && rng.gen_bool(0.4) {
+            EconomyArchetype::Military
+        } else {
+            archetype
+        };
+
+        let mut production = HashMap::new();
+        let mut consumption = HashMap::new();
+
+        // Base profiles from archetype, with small random variance.
+        let variance = |rng: &mut StdRng, base: f32| -> f32 {
+            (base + rng.gen_range(-0.1..0.1)).clamp(0.0, 1.0)
+        };
+
+        match archetype {
+            EconomyArchetype::Agricultural => {
+                production.insert(TradeGood::Food, variance(rng, 0.8));
+                production.insert(TradeGood::RawMaterials, variance(rng, 0.3));
+                production.insert(TradeGood::ManufacturedGoods, variance(rng, 0.1));
+                production.insert(TradeGood::MedicalSupplies, variance(rng, 0.3));
+                consumption.insert(TradeGood::ManufacturedGoods, variance(rng, 0.7));
+                consumption.insert(TradeGood::ConstructionMaterials, variance(rng, 0.5));
+                consumption.insert(TradeGood::RefinedFuelCells, variance(rng, 0.4));
+            }
+            EconomyArchetype::Extraction => {
+                production.insert(TradeGood::RawMaterials, variance(rng, 0.9));
+                production.insert(TradeGood::ConstructionMaterials, variance(rng, 0.5));
+                consumption.insert(TradeGood::Food, variance(rng, 0.7));
+                consumption.insert(TradeGood::MedicalSupplies, variance(rng, 0.6));
+                consumption.insert(TradeGood::ManufacturedGoods, variance(rng, 0.5));
+                consumption.insert(TradeGood::RefinedFuelCells, variance(rng, 0.3));
+            }
+            EconomyArchetype::Manufacturing => {
+                production.insert(TradeGood::ManufacturedGoods, variance(rng, 0.8));
+                production.insert(TradeGood::RefinedFuelCells, variance(rng, 0.5));
+                consumption.insert(TradeGood::RawMaterials, variance(rng, 0.8));
+                consumption.insert(TradeGood::Food, variance(rng, 0.5));
+                consumption.insert(TradeGood::ConstructionMaterials, variance(rng, 0.3));
+            }
+            EconomyArchetype::TradeHub => {
+                // Trade hubs have moderate everything — they're middlemen.
+                for good in TradeGood::all() {
+                    production.insert(*good, variance(rng, 0.4));
+                    consumption.insert(*good, variance(rng, 0.4));
+                }
+            }
+            EconomyArchetype::Military => {
+                production.insert(TradeGood::RefinedFuelCells, variance(rng, 0.4));
+                consumption.insert(TradeGood::Food, variance(rng, 0.6));
+                consumption.insert(TradeGood::RawMaterials, variance(rng, 0.5));
+                consumption.insert(TradeGood::ManufacturedGoods, variance(rng, 0.7));
+                consumption.insert(TradeGood::MedicalSupplies, variance(rng, 0.6));
+                consumption.insert(TradeGood::ConstructionMaterials, variance(rng, 0.6));
+                consumption.insert(TradeGood::RefinedFuelCells, variance(rng, 0.7));
+            }
+            EconomyArchetype::Frontier => {
+                // Frontier systems have very little — high consumption, low production.
+                for good in TradeGood::all() {
+                    production.insert(*good, variance(rng, 0.1));
+                    consumption.insert(*good, variance(rng, 0.5));
+                }
+                // But they might have raw materials from local extraction.
+                production.insert(TradeGood::RawMaterials, variance(rng, 0.4));
+            }
+        }
+
+        let price_volatility = match infra {
+            InfrastructureLevel::Capital => 0.6,
+            InfrastructureLevel::Hub => 0.8,
+            InfrastructureLevel::Established => 1.0,
+            InfrastructureLevel::Colony => 1.2,
+            InfrastructureLevel::Outpost => 1.8,
+            InfrastructureLevel::None => 2.0,
+        };
+
+        let fuel_price = match infra {
+            InfrastructureLevel::Capital | InfrastructureLevel::Hub => 2.0 + rng.gen_range(0.0..1.0),
+            InfrastructureLevel::Established | InfrastructureLevel::Colony => 3.0 + rng.gen_range(0.0..2.0),
+            InfrastructureLevel::Outpost => 5.0 + rng.gen_range(0.0..3.0),
+            InfrastructureLevel::None => 0.0,
+        };
+
+        let supply_price = match infra {
+            InfrastructureLevel::Capital | InfrastructureLevel::Hub => 1.5 + rng.gen_range(0.0..0.5),
+            InfrastructureLevel::Established | InfrastructureLevel::Colony => 2.0 + rng.gen_range(0.0..1.5),
+            InfrastructureLevel::Outpost => 3.5 + rng.gen_range(0.0..2.0),
+            InfrastructureLevel::None => 0.0,
+        };
+
+        system.economy = Some(SystemEconomy {
+            production,
+            consumption,
+            price_volatility,
+            fuel_price,
+            supply_price,
+        });
+    }
+}
+
+// ===========================================================================
+// NPC generation
+// ===========================================================================
+
+/// First names and last names for NPC generation.
+const NPC_FIRST_NAMES: [&str; 20] = [
+    "Maren", "Joss", "Kael", "Suri", "Dav", "Ren", "Thea", "Orin",
+    "Lys", "Cade", "Nessa", "Tomas", "Asha", "Vek", "Petra", "Idris",
+    "Yara", "Leong", "Sienna", "Harlan",
+];
+
+const NPC_LAST_NAMES: [&str; 20] = [
+    "Solari", "Voss", "Kessler", "Okafor", "Tannen", "Haig", "Reyes",
+    "Strand", "Vasil", "Torren", "Ashcroft", "Nazari", "Brennan", "Loh",
+    "Duval", "Mikkelsen", "Achebe", "Cross", "Sato", "Kaur",
+];
+
+/// Title and bio template per faction category.
+fn npc_template_for_category(category: FactionCategory) -> (&'static str, &'static str) {
+    match category {
+        FactionCategory::Military => (
+            "Garrison Commander",
+            "Career officer posted here to maintain order. Efficient, formal, \
+             evaluates everyone by whether they're useful or a problem.",
+        ),
+        FactionCategory::Economic => (
+            "Trade Liaison",
+            "Manages commercial operations and trade agreements. Knows the price \
+             of everything and the value of reliable partners.",
+        ),
+        FactionCategory::Guild => (
+            "Guild Factor",
+            "The local representative of the Corridor Guild. Handles contracts, \
+             repairs, and the quiet logistics that keep ships moving.",
+        ),
+        FactionCategory::Criminal => (
+            "Fixer",
+            "Operates in the spaces between official channels. Knows who needs \
+             what moved and who doesn't ask questions.",
+        ),
+        FactionCategory::Religious => (
+            "Prior",
+            "Tends to the spiritual needs of travelers and locals. Speaks carefully, \
+             listens more carefully, knows things about distorted space.",
+        ),
+        FactionCategory::Academic => (
+            "Research Coordinator",
+            "Manages scientific operations and data collection. Perpetually underfunded, \
+             perpetually curious.",
+        ),
+        FactionCategory::Political => (
+            "Administrator",
+            "The local face of governance. Manages disputes, allocates resources, \
+             and tries to keep everyone from each other's throats.",
+        ),
+    }
+}
+
+/// Generate permanent NPCs for systems with Colony+ infrastructure.
+/// One NPC per major faction presence at each qualifying system.
+fn generate_npcs(
+    systems: &[StarSystem],
+    factions: &[Faction],
+    rng: &mut StdRng,
+) -> Vec<Npc> {
+    let mut npcs = Vec::new();
+    let mut name_idx = 0usize;
+
+    for system in systems {
+        // Only systems with real infrastructure get NPCs.
+        let infra_rank = match system.infrastructure_level {
+            InfrastructureLevel::None | InfrastructureLevel::Outpost => continue,
+            InfrastructureLevel::Colony => 1,
+            InfrastructureLevel::Established => 2,
+            InfrastructureLevel::Hub => 3,
+            InfrastructureLevel::Capital => 3,
+        };
+
+        // Pick the top faction presences by strength, up to infra_rank.
+        let mut presences: Vec<&FactionPresence> = system.faction_presence.iter()
+            .filter(|fp| fp.strength >= 0.3)
+            .collect();
+        presences.sort_by(|a, b| b.strength.partial_cmp(&a.strength).unwrap());
+        presences.truncate(infra_rank);
+
+        for presence in presences {
+            let faction = match factions.iter().find(|f| f.id == presence.faction_id) {
+                Some(f) => f,
+                None => continue,
+            };
+
+            let (title, bio) = npc_template_for_category(faction.category);
+
+            // Deterministic name selection using a rotating index + rng.
+            let first = NPC_FIRST_NAMES[name_idx % NPC_FIRST_NAMES.len()];
+            let last_offset: usize = rng.gen_range(0..NPC_LAST_NAMES.len());
+            let last = NPC_LAST_NAMES[(name_idx + last_offset) % NPC_LAST_NAMES.len()];
+            name_idx += 1;
+
+            let mut npc = Npc::new(
+                format!("{} {}", first, last),
+                title,
+                Some(faction.id),
+                system.id,
+                bio,
+            );
+
+            // Add a motivation based on faction category.
+            npc.motivations.push(match faction.category {
+                FactionCategory::Military => "maintain order and security".into(),
+                FactionCategory::Economic => "expand trade routes and profits".into(),
+                FactionCategory::Guild => "keep ships flying and contracts honored".into(),
+                FactionCategory::Criminal => "move goods, avoid attention".into(),
+                FactionCategory::Religious => "understand the distortions".into(),
+                FactionCategory::Academic => "gather data, publish findings".into(),
+                FactionCategory::Political => "keep the peace, grow influence".into(),
+            });
+
+            npcs.push(npc);
+        }
+    }
+
+    npcs
 }
 
 // ===========================================================================
@@ -1836,5 +2145,116 @@ mod tests {
             .map(|c| extract_civ_prefix(&c.name)).collect();
         assert!(civ_prefixes.iter().any(|p| mil.name.contains(p)),
             "Military faction '{}' should contain a civ prefix (civs: {:?})", mil.name, civ_prefixes);
+    }
+
+    // --- NPC generation ---
+
+    #[test]
+    fn npcs_generated_at_colony_plus_systems() {
+        let galaxy = generate_galaxy(42);
+        assert!(!galaxy.npcs.is_empty(), "Should generate at least some NPCs");
+
+        // Every NPC should be at a Colony+ system.
+        for npc in &galaxy.npcs {
+            let system = galaxy.systems.iter().find(|s| s.id == npc.home_system_id)
+                .expect("NPC home system should exist");
+            assert!(
+                !matches!(system.infrastructure_level,
+                    InfrastructureLevel::None | InfrastructureLevel::Outpost),
+                "NPC {} should not be at {:?} system {}",
+                npc.name, system.infrastructure_level, system.name,
+            );
+        }
+    }
+
+    #[test]
+    fn npcs_have_valid_faction_refs() {
+        let galaxy = generate_galaxy(42);
+        let faction_ids: HashSet<Uuid> = galaxy.factions.iter().map(|f| f.id).collect();
+        for npc in &galaxy.npcs {
+            if let Some(fid) = npc.faction_id {
+                assert!(faction_ids.contains(&fid),
+                    "NPC {} references non-existent faction", npc.name);
+            }
+        }
+    }
+
+    #[test]
+    fn meridian_has_npcs() {
+        let galaxy = generate_galaxy(42);
+        let meridian = galaxy.systems.iter().find(|s| s.name == "Meridian").unwrap();
+        let meridian_npcs: Vec<&Npc> = galaxy.npcs.iter()
+            .filter(|n| n.home_system_id == meridian.id)
+            .collect();
+        assert!(!meridian_npcs.is_empty(),
+            "Meridian should have at least one NPC (infra: {:?})",
+            meridian.infrastructure_level);
+        for npc in &meridian_npcs {
+            println!("  {} — {}", npc.name, npc.title);
+        }
+    }
+
+    // --- Economy generation ---
+
+    #[test]
+    fn inhabited_systems_have_economies() {
+        let galaxy = generate_galaxy(42);
+        for system in &galaxy.systems {
+            match system.infrastructure_level {
+                InfrastructureLevel::None => {
+                    assert!(system.economy.is_none(),
+                        "{} (None) should not have economy", system.name);
+                }
+                _ => {
+                    assert!(system.economy.is_some(),
+                        "{} ({:?}) should have economy",
+                        system.name, system.infrastructure_level);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn economy_prices_are_reasonable() {
+        let galaxy = generate_galaxy(42);
+        for system in &galaxy.systems {
+            if let Some(ref econ) = system.economy {
+                assert!(econ.fuel_price > 0.0 && econ.fuel_price < 20.0,
+                    "{} fuel price {:.1} out of range", system.name, econ.fuel_price);
+                assert!(econ.supply_price > 0.0 && econ.supply_price < 15.0,
+                    "{} supply price {:.1} out of range", system.name, econ.supply_price);
+                for good in TradeGood::all() {
+                    let buy = econ.buy_price(*good);
+                    let sell = econ.sell_price(*good);
+                    assert!(buy > 0.0, "{} buy price for {:?} should be positive", system.name, good);
+                    assert!(sell < buy, "{} sell price should be less than buy for {:?}", system.name, good);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn trade_routes_exist() {
+        // At least one pair of systems should have a meaningful price difference
+        // on some good, making trade profitable.
+        let galaxy = generate_galaxy(42);
+        let economies: Vec<(&str, &SystemEconomy)> = galaxy.systems.iter()
+            .filter_map(|s| s.economy.as_ref().map(|e| (s.name.as_str(), e)))
+            .collect();
+
+        let mut found_route = false;
+        for good in TradeGood::all() {
+            for (name_a, econ_a) in &economies {
+                for (name_b, econ_b) in &economies {
+                    if name_a == name_b { continue; }
+                    let buy_at_a = econ_a.buy_price(*good);
+                    let sell_at_b = econ_b.sell_price(*good);
+                    if sell_at_b > buy_at_a {
+                        found_route = true;
+                    }
+                }
+            }
+        }
+        assert!(found_route, "Should have at least one profitable trade route");
     }
 }

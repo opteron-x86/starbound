@@ -24,7 +24,7 @@ mod tests {
     #[test]
     fn all_events_load() {
         let events = all_seed_events();
-        assert!(events.len() >= 29, "Should have at least 29 seed events, got {}", events.len());
+        assert!(events.len() >= 35, "Should have at least 35 seed events, got {}", events.len());
     }
 
     #[test]
@@ -32,6 +32,17 @@ mod tests {
         for event in all_seed_events() {
             assert!(!event.choices.is_empty(),
                 "Event '{}' has no choices", event.id);
+        }
+    }
+
+    #[test]
+    fn all_choices_have_effects() {
+        for event in all_seed_events() {
+            for (i, choice) in event.choices.iter().enumerate() {
+                assert!(!choice.effects.is_empty(),
+                    "Event '{}' choice {} ('{}') has no effects",
+                    event.id, i, choice.label);
+            }
         }
     }
 

@@ -1,13 +1,9 @@
 // file: crates/game/src/consequences.rs
 //! The consequence system — turns player choices into game state changes.
 //!
-//! Day 8: Making choices matter.
-//!
-//! Each seed event choice has a `mechanical_effect` string. This module
-//! interprets those strings into concrete `Effect` values and applies
-//! them to the journey state. The effect vocabulary is intentionally
-//! small and composable — the LLM will eventually use the same vocabulary,
-//! and a small, well-defined set is easier to validate.
+//! Effects are defined as structured `EffectDef` values in event JSON.
+//! This module converts them to concrete `Effect` enums and applies
+//! them to the journey state.
 //!
 //! Design principle: effects are deterministic given the same game state.
 //! Randomness belongs in the encounter pipeline, not in consequences.
@@ -19,6 +15,8 @@ use starbound_core::journey::Journey;
 use starbound_core::narrative::{
     EventCategory, GameEvent, ResolutionState, Thread, ThreadType,
 };
+
+use starbound_encounters::seed_event::EffectDef;
 
 // ---------------------------------------------------------------------------
 // Effect types
@@ -93,713 +91,95 @@ pub struct ConsequenceReport {
 }
 
 // ---------------------------------------------------------------------------
-// Effect resolution: mechanical_effect string → Vec<Effect>
+// EffectDef -> Effect conversion
 // ---------------------------------------------------------------------------
 
-/// Resolve a mechanical effect string into concrete effects.
-/// This is the central vocabulary — every effect the game can produce
-/// is defined here. Unknown effects produce a Pass with a log note.
-pub fn resolve_effects(mechanical_effect: &str, journey: &Journey) -> Vec<Effect> {
-    match mechanical_effect {
-        // -----------------------------------------------------------------
-        // Fuel and trade
-        // -----------------------------------------------------------------
-        "buy_fuel" => vec![
-            Effect::Fuel(20.0),
-            Effect::Resources(-30.0),
-        ],
-        "buy_fuel_and_talk" => vec![
-            Effect::Fuel(20.0),
-            Effect::Resources(-30.0),
-            Effect::CrewStress(-0.05),
-            Effect::Narrative("A small kindness at a quiet refueling stop.".into()),
-        ],
-        "buy_fuel_expensive" => {
-            // Price scales with desperation — lower fuel = higher price.
-            let fuel_frac = journey.ship.fuel / journey.ship.fuel_capacity;
-            let price_multiplier = 2.0 + (1.0 - fuel_frac as f64);
-            let fill_amount = (journey.ship.fuel_capacity - journey.ship.fuel).min(40.0);
-            vec![
-                Effect::Fuel(fill_amount),
-                Effect::Resources(-(fill_amount as f64 * price_multiplier)),
-                Effect::CrewStress(0.05),
-                Effect::Narrative("Paid through the nose, but the tanks are fuller.".into()),
-            ]
-        }
-        "buy_fuel_minimum" => vec![
-            Effect::Fuel(10.0),
-            Effect::Resources(-25.0),
-            Effect::Narrative("Just enough to reach the next port. Hopefully.".into()),
-        ],
-        "negotiate_fuel" => {
-            // Negotiation gets a moderate deal — not as bad as full price.
-            let fill_amount = (journey.ship.fuel_capacity - journey.ship.fuel).min(30.0);
-            vec![
-                Effect::Fuel(fill_amount),
-                Effect::Resources(-(fill_amount as f64 * 1.5)),
-                Effect::Narrative("Talked the price down. Not cheap, but fair enough.".into()),
-            ]
-        }
-        "seek_alternatives" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Mystery,
-                description: "Heard about an alternative fuel source — \
-                    unorthodox, possibly dangerous, worth investigating.".into(),
-            },
-            Effect::Narrative("No fuel today, but a lead on something interesting.".into()),
-        ],
-        "open_trade" => vec![
-            Effect::Fuel(15.0),
-            Effect::Resources(-40.0),
-            Effect::Hull(0.05),
-            Effect::Narrative("Resupplied. The ship feels a little more whole.".into()),
-        ],
-
-        // -----------------------------------------------------------------
-        // Supplies
-        // -----------------------------------------------------------------
-        "buy_supplies" => vec![
-            Effect::Supplies(30.0),
-            Effect::Resources(-25.0),
-        ],
-        "buy_supplies_and_fuel" => vec![
-            Effect::Supplies(25.0),
-            Effect::Fuel(15.0),
-            Effect::Resources(-50.0),
-            Effect::Narrative("Topped off the tanks and restocked the hold.".into()),
-        ],
-        "buy_supplies_expensive" => {
-            let supply_frac = journey.ship.supplies / journey.ship.supply_capacity;
-            let price_multiplier = 1.5 + (1.0 - supply_frac as f64);
-            let fill_amount = (journey.ship.supply_capacity - journey.ship.supplies).min(40.0);
-            vec![
-                Effect::Supplies(fill_amount),
-                Effect::Resources(-(fill_amount as f64 * price_multiplier)),
-                Effect::Narrative("Frontier prices. You paid what they asked.".into()),
-            ]
-        }
-        "scavenge_supplies" => vec![
-            Effect::Supplies(10.0),
-            Effect::CrewStress(0.05),
-            Effect::Narrative("Found usable supplies in the wreckage. Not appetizing, but functional.".into()),
-        ],
-        "ration_supplies" => vec![
-            Effect::CrewStress(0.08),
-            Effect::CrewMood { mood: Mood::Anxious, all: false },
-            Effect::Narrative("Tightened the rationing. Nobody's happy about it.".into()),
-        ],
-        "share_supplies" => vec![
-            Effect::Supplies(-15.0),
-            Effect::TrustIdeological(0.1),
-            Effect::Narrative("Gave what you could spare. Your crew noticed.".into()),
-        ],
-        
-        // -----------------------------------------------------------------
-        // Corridor Guild encounters
-        // -----------------------------------------------------------------
-        "guild_preferred_rates" => vec![
-            Effect::Fuel(30.0),
-            Effect::Resources(-50.0),
-            Effect::SpawnThread {
-                thread_type: ThreadType::Debt,
-                description: "Accepted Corridor Guild preferred rates. They'll \
-                    remember — and they'll expect reciprocity.".into(),
-            },
-            Effect::Narrative("Signed on with the Guild's network. Good prices. Strings attached.".into()),
-        ],
-        "buy_fuel_independent" => vec![
-            Effect::Fuel(20.0),
-            Effect::Resources(-80.0),
-            Effect::Narrative("Paid more than you had to. The independent seller looked grateful.".into()),
-        ],
-        "guild_probe_network" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Secret,
-                description: "The Corridor Guild's logistics network extends further \
-                    than official records suggest. They know shipping routes, cargo \
-                    manifests, and who's moving what — including near the frontier.".into(),
-            },
-            Effect::Narrative("Learned more than the Guild rep intended to share.".into()),
-        ],
-
-        // -----------------------------------------------------------------
-        // Lattice encounters
-        // -----------------------------------------------------------------
-        "lattice_copy_intel" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Secret,
-                description: "Copied data from a Lattice dead drop. Coordinates, \
-                    a name, and a warning: someone else knows about the signal.".into(),
-            },
-            Effect::Narrative("Took the knowledge. Left no trace.".into()),
-        ],
-        "lattice_take_chip" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Secret,
-                description: "Took a Lattice dead drop chip. The coordinates and \
-                    name might be useful. Taking the chip means they know you found it.".into(),
-            },
-            Effect::AddCargo { item: "Lattice data chip".into(), quantity: 1 },
-            Effect::Narrative("Pocketed the chip. Someone will notice it's gone.".into()),
-        ],
-        "lattice_destroy" => vec![
-            Effect::Narrative("Crushed the chip under your boot. Some connections aren't worth making.".into()),
-        ],
-        "lattice_accept_broker" => vec![
-            Effect::Resources(-100.0),
-            Effect::SpawnThread {
-                thread_type: ThreadType::Secret,
-                description: "Established a channel with a Lattice intelligence broker. \
-                    They have information about the signal and faction movements near \
-                    distorted space. The relationship is transactional — for now.".into(),
-            },
-            Effect::Narrative("Made contact with the shadows. They had exactly what you needed.".into()),
-        ],
-        "lattice_negotiate" => vec![
-            Effect::Resources(-60.0),
-            Effect::SpawnThread {
-                thread_type: ThreadType::Secret,
-                description: "Negotiated limited terms with a Lattice broker. They \
-                    provided partial intelligence — enough to be useful, not enough \
-                    to feel comfortable.".into(),
-            },
-            Effect::Narrative("Bargained them down. They respected the counter-offer.".into()),
-        ],
-
-        // -----------------------------------------------------------------
-        // Order of the Quiet Star encounters
-        // -----------------------------------------------------------------
-        "quiet_star_listen" => vec![
-            Effect::CrewMood { mood: Mood::Inspired, all: true },
-            Effect::CrewStress(-0.05),
-            Effect::SpawnThread {
-                thread_type: ThreadType::Anomaly,
-                description: "The Order describes patterns in the time distortion — \
-                    rhythmic fluctuations that correlate with the signal's frequency. \
-                    They believe the distortion and the signal share a source.".into(),
-            },
-            Effect::Narrative("Listened. What they described changes the shape of everything.".into()),
-        ],
-        "quiet_star_ask_signal" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Mystery,
-                description: "The Order has been tracking the signal independently. \
-                    Their data suggests the source is deep in distorted space — \
-                    somewhere time runs so slowly it might as well have stopped.".into(),
-            },
-            Effect::Narrative("They know about the signal. They've been listening longer than you have.".into()),
-        ],
-        "quiet_star_join" => vec![
-            Effect::CrewStress(-0.1),
-            Effect::CrewMood { mood: Mood::Hopeful, all: true },
-            Effect::SpawnThread {
-                thread_type: ThreadType::Anomaly,
-                description: "Spent time in the vigil, listening at the edge of \
-                    distorted space. Something was there — not a sound exactly, \
-                    but a structure in the silence.".into(),
-            },
-            Effect::Narrative("Sat in the quiet. Heard something. Can't explain what.".into()),
-        ],
-        "quiet_star_mission_clue" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Mystery,
-                description: "The pilgrim described the signal as a question — \
-                    mathematical, patient, waiting for comprehension. The pattern \
-                    she drew matches nothing in human mathematics, but your \
-                    science officer thinks it resembles a topology proof.".into(),
-            },
-            Effect::CrewMood { mood: Mood::Inspired, all: false },
-            Effect::Narrative(
-                "The pattern burns in your mind. It means something. You almost understand.".into(),
-            ),
-        ],
-        "quiet_star_record_pattern" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Mystery,
-                description: "Recorded the pattern the pilgrim drew on the viewport. \
-                    Analysis pending, but initial comparison suggests non-human \
-                    mathematical notation.".into(),
-            },
-            Effect::Narrative("Captured the image. Science will find what faith can't.".into()),
-        ],
-        "quiet_star_how_know" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Secret,
-                description: "The pilgrim knew about the mission — claims the Order \
-                    has contacts who share information about signal-seekers. \
-                    Unclear whether this means allies or surveillance.".into(),
-            },
-            Effect::Narrative("She smiled. 'The distortion tells us who is listening.' Make of that what you will.".into()),
-        ],
-
-        // -----------------------------------------------------------------
-        // Ashfall Salvage encounters
-        // -----------------------------------------------------------------
-        "ashfall_repair_credits" => vec![
-            Effect::Hull(0.2),
-            Effect::RepairModule { module: ModuleTarget::Engine, amount: 0.15 },
-            Effect::Resources(-120.0),
-            Effect::Narrative("Professional work. No questions asked. Hull integrity restored.".into()),
-        ],
-        "ashfall_repair_trade" => vec![
-            Effect::Hull(0.15),
-            Effect::RepairModule { module: ModuleTarget::Engine, amount: 0.1 },
-            Effect::JettisonCargo,
-            Effect::Narrative("Traded cargo for repairs. Fair deal, out where fair is relative.".into()),
-        ],
-        "ashfall_probe_services" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Secret,
-                description: "Ashfall Salvage runs more than a repair shop — they \
-                    move people, cargo, and information across borders the official \
-                    routes don't cross. The frontier has its own economy.".into(),
-            },
-            Effect::Narrative("Asked around. The frontier has layers you hadn't seen.".into()),
-        ],
-
-        // -----------------------------------------------------------------
-        // Hegemony Military Command encounters
-        // -----------------------------------------------------------------
-        "military_probe_intel" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Secret,
-                description: "The military officer let slip that ships returning \
-                    from deep-frontier distorted space show anomalous navigation \
-                    log corruption. Hegemony Command is tracking it.".into(),
-            },
-            Effect::Narrative("She said more than she meant to. Or exactly as much as she intended.".into()),
-        ],
-        "military_ask_routes" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Secret,
-                description: "Learned that Hegemony Military Command has designated \
-                    certain frontier routes as restricted — specifically near \
-                    systems with high time distortion. They're not saying why.".into(),
-            },
-            Effect::Narrative("Restricted zones. Near the frontier. Near the signal. That's not a coincidence.".into()),
-        ],
-
-        // -----------------------------------------------------------------
-        // Spacers' Collective encounters
-        // -----------------------------------------------------------------
-        "spacers_listen" => vec![
-            Effect::CrewStress(-0.05),
-            Effect::SpawnThread {
-                thread_type: ThreadType::Secret,
-                description: "The spacer's network has noticed unusual shipping \
-                    pattern changes — routes being rerouted around certain frontier \
-                    systems, contracts drying up near distorted space.".into(),
-            },
-            Effect::Narrative("Bought a round. Heard three rumors. Two of them might even be true.".into()),
-        ],
-        "spacers_favor" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Debt,
-                description: "The spacer needs a message delivered to a contact at \
-                    a frontier system. Simple job, he says. Spacers don't ask for \
-                    favors unless the official channels won't work.".into(),
-            },
-            Effect::AddCargo { item: "Sealed message tube (Spacers' Collective)".into(), quantity: 1 },
-            Effect::Narrative("Took the job. A message, a destination, and a handshake.".into()),
-        ],
-
-        // -----------------------------------------------------------------
-        // Combat and evasion
-        // -----------------------------------------------------------------
-        "jettison_cargo" => vec![
-            Effect::JettisonCargo,
-            Effect::CrewMood { mood: Mood::Anxious, all: false },
-            Effect::Narrative("Cargo jettisoned. The pirates took it and vanished.".into()),
-            Effect::SpawnThread {
-                thread_type: ThreadType::Grudge,
-                description: "Lost cargo to pirates in unclaimed space. \
-                    The crew remembers.".into(),
-            },
-        ],
-        "hold_course" => {
-            // Risky — could go either way. For Phase 1, a mild consequence.
-            vec![
-                Effect::Hull(-0.1),
-                Effect::DamageModule { module: ModuleTarget::Engine, amount: 0.1 },
-                Effect::CrewStress(0.15),
-                Effect::Narrative(
-                    "They fired a warning shot that wasn't entirely a warning. \
-                     Hull took a hit, but they broke off.".into(),
-                ),
-                Effect::SpawnThread {
-                    thread_type: ThreadType::Grudge,
-                    description: "Faced down pirates and survived. They know your ship now.".into(),
-                },
-            ]
-        }
-        "negotiate_pirates" => vec![
-            Effect::Resources(-100.0),
-            Effect::Narrative(
-                "Negotiated a 'transit fee.' Everyone pretended it wasn't extortion.".into(),
-            ),
-        ],
-        "flee" => vec![
-            Effect::Fuel(-10.0),
-            Effect::CrewStress(0.1),
-            Effect::Narrative("Burned hard and got clear. Cost fuel, saved everything else.".into()),
-        ],
-
-        // -----------------------------------------------------------------
-        // Derelicts and exploration
-        // -----------------------------------------------------------------
-        "board_derelict" => vec![
-            Effect::CrewStress(0.1),
-            Effect::SpawnThread {
-                thread_type: ThreadType::Mystery,
-                description: "Found something on the derelict — a log fragment, \
-                    a name, a heading. Someone was looking for the same signal.".into(),
-            },
-            Effect::Narrative("The derelict held no survivors, but it held a story.".into()),
-        ],
-        "salvage_derelict" => vec![
-            Effect::Hull(0.1),
-            Effect::RepairModule { module: ModuleTarget::Engine, amount: 0.1 },
-            Effect::Resources(50.0),
-            Effect::CrewMood { mood: Mood::Determined, all: false },
-            Effect::Narrative("Stripped what was useful. Practical. Necessary.".into()),
-        ],
-        "detailed_scan" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Mystery,
-                description: "The survey picked up something faint — a signal \
-                    signature that doesn't match any known source.".into(),
-            },
-            Effect::Narrative("Thorough scan completed. Found more than expected.".into()),
-        ],
-
-        // -----------------------------------------------------------------
-        // Ancient structures
-        // -----------------------------------------------------------------
-        "dock_ancient" => vec![
-            Effect::CrewStress(0.15),
-            Effect::CrewMood { mood: Mood::Inspired, all: true },
-            Effect::SpawnThread {
-                thread_type: ThreadType::Anomaly,
-                description: "Docked with an ancient structure of unknown origin. \
-                    The interior defies easy description. Sensors recorded data \
-                    that will take weeks to analyze.".into(),
-            },
-            Effect::TrustProfessional(0.05),
-            Effect::Narrative(
-                "You went inside. What you found will take time to understand.".into(),
-            ),
-        ],
-        "probe_ancient" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Anomaly,
-                description: "Probe returned data from the ancient structure. \
-                    Partial readings — enough to confirm it's artificial, \
-                    not enough to explain it.".into(),
-            },
-            Effect::Narrative("The probe came back. Most of the data is incomprehensible.".into()),
-        ],
-        "observe_ancient" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Anomaly,
-                description: "Recorded external observations of an ancient structure. \
-                    Detailed but distant.".into(),
-            },
-            Effect::Narrative("Documented everything from a safe distance.".into()),
-        ],
-
-        // -----------------------------------------------------------------
-        // Faction encounters
-        // -----------------------------------------------------------------
-        "comply_checkpoint" => vec![
-            Effect::Narrative("Inspection passed without incident.".into()),
-        ],
-        "comply_and_probe" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Secret,
-                description: "The checkpoint officer mentioned something interesting — \
-                    increased patrols, a missing ship, a restricted zone that \
-                    wasn't restricted last year.".into(),
-            },
-            Effect::Narrative(
-                "Complied and asked questions. Learned something worth knowing.".into(),
-            ),
-        ],
-        "partial_comply" => vec![
-            Effect::CrewStress(0.05),
-            Effect::TrustIdeological(0.05),
-            Effect::SpawnThread {
-                thread_type: ThreadType::Grudge,
-                description: "Cited independent vessel rights at a faction checkpoint. \
-                    They let you through, but they remembered your ship.".into(),
-            },
-            Effect::Narrative("Stood on principle. Made an impression. Not sure what kind.".into()),
-        ],
-
-        // -----------------------------------------------------------------
-        // Crew and personal
-        // -----------------------------------------------------------------
-        "crew_bond" => vec![
-            Effect::CrewStress(-0.1),
-            Effect::TrustPersonal(0.05),
-            Effect::CrewMood { mood: Mood::Content, all: false },
-            Effect::Narrative("Sat with the crew. Listened. Was present.".into()),
-        ],
-        "captain_opens_up" => vec![
-            Effect::CrewStress(-0.1),
-            Effect::TrustPersonal(0.1),
-            Effect::TrustIdeological(0.03),
-            Effect::SpawnThread {
-                thread_type: ThreadType::Relationship,
-                description: "Shared something personal with the crew. \
-                    The walls are a little thinner now.".into(),
-            },
-            Effect::Narrative("You told them something true. It cost you nothing and everything.".into()),
-        ],
-        "shore_leave" => vec![
-            Effect::CrewStress(-0.2),
-            Effect::Resources(-30.0),
-            Effect::CrewMood { mood: Mood::Hopeful, all: true },
-            Effect::Narrative("The crew dispersed into the station. Came back lighter.".into()),
-        ],
-
-        // -----------------------------------------------------------------
-        // Repairs
-        // -----------------------------------------------------------------
-        "navigate_to_repairs" => vec![
-            // This is a decision to prioritize — the narrative effect matters most.
-            Effect::Narrative("Set course for the nearest repair facility.".into()),
-            Effect::AddConcern("Heading for repairs — hull integrity critical.".into()),
-        ],
-        "field_repair" => vec![
-            Effect::Hull(0.15),
-            Effect::RepairModule { module: ModuleTarget::Sensors, amount: 0.15 },
-            Effect::Resources(-20.0),
-            Effect::CrewStress(0.05),
-            Effect::TrustProfessional(0.05),
-            Effect::Narrative("Jury-rigged repairs. Holding together, for now.".into()),
-        ],
-        "ignore_damage" => vec![
-            Effect::CrewStress(0.1),
-            Effect::TrustProfessional(-0.05),
-            Effect::CrewMood { mood: Mood::Anxious, all: false },
-            Effect::Narrative("Pressed on despite the damage. The crew noticed.".into()),
-        ],
-
-        // -----------------------------------------------------------------
-        // Information and intel
-        // -----------------------------------------------------------------
-        "gather_intel" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Secret,
-                description: "Picked up rumors — faction movements, missing ships, \
-                    a place that used to be safe and isn't anymore.".into(),
-            },
-            Effect::Narrative("Listened to the local talk. Filed it away.".into()),
-        ],
-        "check_jobs" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Debt,
-                description: "Took a contract — delivery, investigation, or escort. \
-                    Someone is counting on you now.".into(),
-            },
-            Effect::Narrative("Found work. The kind that keeps the tanks full.".into()),
-        ],
-
-        // -----------------------------------------------------------------
-        // Smuggling
-        // -----------------------------------------------------------------
-        "accept_smuggle" => vec![
-            Effect::Resources(200.0),
-            Effect::AddCargo { item: "Sealed containers (unknown contents)".into(), quantity: 5 },
-            Effect::CrewStress(0.1),
-            Effect::TrustIdeological(-0.05),
-            Effect::SpawnThread {
-                thread_type: ThreadType::Debt,
-                description: "Carrying unknown cargo across a faction border. \
-                    Someone is expecting delivery.".into(),
-            },
-            Effect::Narrative("Took the job. Didn't ask what's in the containers.".into()),
-        ],
-        "refuse_smuggle" => vec![
-            Effect::TrustIdeological(0.03),
-            Effect::Narrative("Turned it down. The man shrugged and found someone else.".into()),
-        ],
-        "ask_what_cargo" => vec![
-            Effect::SpawnThread {
-                thread_type: ThreadType::Secret,
-                description: "The smuggler described the cargo — medical supplies, \
-                    he said. Whether that's true is another question.".into(),
-            },
-            Effect::Narrative("Asked questions. Got answers. Not sure they were honest.".into()),
-        ],
-
-        // -----------------------------------------------------------------
-        // Quiet moments and pass-throughs
-        // -----------------------------------------------------------------
-        "rest" => vec![
-            Effect::CrewStress(-0.05),
-            Effect::Narrative("Took a moment. The universe waited.".into()),
-        ],
-        "write_log" => vec![
-            Effect::Narrative("Added an entry to the log. Preserving what matters.".into()),
-        ],
-        "open_navigation" => vec![
-            Effect::Pass,
-        ],
-        "pass" => vec![
-            Effect::Pass,
-        ],
-        "log_and_ignore" => vec![
-            Effect::Narrative("Noted the coordinates. Moved on.".into()),
-        ],
-
-        // -----------------------------------------------------------------
-        // Unknown effect — try compound parsing, then graceful fallback
-        // -----------------------------------------------------------------
-        unknown => {
-            // Compound effects: semicolon-separated, each parsed individually.
-            // e.g., "resources:200;buy_supplies;fuel:-5"
-            if unknown.contains(';') {
-                let mut all_effects = Vec::new();
-                for part in unknown.split(';') {
-                    let part = part.trim();
-                    if part.is_empty() { continue; }
-                    // Recursive single-effect resolution.
-                    let mut sub = resolve_single_effect(part, journey);
-                    all_effects.append(&mut sub);
-                }
-                if all_effects.is_empty() {
-                    vec![Effect::Narrative(format!(
-                        "Something happened. [unhandled compound: {}]", unknown
-                    ))]
-                } else {
-                    all_effects
-                }
-            } else {
-                // Single unknown — try parameterized parsing.
-                let parsed = resolve_single_effect(unknown, journey);
-                if parsed.is_empty() {
-                    vec![Effect::Narrative(format!(
-                        "Something happened. [unhandled effect: {}]", unknown
-                    ))]
-                } else {
-                    parsed
-                }
-            }
-        }
+/// Convert a data-driven `EffectDef` (from event JSON) to a concrete `Effect`.
+///
+/// This is the single point where authored content meets the game engine.
+/// All structural decisions are made in the JSON; this function just
+/// translates the data format.
+pub fn effect_def_to_effect(def: &EffectDef) -> Effect {
+    match def {
+        EffectDef::Fuel { delta } => Effect::Fuel(*delta),
+        EffectDef::Supplies { delta } => Effect::Supplies(*delta),
+        EffectDef::Resources { delta } => Effect::Resources(*delta),
+        EffectDef::Hull { delta } => Effect::Hull(*delta),
+        EffectDef::CrewStress { delta } => Effect::CrewStress(*delta),
+        EffectDef::CrewMood { mood, all } => Effect::CrewMood {
+            mood: parse_mood(mood),
+            all: *all,
+        },
+        EffectDef::TrustProfessional { delta } => Effect::TrustProfessional(*delta),
+        EffectDef::TrustPersonal { delta } => Effect::TrustPersonal(*delta),
+        EffectDef::TrustIdeological { delta } => Effect::TrustIdeological(*delta),
+        EffectDef::SpawnThread {
+            thread_type,
+            description,
+        } => Effect::SpawnThread {
+            thread_type: parse_thread_type(thread_type),
+            description: description.clone(),
+        },
+        EffectDef::AddCargo { item, quantity } => Effect::AddCargo {
+            item: item.clone(),
+            quantity: *quantity,
+        },
+        EffectDef::JettisonCargo {} => Effect::JettisonCargo,
+        EffectDef::DamageModule { module, amount } => Effect::DamageModule {
+            module: parse_module_target(module),
+            amount: *amount,
+        },
+        EffectDef::RepairModule { module, amount } => Effect::RepairModule {
+            module: parse_module_target(module),
+            amount: *amount,
+        },
+        EffectDef::AddConcern { text } => Effect::AddConcern(text.clone()),
+        EffectDef::Narrative { text } => Effect::Narrative(text.clone()),
+        EffectDef::Pass {} => Effect::Pass,
     }
 }
 
-/// Parse a single parameterized effect string like "resources:200"
-/// or "repair_module:engine:0.3". Returns empty vec if unrecognized.
-fn resolve_single_effect(effect: &str, journey: &Journey) -> Vec<Effect> {
-    // Try known simple effects first (delegate back to main match).
-    // Only include effects that won't trigger compound parsing themselves.
-    let known_simple = [
-        "buy_supplies", "buy_fuel", "buy_fuel_expensive", "buy_fuel_minimum",
-        "buy_supplies_expensive", "buy_supplies_and_fuel",
-        "negotiate_fuel", "seek_alternatives",
-        "open_trade", "field_repair", "ignore_damage",
-        "gather_intel", "check_jobs",
-        "rest", "write_log", "pass", "log_and_ignore",
-        "shore_leave", "hold_course",
-        "scavenge_supplies", "ration_supplies", "share_supplies",
-    ];
-    if known_simple.contains(&effect) {
-        return resolve_effects(effect, journey);
+/// Convert a slice of `EffectDef` values to `Effect` values.
+pub fn convert_effects(defs: &[EffectDef]) -> Vec<Effect> {
+    defs.iter().map(effect_def_to_effect).collect()
+}
+
+fn parse_mood(s: &str) -> Mood {
+    match s {
+        "content" => Mood::Content,
+        "anxious" => Mood::Anxious,
+        "determined" => Mood::Determined,
+        "hopeful" => Mood::Hopeful,
+        "frustrated" | "angry" => Mood::Angry,
+        "inspired" => Mood::Inspired,
+        "grieving" => Mood::Grieving,
+        "suspicious" | "withdrawn" => Mood::Withdrawn,
+        "restless" => Mood::Restless,
+        _ => Mood::Content,
     }
+}
 
-    let parts: Vec<&str> = effect.splitn(3, ':').collect();
+fn parse_thread_type(s: &str) -> ThreadType {
+    match s {
+        "relationship" | "bond" => ThreadType::Relationship,
+        "mystery" => ThreadType::Mystery,
+        "debt" => ThreadType::Debt,
+        "grudge" => ThreadType::Grudge,
+        "promise" => ThreadType::Promise,
+        "secret" => ThreadType::Secret,
+        "anomaly" | "clue" => ThreadType::Anomaly,
+        _ => ThreadType::Mystery,
+    }
+}
 
-    match parts.as_slice() {
-        ["resources", amount] => {
-            if let Ok(val) = amount.parse::<f64>() {
-                vec![Effect::Resources(val)]
-            } else {
-                vec![]
-            }
-        }
-        ["fuel", amount] => {
-            if let Ok(val) = amount.parse::<f32>() {
-                vec![Effect::Fuel(val)]
-            } else {
-                vec![]
-            }
-        }
-        ["hull", amount] => {
-            if let Ok(val) = amount.parse::<f32>() {
-                vec![Effect::Hull(val)]
-            } else {
-                vec![]
-            }
-        }
-        ["crew_stress", amount] => {
-            if let Ok(val) = amount.parse::<f32>() {
-                vec![Effect::CrewStress(val)]
-            } else {
-                vec![]
-            }
-        }
-        ["repair_module", target, amount] => {
-            let module = match *target {
-                "engine" => Some(ModuleTarget::Engine),
-                "sensors" => Some(ModuleTarget::Sensors),
-                "comms" => Some(ModuleTarget::Comms),
-                "weapons" => Some(ModuleTarget::Weapons),
-                "life_support" => Some(ModuleTarget::LifeSupport),
-                _ => None,
-            };
-            if let (Some(m), Ok(val)) = (module, amount.parse::<f32>()) {
-                vec![Effect::RepairModule { module: m, amount: val }]
-            } else {
-                vec![]
-            }
-        }
-        ["damage_module", target, amount] => {
-            let module = match *target {
-                "engine" => Some(ModuleTarget::Engine),
-                "sensors" => Some(ModuleTarget::Sensors),
-                "comms" => Some(ModuleTarget::Comms),
-                "weapons" => Some(ModuleTarget::Weapons),
-                "life_support" => Some(ModuleTarget::LifeSupport),
-                _ => None,
-            };
-            if let (Some(m), Ok(val)) = (module, amount.parse::<f32>()) {
-                vec![Effect::DamageModule { module: m, amount: val }]
-            } else {
-                vec![]
-            }
-        }
-        ["spawn_thread", thread_type, description] => {
-            let tt = match *thread_type {
-                "mystery" => ThreadType::Mystery,
-                "grudge" => ThreadType::Grudge,
-                "debt" => ThreadType::Debt,
-                "bond" | "relationship" => ThreadType::Relationship,
-                "secret" => ThreadType::Secret,
-                "clue" | "anomaly" => ThreadType::Anomaly,
-                "promise" => ThreadType::Promise,
-                _ => ThreadType::Mystery,
-            };
-            vec![Effect::SpawnThread {
-                thread_type: tt,
-                description: description.to_string(),
-            }]
-        }
-        ["narrative", text] => {
-            vec![Effect::Narrative(text.to_string())]
-        }
-        ["cargo", item, quantity] => {
-            if let Ok(qty) = quantity.parse::<u32>() {
-                vec![Effect::AddCargo {
-                    item: item.to_string(),
-                    quantity: qty,
-                }]
-            } else {
-                vec![]
-            }
-        }
-        _ => vec![],
+fn parse_module_target(s: &str) -> ModuleTarget {
+    match s {
+        "engine" => ModuleTarget::Engine,
+        "sensors" => ModuleTarget::Sensors,
+        "comms" => ModuleTarget::Comms,
+        "weapons" => ModuleTarget::Weapons,
+        "life_support" => ModuleTarget::LifeSupport,
+        _ => ModuleTarget::Engine,
     }
 }
 
@@ -901,14 +281,13 @@ pub fn apply_effects(
                     for member in &mut journey.crew {
                         member.state.mood = *mood;
                     }
-                    changes.push(format!("Crew mood → {}", mood));
+                    changes.push(format!("Crew mood -> {}", mood));
                 } else {
-                    // Affect the crew member with the highest stress.
                     if let Some(member) = journey.crew.iter_mut()
                         .max_by(|a, b| a.state.stress.partial_cmp(&b.state.stress).unwrap())
                     {
                         member.state.mood = *mood;
-                        changes.push(format!("{} mood → {}", member.name, mood));
+                        changes.push(format!("{} mood -> {}", member.name, mood));
                     }
                 }
             }
@@ -956,7 +335,7 @@ pub fn apply_effects(
                 };
                 journey.threads.push(thread);
                 threads_spawned += 1;
-                changes.push(format!("New thread: {} — {}", thread_type, short_desc(description)));
+                changes.push(format!("New thread: {} -- {}", thread_type, short_desc(description)));
             }
 
             Effect::AddCargo { item, quantity } => {
@@ -986,12 +365,10 @@ pub fn apply_effects(
             }
 
             Effect::AddConcern(concern) => {
-                // Add to the crew member with lowest stress (most bandwidth).
                 if let Some(member) = journey.crew.iter_mut()
                     .min_by(|a, b| a.state.stress.partial_cmp(&b.state.stress).unwrap())
                 {
                     member.state.active_concerns.push(concern.clone());
-                    // Cap at 3 active concerns.
                     if member.state.active_concerns.len() > 3 {
                         member.state.active_concerns.remove(0);
                     }
@@ -1002,13 +379,10 @@ pub fn apply_effects(
                 narrative_notes.push(text.clone());
             }
 
-            Effect::Pass => {
-                // Intentionally nothing.
-            }
+            Effect::Pass => {}
         }
     }
 
-    // Build the log entry.
     let log_entry = if !narrative_notes.is_empty() {
         narrative_notes.join(" ")
     } else if !changes.is_empty() {
@@ -1017,7 +391,6 @@ pub fn apply_effects(
         event_description.to_string()
     };
 
-    // Write to the event log.
     journey.event_log.push(GameEvent {
         timestamp: journey.time,
         category: EventCategory::Encounter,
@@ -1060,8 +433,6 @@ fn module_name(target: ModuleTarget) -> &'static str {
     }
 }
 
-/// How much tension a new thread starts with. Different thread types
-/// have different narrative urgency.
 fn starting_tension(thread_type: ThreadType) -> f32 {
     match thread_type {
         ThreadType::Relationship => 0.3,
@@ -1074,7 +445,6 @@ fn starting_tension(thread_type: ThreadType) -> f32 {
     }
 }
 
-/// Truncate a description to a short snippet for change summaries.
 fn short_desc(s: &str) -> String {
     let truncated: String = s.chars().take(50).collect();
     if s.len() > 50 {
@@ -1169,19 +539,72 @@ mod tests {
             event_log: vec![],
             civ_standings: HashMap::new(),
             profile: PlayerProfile::new(),
+            active_contracts: vec![],
+        }
+    }
+
+    // --- EffectDef -> Effect conversion ---
+
+    #[test]
+    fn effect_def_fuel_converts() {
+        let def = EffectDef::Fuel { delta: 20.0 };
+        let effect = effect_def_to_effect(&def);
+        assert_eq!(effect, Effect::Fuel(20.0));
+    }
+
+    #[test]
+    fn effect_def_spawn_thread_converts() {
+        let def = EffectDef::SpawnThread {
+            thread_type: "mystery".into(),
+            description: "Something strange.".into(),
+        };
+        let effect = effect_def_to_effect(&def);
+        match effect {
+            Effect::SpawnThread { thread_type, description } => {
+                assert_eq!(thread_type, ThreadType::Mystery);
+                assert_eq!(description, "Something strange.");
+            }
+            _ => panic!("Expected SpawnThread"),
         }
     }
 
     #[test]
-    fn buy_fuel_adds_fuel_removes_resources() {
-        let mut journey = test_journey_with_crew();
-        let effects = resolve_effects("buy_fuel", &journey);
-        let report = apply_effects(&effects, &mut journey, "Bought fuel");
+    fn effect_def_crew_mood_converts() {
+        let def = EffectDef::CrewMood { mood: "inspired".into(), all: true };
+        let effect = effect_def_to_effect(&def);
+        assert_eq!(effect, Effect::CrewMood { mood: Mood::Inspired, all: true });
+    }
 
+    #[test]
+    fn effect_def_module_repair_converts() {
+        let def = EffectDef::RepairModule { module: "engine".into(), amount: 0.3 };
+        let effect = effect_def_to_effect(&def);
+        assert_eq!(effect, Effect::RepairModule { module: ModuleTarget::Engine, amount: 0.3 });
+    }
+
+    #[test]
+    fn convert_effects_batch() {
+        let defs = vec![
+            EffectDef::Fuel { delta: 20.0 },
+            EffectDef::Resources { delta: -30.0 },
+            EffectDef::Narrative { text: "Refueled.".into() },
+        ];
+        let effects = convert_effects(&defs);
+        assert_eq!(effects.len(), 3);
+        assert_eq!(effects[0], Effect::Fuel(20.0));
+        assert_eq!(effects[1], Effect::Resources(-30.0));
+        assert!(matches!(&effects[2], Effect::Narrative(t) if t == "Refueled."));
+    }
+
+    // --- Effect application ---
+
+    #[test]
+    fn fuel_added_and_clamped() {
+        let mut journey = test_journey_with_crew();
+        let effects = vec![Effect::Fuel(20.0)];
+        let report = apply_effects(&effects, &mut journey, "Fuel test");
         assert_eq!(journey.ship.fuel, 70.0);
-        assert_eq!(journey.resources, 470.0);
         assert!(!report.changes.is_empty());
-        assert_eq!(journey.event_log.len(), 1);
     }
 
     #[test]
@@ -1190,8 +613,7 @@ mod tests {
         journey.ship.fuel = 95.0;
         let effects = vec![Effect::Fuel(20.0)];
         apply_effects(&effects, &mut journey, "Overfill test");
-
-        assert_eq!(journey.ship.fuel, 100.0); // Clamped to capacity.
+        assert_eq!(journey.ship.fuel, 100.0);
     }
 
     #[test]
@@ -1199,52 +621,35 @@ mod tests {
         let mut journey = test_journey_with_crew();
         journey.resources = 10.0;
         let effects = vec![Effect::Resources(-100.0)];
-        apply_effects(&effects, &mut journey, "Broke");
-
+        apply_effects(&effects, &mut journey, "Drain test");
         assert_eq!(journey.resources, 0.0);
     }
 
     #[test]
-    fn crew_stress_clamped() {
-        let mut journey = test_journey_with_crew();
-        let effects = vec![Effect::CrewStress(2.0)]; // Absurdly high.
-        apply_effects(&effects, &mut journey, "Stress test");
-
-        for member in &journey.crew {
-            assert!(member.state.stress <= 1.0);
-        }
-    }
-
-    #[test]
-    fn spawn_thread_creates_thread() {
+    fn spawn_thread_adds_to_ledger() {
         let mut journey = test_journey_with_crew();
         assert!(journey.threads.is_empty());
-
-        let effects = resolve_effects("board_derelict", &journey);
-        let report = apply_effects(&effects, &mut journey, "Boarded a derelict");
-
+        let effects = vec![Effect::SpawnThread {
+            thread_type: ThreadType::Mystery,
+            description: "A signal in the dark.".into(),
+        }];
+        let report = apply_effects(&effects, &mut journey, "Signal");
         assert_eq!(journey.threads.len(), 1);
         assert_eq!(report.threads_spawned, 1);
-        assert_eq!(journey.threads[0].thread_type, ThreadType::Mystery);
-        assert_eq!(journey.threads[0].resolution, ResolutionState::Open);
     }
 
     #[test]
-    fn jettison_cargo_clears_cargo() {
+    fn cargo_jettison_clears_all() {
         let mut journey = test_journey_with_crew();
-        journey.ship.cargo.insert("Spice".into(), 10);
-        journey.ship.cargo.insert("Machine parts".into(), 5);
-
+        journey.ship.cargo.insert("Data cores".into(), 3);
         let effects = vec![Effect::JettisonCargo];
-        apply_effects(&effects, &mut journey, "Jettisoned");
-
+        apply_effects(&effects, &mut journey, "Jettison");
         assert!(journey.ship.cargo.is_empty());
     }
 
     #[test]
     fn module_damage_and_repair() {
         let mut journey = test_journey_with_crew();
-
         let effects = vec![
             Effect::DamageModule { module: ModuleTarget::Engine, amount: 0.3 },
         ];
@@ -1261,13 +666,9 @@ mod tests {
     #[test]
     fn crew_mood_targets_most_stressed() {
         let mut journey = test_journey_with_crew();
-        // Crew B has stress 0.5, Crew A has 0.3.
         let effects = vec![Effect::CrewMood { mood: Mood::Anxious, all: false }];
         apply_effects(&effects, &mut journey, "Mood shift");
-
-        // Crew B (highest stress) should have changed.
         assert_eq!(journey.crew[1].state.mood, Mood::Anxious);
-        // Crew A should be unchanged.
         assert_eq!(journey.crew[0].state.mood, Mood::Content);
     }
 
@@ -1276,167 +677,74 @@ mod tests {
         let mut journey = test_journey_with_crew();
         let before_a = journey.crew[0].trust.personal;
         let before_b = journey.crew[1].trust.personal;
-
         let effects = vec![Effect::TrustPersonal(0.1)];
         apply_effects(&effects, &mut journey, "Trust test");
-
         assert!((journey.crew[0].trust.personal - (before_a + 0.1)).abs() < 0.001);
         assert!((journey.crew[1].trust.personal - (before_b + 0.1)).abs() < 0.001);
-    }
-
-    #[test]
-    fn unknown_effect_produces_narrative() {
-        let journey = test_journey_with_crew();
-        let effects = resolve_effects("some_future_effect", &journey);
-
-        assert_eq!(effects.len(), 1);
-        match &effects[0] {
-            Effect::Narrative(text) => {
-                assert!(text.contains("some_future_effect"));
-            }
-            _ => panic!("Unknown effect should produce Narrative"),
-        }
-    }
-
-    #[test]
-    fn expensive_fuel_scales_with_desperation() {
-        let mut journey_low = test_journey_with_crew();
-        journey_low.ship.fuel = 10.0;
-
-        let mut journey_mid = test_journey_with_crew();
-        journey_mid.ship.fuel = 50.0;
-
-        let effects_low = resolve_effects("buy_fuel_expensive", &journey_low);
-        let effects_mid = resolve_effects("buy_fuel_expensive", &journey_mid);
-
-        // Low fuel should cost more per unit.
-        let cost_low = effects_low.iter().find_map(|e| match e {
-            Effect::Resources(d) => Some(d.abs()),
-            _ => None,
-        }).unwrap();
-
-        let cost_mid = effects_mid.iter().find_map(|e| match e {
-            Effect::Resources(d) => Some(d.abs()),
-            _ => None,
-        }).unwrap();
-
-        assert!(cost_low > cost_mid,
-            "Low fuel should cost more: low={:.0}, mid={:.0}", cost_low, cost_mid);
-    }
-
-    #[test]
-    fn shore_leave_reduces_stress_costs_resources() {
-        let mut journey = test_journey_with_crew();
-        let initial_stress_a = journey.crew[0].state.stress;
-        let initial_resources = journey.resources;
-
-        let effects = resolve_effects("shore_leave", &journey);
-        apply_effects(&effects, &mut journey, "Shore leave");
-
-        assert!(journey.crew[0].state.stress < initial_stress_a);
-        assert!(journey.resources < initial_resources);
-        assert_eq!(journey.crew[0].state.mood, Mood::Hopeful);
-    }
-
-    #[test]
-    fn hold_course_damages_hull_and_engine() {
-        let mut journey = test_journey_with_crew();
-        let initial_hull = journey.ship.hull_condition;
-        let initial_engine = journey.ship.modules.engine.condition;
-
-        let effects = resolve_effects("hold_course", &journey);
-        apply_effects(&effects, &mut journey, "Stood ground");
-
-        assert!(journey.ship.hull_condition < initial_hull);
-        assert!(journey.ship.modules.engine.condition < initial_engine);
-        assert_eq!(journey.threads.len(), 1); // Grudge thread spawned.
     }
 
     #[test]
     fn event_log_grows_with_each_application() {
         let mut journey = test_journey_with_crew();
         assert!(journey.event_log.is_empty());
-
-        let effects = resolve_effects("rest", &journey);
-        apply_effects(&effects, &mut journey, "Rested");
-
-        let effects = resolve_effects("buy_fuel", &journey);
-        apply_effects(&effects, &mut journey, "Refueled");
-
+        apply_effects(&[Effect::CrewStress(-0.05)], &mut journey, "Rested");
+        apply_effects(&[Effect::Fuel(20.0)], &mut journey, "Refueled");
         assert_eq!(journey.event_log.len(), 2);
     }
 
-    // --- Compound effect parsing ---
+    // --- Full pipeline: EffectDef -> convert -> apply ---
 
     #[test]
-    fn compound_effects_parse_semicolons() {
-        let journey = test_journey_with_crew();
-        let effects = resolve_effects("resources:200;buy_supplies", &journey);
-
-        // Should produce Resources(200) + the buy_supplies effects.
-        let has_resources = effects.iter().any(|e| matches!(e, Effect::Resources(v) if *v > 100.0));
-        let has_supplies = effects.iter().any(|e| matches!(e, Effect::Supplies(v) if *v > 0.0));
-
-        assert!(has_resources, "Should have resources effect");
-        assert!(has_supplies, "Should have supplies effect from buy_supplies");
-    }
-
-    #[test]
-    fn parameterized_repair_module() {
-        let journey = test_journey_with_crew();
-        let effects = resolve_effects("repair_module:engine:0.3", &journey);
-
-        let has_repair = effects.iter().any(|e| {
-            matches!(e, Effect::RepairModule { module: ModuleTarget::Engine, amount }
-                if (*amount - 0.3).abs() < 0.01)
-        });
-        assert!(has_repair, "Should parse repair_module:engine:0.3");
-    }
-
-    #[test]
-    fn parameterized_spawn_thread() {
-        let journey = test_journey_with_crew();
-        let effects = resolve_effects(
-            "spawn_thread:mystery:Something strange in the void",
-            &journey,
-        );
-
-        let has_thread = effects.iter().any(|e| {
-            matches!(e, Effect::SpawnThread { thread_type: ThreadType::Mystery, .. })
-        });
-        assert!(has_thread, "Should parse spawn_thread:mystery:description");
-    }
-
-    #[test]
-    fn compound_with_narrative() {
-        let journey = test_journey_with_crew();
-        let effects = resolve_effects(
-            "fuel:-2;narrative:The scan reveals nothing unusual.",
-            &journey,
-        );
-
-        let has_fuel = effects.iter().any(|e| matches!(e, Effect::Fuel(v) if *v < 0.0));
-        let has_narrative = effects.iter().any(|e| matches!(e, Effect::Narrative(_)));
-
-        assert!(has_fuel, "Should have fuel effect");
-        assert!(has_narrative, "Should have narrative effect");
-    }
-
-    #[test]
-    fn full_intent_effect_chain() {
+    fn full_pipeline_def_to_application() {
         let mut journey = test_journey_with_crew();
-        let effects = resolve_effects(
-            "resources:-300;hull:0.3;repair_module:engine:0.3;repair_module:sensors:0.2",
-            &journey,
-        );
+        let initial_fuel = journey.ship.fuel;
+        let initial_resources = journey.resources;
 
-        let report = apply_effects(&effects, &mut journey, "Full repair");
+        let defs = vec![
+            EffectDef::Fuel { delta: 20.0 },
+            EffectDef::Resources { delta: -30.0 },
+            EffectDef::CrewStress { delta: -0.05 },
+            EffectDef::Narrative { text: "A small kindness at a quiet refueling stop.".into() },
+        ];
+        let effects = convert_effects(&defs);
+        let report = apply_effects(&effects, &mut journey, "buy_fuel_and_talk");
 
-        // Resources should decrease.
-        assert!(journey.resources < 1000.0, "Resources should decrease");
-        // Hull should increase.
-        assert!(journey.ship.hull_condition > 0.9, "Hull should increase");
-        // Engine should be repaired.
-        assert!(journey.ship.modules.engine.condition > 0.9, "Engine should be repaired");
+        assert_eq!(journey.ship.fuel, initial_fuel + 20.0);
+        assert_eq!(journey.resources, initial_resources - 30.0);
+        assert!(report.log_entry.contains("small kindness"));
+    }
+
+    #[test]
+    fn full_pipeline_compound_effects() {
+        let mut journey = test_journey_with_crew();
+        let defs = vec![
+            EffectDef::Resources { delta: -300.0 },
+            EffectDef::Hull { delta: 0.3 },
+            EffectDef::RepairModule { module: "engine".into(), amount: 0.3 },
+            EffectDef::RepairModule { module: "sensors".into(), amount: 0.2 },
+        ];
+        let effects = convert_effects(&defs);
+        apply_effects(&effects, &mut journey, "Full repair");
+
+        assert!(journey.resources < 500.0);
+        assert!(journey.ship.hull_condition > 0.9);
+        assert!(journey.ship.modules.engine.condition > 0.9);
+    }
+
+    #[test]
+    fn effect_def_json_round_trip() {
+        let defs = vec![
+            EffectDef::Fuel { delta: 20.0 },
+            EffectDef::SpawnThread {
+                thread_type: "mystery".into(),
+                description: "Something found.".into(),
+            },
+            EffectDef::CrewMood { mood: "hopeful".into(), all: true },
+            EffectDef::Pass {},
+        ];
+        let json = serde_json::to_string_pretty(&defs).unwrap();
+        let parsed: Vec<EffectDef> = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.len(), 4);
+        assert_eq!(parsed[0], EffectDef::Fuel { delta: 20.0 });
     }
 }

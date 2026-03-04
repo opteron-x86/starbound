@@ -355,6 +355,7 @@ mod tests {
             event_log: vec![],
             civ_standings: HashMap::new(),
             profile: PlayerProfile::new(),
+            active_contracts: vec![],
         }
     }
 

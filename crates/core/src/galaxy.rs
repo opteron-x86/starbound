@@ -41,6 +41,10 @@ pub struct StarSystem {
     /// strength 0.9 / visibility 1.0. The Corridor Guild might be
     /// here too — strength 0.3, visibility 0.1.
     pub faction_presence: Vec<FactionPresence>,
+    /// The local economy — prices, production, demand. None for
+    /// uninhabited systems.
+    #[serde(default)]
+    pub economy: Option<SystemEconomy>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Display, EnumString)]
@@ -458,4 +462,128 @@ pub enum FactionRank {
     Trusted,
     /// The highest rank. Part of the faction's leadership circle.
     InnerCircle,
+}
+
+// ===========================================================================
+// SYSTEM ECONOMY
+// ===========================================================================
+
+/// Trade good categories available in the galaxy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Display, EnumString)]
+#[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum TradeGood {
+    Food,
+    RawMaterials,
+    ManufacturedGoods,
+    MedicalSupplies,
+    ConstructionMaterials,
+    RefinedFuelCells,
+}
+
+impl TradeGood {
+    /// Base price per unit when supply and demand are balanced.
+    pub fn base_price(&self) -> f64 {
+        match self {
+            TradeGood::Food => 10.0,
+            TradeGood::RawMaterials => 15.0,
+            TradeGood::ManufacturedGoods => 30.0,
+            TradeGood::MedicalSupplies => 25.0,
+            TradeGood::ConstructionMaterials => 20.0,
+            TradeGood::RefinedFuelCells => 18.0,
+        }
+    }
+
+    /// All trade good variants, for iteration.
+    pub fn all() -> &'static [TradeGood] {
+        &[
+            TradeGood::Food,
+            TradeGood::RawMaterials,
+            TradeGood::ManufacturedGoods,
+            TradeGood::MedicalSupplies,
+            TradeGood::ConstructionMaterials,
+            TradeGood::RefinedFuelCells,
+        ]
+    }
+
+    /// Display name for the trade screen.
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            TradeGood::Food => "Food",
+            TradeGood::RawMaterials => "Raw materials",
+            TradeGood::ManufacturedGoods => "Manufactured goods",
+            TradeGood::MedicalSupplies => "Medical supplies",
+            TradeGood::ConstructionMaterials => "Construction materials",
+            TradeGood::RefinedFuelCells => "Refined fuel cells",
+        }
+    }
+}
+
+/// A system's economic profile — drives trade prices and availability.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SystemEconomy {
+    /// What this system produces (0.0 = imports everything, 1.0 = major exporter).
+    pub production: HashMap<TradeGood, f32>,
+    /// What this system needs (0.0 = no demand, 1.0 = desperate need).
+    pub consumption: HashMap<TradeGood, f32>,
+    /// How much prices swing. Frontier = high, capital = low.
+    pub price_volatility: f32,
+    /// Credits per fuel unit.
+    pub fuel_price: f32,
+    /// Credits per supply unit.
+    pub supply_price: f32,
+}
+
+impl SystemEconomy {
+    /// Calculate the buy price for a trade good at this system.
+    /// Higher consumption and lower production = more expensive.
+    pub fn buy_price(&self, good: TradeGood) -> f64 {
+        let base = good.base_price();
+        let prod = *self.production.get(&good).unwrap_or(&0.5);
+        let cons = *self.consumption.get(&good).unwrap_or(&0.5);
+        // Price goes up with consumption, down with production.
+        let modifier = 1.0 + (cons - prod) as f64 * self.price_volatility as f64;
+        (base * modifier.max(0.3)).round()
+    }
+
+    /// Sell price is always less than buy price (the spread).
+    /// Systems pay more for goods they consume heavily.
+    pub fn sell_price(&self, good: TradeGood) -> f64 {
+        (self.buy_price(good) * 0.75).round()
+    }
+
+    /// How much of a good is available to buy.
+    /// High production = plenty, low production = limited.
+    pub fn availability(&self, good: TradeGood) -> Availability {
+        let prod = *self.production.get(&good).unwrap_or(&0.0);
+        if prod >= 0.7 {
+            Availability::Plenty
+        } else if prod >= 0.4 {
+            Availability::Moderate
+        } else if prod >= 0.15 {
+            Availability::Limited
+        } else {
+            Availability::Unavailable
+        }
+    }
+}
+
+/// How much of a trade good is available for purchase.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Availability {
+    Plenty,
+    Moderate,
+    Limited,
+    Unavailable,
+}
+
+impl std::fmt::Display for Availability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Availability::Plenty => write!(f, "plenty"),
+            Availability::Moderate => write!(f, "moderate"),
+            Availability::Limited => write!(f, "limited"),
+            Availability::Unavailable => write!(f, "unavailable"),
+        }
+    }
 }

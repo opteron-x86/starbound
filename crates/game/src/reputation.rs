@@ -16,7 +16,6 @@ use starbound_core::journey::Journey;
 use starbound_core::reputation::{
     ActionContext, ActionRecord, ActionType, LabelKind, PlayerProfile, ReputationLabel,
 };
-use starbound_core::time::Timestamp;
 use uuid::Uuid;
 
 // ---------------------------------------------------------------------------
@@ -470,7 +469,6 @@ pub fn reputation_encounter_weight(profile: &PlayerProfile, event_tags: &[String
 #[cfg(test)]
 mod tests {
     use super::*;
-    use starbound_core::reputation::*;
     use starbound_core::time::Timestamp;
 
     fn empty_profile() -> PlayerProfile {

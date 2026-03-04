@@ -85,6 +85,7 @@ fn create_and_serialize_sample_game_state() {
         active_threads: vec![],
             time_factor: 1.0,
         faction_presence: vec![],
+            economy: None,
     };
 
     let cygnus_gate = StarSystem {
@@ -110,6 +111,7 @@ fn create_and_serialize_sample_game_state() {
         active_threads: vec![],
             time_factor: 1.0,
         faction_presence: vec![],
+            economy: None,
     };
 
     // -- Sector --
@@ -332,6 +334,7 @@ fn create_and_serialize_sample_game_state() {
         }],
         civ_standings: HashMap::new(),
         profile: PlayerProfile::new(),
+            active_contracts: vec![],
     };
 
     // -- Serialize and verify --

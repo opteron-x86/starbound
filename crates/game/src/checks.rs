@@ -152,7 +152,7 @@ const FACTION_WEIGHT: f32 = 0.15;
 
 /// Maximum contribution from reputation profile.
 /// Stubbed at 0.0 until the behavioral profile system is built.
-const REPUTATION_WEIGHT: f32 = 0.10;
+const _REPUTATION_WEIGHT: f32 = 0.10;
 
 /// Maximum contribution from ship upgrade bonuses.
 /// Stubbed at a small flat value; will be driven by module variants later.
@@ -629,6 +629,7 @@ mod tests {
             event_log: vec![],
             civ_standings: HashMap::new(),
             profile: PlayerProfile::new(),
+            active_contracts: vec![],
         }
     }
 

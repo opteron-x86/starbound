@@ -437,6 +437,7 @@ mod tests {
             active_threads: vec![],
             time_factor: 1.0,
             faction_presence: vec![],
+            economy: None,
         }
     }
 
