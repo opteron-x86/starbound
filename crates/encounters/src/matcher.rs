@@ -243,6 +243,7 @@ mod tests {
     use starbound_core::mission::*;
     use starbound_core::ship::*;
     use starbound_core::time::Timestamp;
+    use starbound_core::reputation::PlayerProfile;
     use uuid::Uuid;
 
     fn test_system(infra: InfrastructureLevel, faction: Option<Uuid>) -> StarSystem {
@@ -306,6 +307,8 @@ mod tests {
                 hull_condition: hull,
                 fuel,
                 fuel_capacity: 100.0,
+                supplies: 80.0,
+                supply_capacity: 100.0,
                 cargo: HashMap::new(),
                 cargo_capacity: 50,
                 modules: ShipModules {
@@ -328,6 +331,7 @@ mod tests {
             threads: vec![],
             event_log: vec![],
             civ_standings: HashMap::new(),
+            profile: PlayerProfile::new(),
         }
     }
 

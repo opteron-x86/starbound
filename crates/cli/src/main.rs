@@ -17,11 +17,12 @@ use starbound_core::galaxy::*;
 use starbound_core::journey::Journey;
 use starbound_core::mission::*;
 use starbound_core::ship::*;
+use starbound_core::reputation::PlayerProfile;
 use starbound_core::time::Timestamp;
 
 use starbound_encounters::library::all_seed_events;
 use starbound_encounters::pipeline::{
-    run_pipeline, PipelineConfig, PipelineResult, PipelineState,
+    run_pipeline, PipelineConfig, PipelineResult, PipelineState, PlayerIntent,
 };
 use starbound_encounters::seed_event::SeedEvent;
 
@@ -238,6 +239,8 @@ fn new_game(seed: u64) -> GameState {
             hull_condition: 0.95,
             fuel: 80.0,
             fuel_capacity: 100.0,
+            supplies: 80.0,
+            supply_capacity: 100.0,
             cargo: HashMap::new(),
             cargo_capacity: 50,
             modules: ShipModules {
@@ -262,6 +265,7 @@ fn new_game(seed: u64) -> GameState {
         threads: vec![],
         event_log: vec![],
         civ_standings: HashMap::new(),
+        profile: PlayerProfile::new(),
     };
 
     let mut visit_log = HashMap::new();
@@ -352,9 +356,36 @@ fn display_ship_status(gs: &GameState) {
         ship.fuel, ship.fuel_capacity,
         gs.journey.resources);
 
+    // Supply status — show warning level when relevant.
+    let supply_status = starbound_game::supplies::SupplyStatus::assess(
+        ship.supplies, ship.supply_capacity,
+    );
+    let days_left = starbound_game::supplies::days_remaining(&gs.journey);
+
+    if supply_status.is_warning() {
+        println!("  Supplies: {:.0}/{:.0} [{}]  (~{:.0} days remaining)",
+            ship.supplies, ship.supply_capacity,
+            supply_status.label(),
+            days_left);
+    } else {
+        println!("  Supplies: {:.0}/{:.0}  (~{:.0} days remaining)",
+            ship.supplies, ship.supply_capacity, days_left);
+    }
+
     println!("  Time: {:.1} months personal / {:.1} years galactic",
         time.personal_days / 30.44,
         time.galactic_years());
+
+    // Reputation — show active labels if any.
+    if !gs.journey.profile.labels.is_empty() {
+        let label_strs: Vec<String> = gs.journey.profile.labels.iter()
+            .filter(|l| l.strength >= 0.3)
+            .map(|l| format!("{} ({:.0}%)", l.kind, l.strength * 100.0))
+            .collect();
+        if !label_strs.is_empty() {
+            println!("  Known as: {}", label_strs.join(", "));
+        }
+    }
 }
 
 fn display_routes(plans: &[TravelPlan], gs: &GameState) {
@@ -578,6 +609,7 @@ fn display_intro() {
 
     for line in wrap_text(
         "Your crew is aboard. Your fuel tanks are mostly full. \
+         Supplies should last a few months. \
          The galaxy is out there, waiting to not notice you.", 60
     ) { println!("  {}", line); }
     println!();
@@ -599,36 +631,210 @@ fn game_loop(gs: &mut GameState) {
         display_ship_status(gs);
 
         println!("\n  What do you do?");
-        println!("  1) Travel        2) Crew");
-        println!("  3) Mission       4) Log");
-        println!("  5) Threads       6) Quit");
+        println!("  1) Travel        2) Actions");
+        println!("  3) Crew          4) Mission");
+        println!("  5) Log           6) Threads");
+        println!("  7) Quit");
         println!();
 
         let choice = prompt("  > ");
 
         match choice.as_str() {
             "1" | "travel" => travel_menu(gs),
-            "2" | "crew" => {
+            "2" | "actions" | "act" => action_menu(gs),
+            "3" | "crew" => {
                 display_crew_detail(gs);
                 pause();
             }
-            "3" | "mission" => {
+            "4" | "mission" => {
                 display_mission(gs);
                 pause();
             }
-            "4" | "log" => {
+            "5" | "log" => {
                 display_event_log(gs);
                 pause();
             }
-            "5" | "threads" => {
+            "6" | "threads" => {
                 display_threads(gs);
                 pause();
             }
-            "6" | "q" | "quit" => {
+            "7" | "q" | "quit" => {
                 println!("\n  The galaxy continues without you.\n");
                 break;
             }
             _ => {}
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Action menu — player-initiated encounters
+// ---------------------------------------------------------------------------
+
+/// Determine which actions are available at the current system.
+fn available_actions(gs: &GameState) -> Vec<PlayerIntent> {
+    let system = gs.current_system();
+    let mut actions = Vec::new();
+
+    // Scan is always available — you can always point your sensors at something.
+    actions.push(PlayerIntent::Scan);
+
+    // Investigate is always available — curiosity doesn't need infrastructure.
+    actions.push(PlayerIntent::Investigate);
+
+    // Trade requires at least an outpost.
+    let infra_rank = match system.infrastructure_level {
+        starbound_core::galaxy::InfrastructureLevel::None => 0,
+        starbound_core::galaxy::InfrastructureLevel::Outpost => 1,
+        starbound_core::galaxy::InfrastructureLevel::Colony => 2,
+        starbound_core::galaxy::InfrastructureLevel::Established => 3,
+        starbound_core::galaxy::InfrastructureLevel::Hub => 4,
+        starbound_core::galaxy::InfrastructureLevel::Capital => 5,
+    };
+
+    if infra_rank >= 1 {
+        actions.push(PlayerIntent::Trade);
+    }
+
+    // Repair requires at least an outpost.
+    if infra_rank >= 1 {
+        actions.push(PlayerIntent::Repair);
+    }
+
+    // Resupply requires at least an outpost.
+    if infra_rank >= 1 {
+        actions.push(PlayerIntent::Resupply);
+    }
+
+    actions
+}
+
+fn action_menu(gs: &mut GameState) {
+    let actions = available_actions(gs);
+
+    if actions.is_empty() {
+        println!("\n  Nothing to do here. The system is empty.");
+        pause();
+        return;
+    }
+
+    display_header("Actions");
+
+    for (i, action) in actions.iter().enumerate() {
+        println!("  {}) {}", i + 1, action.label());
+    }
+    println!("  0) Back");
+    println!();
+
+    let input = prompt("  > ");
+    let idx: usize = match input.parse::<usize>() {
+        Ok(n) if n >= 1 && n <= actions.len() => n - 1,
+        _ => return,
+    };
+
+    let intent = actions[idx];
+    run_intent_encounter(gs, intent);
+}
+
+fn run_intent_encounter(gs: &mut GameState, intent: PlayerIntent) {
+    let system = gs.current_system().clone();
+    let years_since = gs.galactic_years_since_last_visit();
+
+    let result = run_pipeline(
+        &gs.events, &system, &gs.journey, years_since,
+        &gs.pipeline_state, &gs.pipeline_config, &mut gs.rng,
+        Some(intent),
+    );
+
+    match result {
+        PipelineResult::Event { event, .. } => {
+            let tone = match event.tone.as_str() {
+                "tense" => starbound_core::narrative::Tone::Tense,
+                "quiet" => starbound_core::narrative::Tone::Quiet,
+                "wonder" => starbound_core::narrative::Tone::Wonder,
+                "urgent" => starbound_core::narrative::Tone::Urgent,
+                "melancholy" => starbound_core::narrative::Tone::Melancholy,
+                _ => starbound_core::narrative::Tone::Mundane,
+            };
+            gs.pipeline_state.record_event(&event.id, tone);
+
+            clear_screen();
+            display_encounter(event);
+            println!();
+
+            let input = prompt("  > ");
+            let choice_idx: usize = input.parse::<usize>()
+                .unwrap_or(1)
+                .saturating_sub(1)
+                .min(event.choices.len().saturating_sub(1));
+
+            let chosen = &event.choices[choice_idx];
+
+            let effects = resolve_effects(&chosen.mechanical_effect, &gs.journey);
+            let report = apply_effects(
+                &effects,
+                &mut gs.journey,
+                &format!("{}: {}", event.id, chosen.label),
+            );
+
+            clear_screen();
+            display_header("Consequences");
+            println!();
+
+            for line in wrap_text(&format!("You chose: {}", chosen.label), 60) {
+                println!("  {}", line);
+            }
+            println!();
+
+            if !report.log_entry.is_empty() {
+                for line in wrap_text(&report.log_entry, 60) {
+                    println!("  {}", line);
+                }
+                println!();
+            }
+
+            if !report.changes.is_empty() {
+                println!("{}", THIN_DIVIDER);
+                for change in &report.changes {
+                    println!("  · {}", change);
+                }
+            }
+
+            if report.threads_spawned > 0 {
+                println!();
+                println!("  {} new thread{} in the ledger.",
+                    report.threads_spawned,
+                    if report.threads_spawned == 1 { "" } else { "s" },
+                );
+            }
+
+            pause();
+        }
+        PipelineResult::Silence { reason, .. } => {
+            clear_screen();
+            display_header(intent.label());
+            println!();
+
+            let msg = match intent {
+                PlayerIntent::Trade => "No one here is interested in trading right now.",
+                PlayerIntent::Investigate => "Your sensors find nothing worth investigating at the moment.",
+                PlayerIntent::Repair => "No repair facilities available at this system.",
+                PlayerIntent::Resupply => "Supplies aren't available here.",
+                PlayerIntent::Scan => "Your sensors sweep the system but find nothing unusual.",
+                PlayerIntent::Recruit => "No one here is looking for work.",
+                PlayerIntent::Rest => "The crew takes a moment to breathe.",
+                PlayerIntent::Smuggle => "No opportunity for that kind of work here.",
+                PlayerIntent::Negotiate => "There's no one to negotiate with.",
+            };
+
+            for line in wrap_text(msg, 60) {
+                println!("  {}", line);
+            }
+
+            // Log it for debugging.
+            let _ = reason;
+
+            pause();
         }
     }
 }
@@ -715,6 +921,18 @@ fn execute_travel_and_arrive(gs: &mut GameState, plan: &TravelPlan, dest_name: &
         println!("\n  Fuel consumed: {:.1}", outcome.fuel_spent);
     }
 
+    if outcome.supplies_consumed > 0.0 {
+        println!("  Supplies consumed: {:.1}", outcome.supplies_consumed);
+    }
+
+    // Supply warnings — these matter narratively.
+    for warning in &outcome.supply_warnings {
+        println!();
+        for line in wrap_text(&format!("  ⚠ {}", warning), 60) {
+            println!("{}", line);
+        }
+    }
+
     println!("\n  Total elapsed: {:.1} months personal / {:.1} years galactic",
         outcome.total_personal_years * 12.0,
         outcome.total_galactic_years);
@@ -750,6 +968,7 @@ fn execute_travel_and_arrive(gs: &mut GameState, plan: &TravelPlan, dest_name: &
     let result = run_pipeline(
         &gs.events, &system, &gs.journey, years_since,
         &gs.pipeline_state, &gs.pipeline_config, &mut gs.rng,
+        None,
     );
 
     match result {

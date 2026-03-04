@@ -10,6 +10,7 @@ pub mod galaxy;
 pub mod journey;
 pub mod mission;
 pub mod narrative;
+pub mod reputation;
 pub mod ship;
 pub mod time;
 
@@ -19,5 +20,6 @@ pub use galaxy::{Civilization, Connection, Faction, Sector, StarSystem};
 pub use journey::Journey;
 pub use mission::{KnowledgeNode, MissionState};
 pub use narrative::{EncounterBrief, GameEvent, Thread};
+pub use reputation::PlayerProfile;
 pub use ship::Ship;
 pub use time::Timestamp;

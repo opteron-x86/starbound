@@ -18,6 +18,13 @@ pub struct Ship {
     /// means limping on sublight — slow and costly in time.
     pub fuel: f32,
     pub fuel_capacity: f32,
+    /// Supplies — food, air, water, maintenance materials.
+    /// Consumed per personal-day based on crew size and life support.
+    /// Running low creates pressure; running out is a death spiral.
+    #[serde(default = "default_supplies")]
+    pub supplies: f32,
+    #[serde(default = "default_supply_capacity")]
+    pub supply_capacity: f32,
     /// Named cargo items with quantities.
     pub cargo: HashMap<String, u32>,
     pub cargo_capacity: u32,
@@ -77,4 +84,16 @@ pub enum TravelMode {
     /// light-year. Modest time dilation (~3:1 galactic/personal).
     /// Used when the FTL drive is damaged or fuel is depleted.
     Sublight,
+}
+
+// ---------------------------------------------------------------------------
+// Defaults for serde backwards compatibility
+// ---------------------------------------------------------------------------
+
+fn default_supplies() -> f32 {
+    80.0
+}
+
+fn default_supply_capacity() -> f32 {
+    100.0
 }

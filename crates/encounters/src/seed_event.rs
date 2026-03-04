@@ -24,6 +24,11 @@ pub struct SeedEvent {
     pub text: String,
     /// The choices available to the player.
     pub choices: Vec<SeedChoice>,
+    /// Which player intents this event can resolve.
+    /// Empty = arrival-only (traditional pipeline behavior).
+    /// Non-empty = this event fires when the player initiates a matching action.
+    #[serde(default)]
+    pub intents: Vec<String>,
 }
 
 /// Conditions for an event to fire. All fields are optional —

@@ -526,6 +526,7 @@ mod tests {
         use starbound_core::crew::*;
         use starbound_core::mission::*;
         use starbound_core::ship::*;
+    use starbound_core::reputation::PlayerProfile;
         use starbound_core::time::Timestamp;
 
         let galaxy = generate_galaxy(42);
@@ -548,6 +549,8 @@ mod tests {
                 hull_condition: 0.9,
                 fuel: 80.0,
                 fuel_capacity: 100.0,
+                supplies: 75.0,
+                supply_capacity: 100.0,
                 cargo: HashMap::new(),
                 cargo_capacity: 50,
                 modules: ShipModules {
@@ -591,6 +594,7 @@ mod tests {
             threads: vec![],
             event_log: vec![],
             civ_standings: HashMap::new(),
+            profile: PlayerProfile::new(),
         };
 
         save.save_journey(&journey).expect("save journey");

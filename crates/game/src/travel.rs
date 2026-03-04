@@ -10,6 +10,8 @@ use starbound_core::narrative::{EventCategory, GameEvent};
 use starbound_core::ship::TravelMode;
 use starbound_simulation::travel::TravelPlan;
 
+use crate::supplies::consume_supplies;
+
 /// The result of executing travel — what happened and why.
 #[derive(Debug)]
 pub struct TravelOutcome {
@@ -20,6 +22,10 @@ pub struct TravelOutcome {
     pub galactic_days: f64,
     /// Fuel burned.
     pub fuel_spent: f32,
+    /// Supplies consumed during transit.
+    pub supplies_consumed: f32,
+    /// Supply warnings generated during transit (if any).
+    pub supply_warnings: Vec<String>,
     /// How much galactic time has now elapsed total.
     pub total_galactic_years: f64,
     /// How much personal time has now elapsed total.
@@ -53,6 +59,9 @@ pub fn execute_travel(
 
     // Advance time.
     journey.time += plan.duration;
+
+    // Consume supplies for the transit duration.
+    let supply_report = consume_supplies(journey, plan.duration.personal_days);
 
     // Move player.
     let from_system = journey.current_system;
@@ -99,6 +108,8 @@ pub fn execute_travel(
         personal_days: plan.duration.personal_days,
         galactic_days: plan.duration.galactic_days,
         fuel_spent: plan.fuel_cost,
+        supplies_consumed: supply_report.consumed,
+        supply_warnings: supply_report.warnings,
         total_galactic_years: journey.time.galactic_years(),
         total_personal_years: journey.time.personal_years(),
     })
@@ -110,6 +121,7 @@ mod tests {
     use std::collections::HashMap;
     use starbound_core::galaxy::{Connection, RouteType};
     use starbound_core::mission::*;
+    use starbound_core::reputation::PlayerProfile;
     use starbound_core::ship::*;
     use starbound_core::time::Timestamp;
     use starbound_simulation::travel::plan_travel;
@@ -122,6 +134,8 @@ mod tests {
                 hull_condition: 1.0,
                 fuel,
                 fuel_capacity: 100.0,
+                supplies: 80.0,
+                supply_capacity: 100.0,
                 cargo: HashMap::new(),
                 cargo_capacity: 50,
                 modules: ShipModules {
@@ -144,6 +158,7 @@ mod tests {
             threads: vec![],
             event_log: vec![],
             civ_standings: HashMap::new(),
+            profile: PlayerProfile::new(),
         }
     }
 
@@ -246,5 +261,26 @@ mod tests {
         // Nothing changed.
         assert_eq!(journey.current_system, system_a);
         assert_eq!(journey.ship.fuel, 10.0);
+    }
+
+    #[test]
+    fn travel_consumes_supplies() {
+        let system_a = Uuid::new_v4();
+        let system_b = Uuid::new_v4();
+        let conn = Connection {
+            system_a,
+            system_b,
+            distance_ly: 5.0,
+            route_type: RouteType::Open,
+        };
+
+        let mut journey = test_journey(system_a, 100.0);
+        let supplies_before = journey.ship.supplies;
+        let plan = plan_travel(&conn, &journey.ship, TravelMode::Ftl, system_a);
+        let outcome = execute_travel(&mut journey, &plan, "Cygnus Gate").unwrap();
+
+        // Supplies should have been consumed.
+        assert!(outcome.supplies_consumed > 0.0);
+        assert!(journey.ship.supplies < supplies_before);
     }
 }

@@ -301,6 +301,7 @@ dependencies = [
 name = "starbound-game"
 version = "0.1.0"
 dependencies = [
+ "rand",
  "rusqlite",
  "serde",
  "serde_json",

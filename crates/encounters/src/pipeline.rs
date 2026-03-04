@@ -1,20 +1,25 @@
 // file: crates/encounters/src/pipeline.rs
-//! The encounter pipeline — five-stage filter chain that selects
-//! what happens when the player arrives somewhere.
+//! The encounter pipeline — universal resolution system for both
+//! things that happen TO the player and things the player INITIATES.
 //!
 //! ```text
+//! intent_filter   → narrow to action   (Stage 0, player-initiated only)
 //! context_filter  → candidate pool     (Day 4 matcher)
 //! pressure_filter → boost situational  (lean into tensions)
 //! echo_filter     → boost thread ties  (weave in the past)
 //! novelty_check   → balance new vs old (meter fresh content)
 //! tone_filter     → pacing bias        (alternate intensity)
+//! reputation      → boost identity fit (player labels)
 //! ```
 //!
 //! The pipeline scores candidates rather than eliminating them.
 //! Every context-eligible event stays in the pool; filters adjust
 //! weights so the final weighted-random selection naturally favors
 //! the most narratively appropriate encounter. Sometimes the
-//! pipeline returns silence — that's by design.
+//! pipeline returns silence — that's by design (but never for
+//! player-initiated actions).
+
+use std::fmt;
 
 use rand::rngs::StdRng;
 use rand::Rng;
@@ -25,6 +30,74 @@ use starbound_core::narrative::{Tone, ResolutionState};
 
 use super::matcher::{match_events, MatchContext};
 use super::seed_event::SeedEvent;
+
+// ---------------------------------------------------------------------------
+// Player intent — what action the player is initiating
+// ---------------------------------------------------------------------------
+
+/// A player-initiated action. When present, the pipeline selects from
+/// events that can resolve this intent rather than from the full pool.
+///
+/// The string tag for each intent matches against `SeedEvent.intents`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PlayerIntent {
+    /// Buy/sell goods at a station or settlement.
+    Trade,
+    /// Examine something unusual — anomaly, signal, ruin.
+    Investigate,
+    /// Fix damaged ship modules at a facility.
+    Repair,
+    /// Restock supplies (food, water, air).
+    Resupply,
+    /// Deep scan the current system for signals, objects, anomalies.
+    Scan,
+    /// Attempt to hire new crew.
+    Recruit,
+    /// Rest and let crew decompress.
+    Rest,
+    /// Attempt to smuggle contraband.
+    Smuggle,
+    /// Open negotiations with a faction or entity.
+    Negotiate,
+}
+
+impl PlayerIntent {
+    /// The string tag used to match against SeedEvent.intents.
+    pub fn tag(self) -> &'static str {
+        match self {
+            PlayerIntent::Trade => "trade",
+            PlayerIntent::Investigate => "investigate",
+            PlayerIntent::Repair => "repair",
+            PlayerIntent::Resupply => "resupply",
+            PlayerIntent::Scan => "scan",
+            PlayerIntent::Recruit => "recruit",
+            PlayerIntent::Rest => "rest",
+            PlayerIntent::Smuggle => "smuggle",
+            PlayerIntent::Negotiate => "negotiate",
+        }
+    }
+
+    /// Human-readable label for the CLI menu.
+    pub fn label(self) -> &'static str {
+        match self {
+            PlayerIntent::Trade => "Trade",
+            PlayerIntent::Investigate => "Investigate",
+            PlayerIntent::Repair => "Repair ship",
+            PlayerIntent::Resupply => "Resupply",
+            PlayerIntent::Scan => "Scan system",
+            PlayerIntent::Recruit => "Recruit crew",
+            PlayerIntent::Rest => "Rest",
+            PlayerIntent::Smuggle => "Smuggle",
+            PlayerIntent::Negotiate => "Negotiate",
+        }
+    }
+}
+
+impl fmt::Display for PlayerIntent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.label())
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Pipeline result
@@ -120,6 +193,14 @@ impl PipelineState {
 ///
 /// Takes the seed library, current game state, and pipeline state.
 /// Returns either a selected event or silence.
+///
+/// When `intent` is `Some`, the pipeline runs in action mode:
+/// - Stage 0 filters to events matching the intent
+/// - Silence check is skipped (the player chose to act)
+/// - If no matching events exist, returns silence with explanation
+///
+/// When `intent` is `None`, the pipeline runs in arrival mode
+/// (original behavior — backwards compatible).
 pub fn run_pipeline<'a>(
     events: &'a [SeedEvent],
     system: &StarSystem,
@@ -128,21 +209,59 @@ pub fn run_pipeline<'a>(
     state: &PipelineState,
     config: &PipelineConfig,
     rng: &mut StdRng,
+    intent: Option<PlayerIntent>,
 ) -> PipelineResult<'a> {
     // -----------------------------------------------------------------------
-    // Silence check — "A game that's always exciting is never exciting."
+    // Stage 0 — Intent filter (player-initiated actions only)
     // -----------------------------------------------------------------------
-    let silence_threshold = config.silence_chance
-        + (state.encounters_since_silence as f64 * config.silence_escalation);
+    let intent_tag = intent.map(|i| i.tag());
+    let is_player_action = intent.is_some();
 
-    if rng.gen::<f64>() < silence_threshold {
+    // Separate events into intent-matching and arrival-only pools.
+    let working_events: Vec<&SeedEvent> = if let Some(tag) = intent_tag {
+        // Player-initiated: only events that declare this intent.
+        events
+            .iter()
+            .filter(|e| e.intents.iter().any(|i| i == tag))
+            .collect()
+    } else {
+        // Arrival mode: only events with no intents (or all events if
+        // we want arrival events to also fire intent events — but for
+        // now, keep them separate for clean separation).
+        events
+            .iter()
+            .filter(|e| e.intents.is_empty())
+            .collect()
+    };
+
+    if working_events.is_empty() {
         return PipelineResult::Silence {
-            reason: format!(
-                "Silence after {} consecutive encounters (threshold {:.0}%)",
-                state.encounters_since_silence,
-                silence_threshold * 100.0,
-            ),
+            reason: if let Some(i) = intent {
+                format!("No events available for action: {}", i.label())
+            } else {
+                "No arrival events in library.".into()
+            },
         };
+    }
+
+    // -----------------------------------------------------------------------
+    // Silence check — skipped for player-initiated actions.
+    // "A game that's always exciting is never exciting."
+    // But when the player asks to do something, something should happen.
+    // -----------------------------------------------------------------------
+    if !is_player_action {
+        let silence_threshold = config.silence_chance
+            + (state.encounters_since_silence as f64 * config.silence_escalation);
+
+        if rng.gen::<f64>() < silence_threshold {
+            return PipelineResult::Silence {
+                reason: format!(
+                    "Silence after {} consecutive encounters (threshold {:.0}%)",
+                    state.encounters_since_silence,
+                    silence_threshold * 100.0,
+                ),
+            };
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -154,9 +273,37 @@ pub fn run_pipeline<'a>(
         galactic_years_since_last_visit,
     };
 
-    let candidates = match_events(events, &ctx);
+    // For intent mode, we need to intersect context-matched events with
+    // the intent-filtered pool. match_events works on the full library,
+    // so we filter its output against our working set.
+    let all_context_matched = match_events(events, &ctx);
+
+    let candidates: Vec<&SeedEvent> = if is_player_action {
+        // Intersect: must be both context-appropriate AND intent-matching.
+        let intent_ids: std::collections::HashSet<&str> =
+            working_events.iter().map(|e| e.id.as_str()).collect();
+        all_context_matched
+            .into_iter()
+            .filter(|e| intent_ids.contains(e.id.as_str()))
+            .collect()
+    } else {
+        // Arrival mode: context filter only, excluding intent-only events.
+        all_context_matched
+            .into_iter()
+            .filter(|e| e.intents.is_empty())
+            .collect()
+    };
 
     if candidates.is_empty() {
+        // For player actions, provide a more helpful message.
+        if let Some(i) = intent {
+            return PipelineResult::Silence {
+                reason: format!(
+                    "No {} opportunities available at this system.",
+                    i.label().to_lowercase(),
+                ),
+            };
+        }
         return PipelineResult::Silence {
             reason: "No events match current context.".into(),
         };
@@ -209,6 +356,13 @@ pub fn run_pipeline<'a>(
             if pacing > 0.0 {
                 weight *= 1.0 + pacing * config.pacing_contrast_boost;
                 reasons.push(format!("pacing +{:.1}", pacing));
+            }
+
+            // Stage 6 — Reputation: boost events matching player identity
+            let rep_weight = journey.profile.encounter_weight(&event.context_requirements.tags);
+            if (rep_weight - 1.0).abs() > 0.01 {
+                weight *= rep_weight;
+                reasons.push(format!("reputation ×{:.1}", rep_weight));
             }
 
             let reason = if reasons.is_empty() {
@@ -421,6 +575,7 @@ mod tests {
     use starbound_core::narrative::*;
     use starbound_core::ship::*;
     use starbound_core::time::Timestamp;
+    use starbound_core::reputation::PlayerProfile;
 
     fn test_system(infra: InfrastructureLevel, faction: Option<Uuid>) -> StarSystem {
         StarSystem {
@@ -466,6 +621,8 @@ mod tests {
                 hull_condition: hull,
                 fuel,
                 fuel_capacity: 100.0,
+                supplies: 80.0,
+                supply_capacity: 100.0,
                 cargo: HashMap::new(),
                 cargo_capacity: 50,
                 modules: ShipModules {
@@ -488,6 +645,7 @@ mod tests {
             threads: vec![],
             event_log: vec![],
             civ_standings: HashMap::new(),
+            profile: PlayerProfile::new(),
         }
     }
 
@@ -522,6 +680,7 @@ mod tests {
 
         let result = run_pipeline(
             &events, &system, &journey, None, &state, &config, &mut rng,
+            None,
         );
 
         match result {
@@ -549,6 +708,7 @@ mod tests {
 
         let result = run_pipeline(
             &events, &system, &journey, None, &state, &config, &mut rng,
+            None,
         );
 
         assert!(matches!(result, PipelineResult::Silence { .. }));
@@ -572,6 +732,7 @@ mod tests {
 
         let result = run_pipeline(
             &events, &system, &journey, None, &state, &config, &mut rng,
+            None,
         );
 
         assert!(matches!(result, PipelineResult::Silence { .. }));
@@ -597,6 +758,7 @@ mod tests {
             let result = run_pipeline(
                 &events, &system, &journey, None,
                 &PipelineState::default(), &config, &mut rng,
+                None,
             );
             if let PipelineResult::Event { event, .. } = result {
                 if event.id == "fuel_merchant_desperate" {
@@ -634,6 +796,7 @@ mod tests {
             let mut rng = StdRng::seed_from_u64(seed);
             let result = run_pipeline(
                 &events, &system, &journey, None, &state, &config, &mut rng,
+                None,
             );
             if let PipelineResult::Event { event, .. } = result {
                 let tone = parse_tone(&event.tone);
@@ -674,6 +837,7 @@ mod tests {
             if let PipelineResult::Event { event, .. } = run_pipeline(
                 &events, &system, &journey_early, None,
                 &PipelineState::default(), &config, &mut rng,
+                None,
             ) {
                 if event.encounter_type == "novel" { novel_early += 1; }
             }
@@ -682,6 +846,7 @@ mod tests {
             if let PipelineResult::Event { event, .. } = run_pipeline(
                 &events, &system, &journey_late, None,
                 &PipelineState::default(), &config, &mut rng,
+                None,
             ) {
                 if event.encounter_type == "novel" { novel_late += 1; }
             }
@@ -724,8 +889,8 @@ mod tests {
         let mut rng1 = StdRng::seed_from_u64(999);
         let mut rng2 = StdRng::seed_from_u64(999);
 
-        let r1 = run_pipeline(&events, &system, &journey, None, &state, &config, &mut rng1);
-        let r2 = run_pipeline(&events, &system, &journey, None, &state, &config, &mut rng2);
+        let r1 = run_pipeline(&events, &system, &journey, None, &state, &config, &mut rng1, None);
+        let r2 = run_pipeline(&events, &system, &journey, None, &state, &config, &mut rng2, None);
 
         match (r1, r2) {
             (PipelineResult::Event { event: e1, .. }, PipelineResult::Event { event: e2, .. }) => {
@@ -758,10 +923,122 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(42);
         let result = run_pipeline(
             &events, &system, &journey, None, &state_stale, &config, &mut rng,
+            None,
         );
 
         // With 100% silence chance, this must be silent.
         assert!(matches!(result, PipelineResult::Silence { .. }),
             "Should be silent after 9 consecutive encounters with escalation");
+    }
+
+    // --- Intent mode tests ---
+
+    #[test]
+    fn intent_filters_to_matching_events() {
+        let events = all_seed_events();
+        let system = test_system(InfrastructureLevel::Colony, Some(Uuid::new_v4()));
+        let journey = test_journey(80.0, 0.9, 3);
+        let config = PipelineConfig {
+            silence_chance: 0.0,
+            silence_escalation: 0.0,
+            ..Default::default()
+        };
+
+        // Run with Trade intent — should only select trade events.
+        let mut found_trade = false;
+        for seed in 0..50 {
+            let mut rng = StdRng::seed_from_u64(seed);
+            if let PipelineResult::Event { event, .. } = run_pipeline(
+                &events, &system, &journey, None,
+                &PipelineState::default(), &config, &mut rng,
+                Some(PlayerIntent::Trade),
+            ) {
+                assert!(
+                    event.intents.contains(&"trade".to_string()),
+                    "Intent mode should only select trade events, got: {}",
+                    event.id,
+                );
+                found_trade = true;
+            }
+        }
+        assert!(found_trade, "Should have found at least one trade event");
+    }
+
+    #[test]
+    fn intent_mode_skips_silence() {
+        let events = all_seed_events();
+        let system = test_system(InfrastructureLevel::Colony, Some(Uuid::new_v4()));
+        let journey = test_journey(80.0, 0.9, 3);
+        let config = PipelineConfig {
+            silence_chance: 1.0, // 100% silence — would always be silent in arrival mode
+            silence_escalation: 0.0,
+            ..Default::default()
+        };
+
+        let mut rng = StdRng::seed_from_u64(42);
+        let result = run_pipeline(
+            &events, &system, &journey, None,
+            &PipelineState::default(), &config, &mut rng,
+            Some(PlayerIntent::Trade),
+        );
+
+        // Intent mode should NOT be silenced even with 100% silence chance.
+        assert!(
+            matches!(result, PipelineResult::Event { .. }),
+            "Intent mode should skip silence check",
+        );
+    }
+
+    #[test]
+    fn arrival_mode_excludes_intent_events() {
+        let events = all_seed_events();
+        let system = test_system(InfrastructureLevel::Colony, Some(Uuid::new_v4()));
+        let journey = test_journey(80.0, 0.9, 3);
+        let config = PipelineConfig {
+            silence_chance: 0.0,
+            silence_escalation: 0.0,
+            ..Default::default()
+        };
+
+        // Run in arrival mode many times — should never get an intent event.
+        for seed in 0..50 {
+            let mut rng = StdRng::seed_from_u64(seed);
+            if let PipelineResult::Event { event, .. } = run_pipeline(
+                &events, &system, &journey, None,
+                &PipelineState::default(), &config, &mut rng,
+                None,
+            ) {
+                assert!(
+                    event.intents.is_empty(),
+                    "Arrival mode should not select intent events, got: {} (intents: {:?})",
+                    event.id, event.intents,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn nonexistent_intent_returns_silence() {
+        let events = all_seed_events();
+        let system = test_system(InfrastructureLevel::None, None);
+        let journey = test_journey(80.0, 0.9, 3);
+        let config = PipelineConfig {
+            silence_chance: 0.0,
+            silence_escalation: 0.0,
+            ..Default::default()
+        };
+
+        // Recruit intent — no events for this yet.
+        let mut rng = StdRng::seed_from_u64(42);
+        let result = run_pipeline(
+            &events, &system, &journey, None,
+            &PipelineState::default(), &config, &mut rng,
+            Some(PlayerIntent::Recruit),
+        );
+
+        assert!(
+            matches!(result, PipelineResult::Silence { .. }),
+            "Intent with no matching events should return silence",
+        );
     }
 }

@@ -10,6 +10,7 @@ use starbound_core::galaxy::*;
 use starbound_core::journey::Journey;
 use starbound_core::mission::*;
 use starbound_core::narrative::*;
+use starbound_core::reputation::PlayerProfile;
 use starbound_core::ship::*;
 use starbound_core::time::Timestamp;
 
@@ -133,6 +134,8 @@ fn create_and_serialize_sample_game_state() {
         hull_condition: 0.85,
         fuel: 75.0,
         fuel_capacity: 100.0,
+        supplies: 65.0,
+        supply_capacity: 100.0,
         cargo: {
             let mut c = HashMap::new();
             c.insert("medical supplies".into(), 12);
@@ -328,6 +331,7 @@ fn create_and_serialize_sample_game_state() {
             consequences: vec!["40 galactic years elapsed during transit".into()],
         }],
         civ_standings: HashMap::new(),
+        profile: PlayerProfile::new(),
     };
 
     // -- Serialize and verify --

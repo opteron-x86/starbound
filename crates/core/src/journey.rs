@@ -7,6 +7,7 @@ use crate::crew::CrewMember;
 use crate::galaxy::CivStanding;
 use crate::mission::MissionState;
 use crate::narrative::{GameEvent, Thread};
+use crate::reputation::PlayerProfile;
 use crate::ship::Ship;
 use crate::time::Timestamp;
 
@@ -32,4 +33,7 @@ pub struct Journey {
     /// Player's standing with each civilization, keyed by civ ID.
     /// Initialized when the player first enters a civ's territory.
     pub civ_standings: HashMap<Uuid, CivStanding>,
+    /// The player's emergent behavioral profile — derived from actions.
+    #[serde(default)]
+    pub profile: PlayerProfile,
 }

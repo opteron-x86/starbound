@@ -7,3 +7,6 @@
 pub mod persistence;
 pub mod travel;
 pub mod consequences;
+pub mod supplies;
+pub mod checks;
+pub mod reputation;

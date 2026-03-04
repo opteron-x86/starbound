@@ -339,6 +339,8 @@ mod tests {
             hull_condition: 1.0,
             fuel,
             fuel_capacity: 100.0,
+            supplies: 80.0,
+            supply_capacity: 100.0,
             cargo: HashMap::new(),
             cargo_capacity: 50,
             modules: ShipModules {

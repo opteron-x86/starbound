@@ -30,6 +30,8 @@ use starbound_core::narrative::{
 pub enum Effect {
     /// Add or remove fuel. Clamped to [0, capacity].
     Fuel(f32),
+    /// Add or remove supplies. Clamped to [0, capacity].
+    Supplies(f32),
     /// Add or remove generic resources (credits/trade goods).
     Resources(f64),
     /// Add or remove hull condition. Clamped to [0.0, 1.0].
@@ -151,6 +153,45 @@ pub fn resolve_effects(mechanical_effect: &str, journey: &Journey) -> Vec<Effect
             Effect::Resources(-40.0),
             Effect::Hull(0.05),
             Effect::Narrative("Resupplied. The ship feels a little more whole.".into()),
+        ],
+
+        // -----------------------------------------------------------------
+        // Supplies
+        // -----------------------------------------------------------------
+        "buy_supplies" => vec![
+            Effect::Supplies(30.0),
+            Effect::Resources(-25.0),
+        ],
+        "buy_supplies_and_fuel" => vec![
+            Effect::Supplies(25.0),
+            Effect::Fuel(15.0),
+            Effect::Resources(-50.0),
+            Effect::Narrative("Topped off the tanks and restocked the hold.".into()),
+        ],
+        "buy_supplies_expensive" => {
+            let supply_frac = journey.ship.supplies / journey.ship.supply_capacity;
+            let price_multiplier = 1.5 + (1.0 - supply_frac as f64);
+            let fill_amount = (journey.ship.supply_capacity - journey.ship.supplies).min(40.0);
+            vec![
+                Effect::Supplies(fill_amount),
+                Effect::Resources(-(fill_amount as f64 * price_multiplier)),
+                Effect::Narrative("Frontier prices. You paid what they asked.".into()),
+            ]
+        }
+        "scavenge_supplies" => vec![
+            Effect::Supplies(10.0),
+            Effect::CrewStress(0.05),
+            Effect::Narrative("Found usable supplies in the wreckage. Not appetizing, but functional.".into()),
+        ],
+        "ration_supplies" => vec![
+            Effect::CrewStress(0.08),
+            Effect::CrewMood { mood: Mood::Anxious, all: false },
+            Effect::Narrative("Tightened the rationing. Nobody's happy about it.".into()),
+        ],
+        "share_supplies" => vec![
+            Effect::Supplies(-15.0),
+            Effect::TrustIdeological(0.1),
+            Effect::Narrative("Gave what you could spare. Your crew noticed.".into()),
         ],
         
         // -----------------------------------------------------------------
@@ -613,13 +654,152 @@ pub fn resolve_effects(mechanical_effect: &str, journey: &Journey) -> Vec<Effect
         ],
 
         // -----------------------------------------------------------------
-        // Unknown effect — graceful fallback
+        // Unknown effect — try compound parsing, then graceful fallback
         // -----------------------------------------------------------------
-        unknown => vec![
-            Effect::Narrative(format!(
-                "Something happened. [unhandled effect: {}]", unknown
-            )),
-        ],
+        unknown => {
+            // Compound effects: semicolon-separated, each parsed individually.
+            // e.g., "resources:200;buy_supplies;fuel:-5"
+            if unknown.contains(';') {
+                let mut all_effects = Vec::new();
+                for part in unknown.split(';') {
+                    let part = part.trim();
+                    if part.is_empty() { continue; }
+                    // Recursive single-effect resolution.
+                    let mut sub = resolve_single_effect(part, journey);
+                    all_effects.append(&mut sub);
+                }
+                if all_effects.is_empty() {
+                    vec![Effect::Narrative(format!(
+                        "Something happened. [unhandled compound: {}]", unknown
+                    ))]
+                } else {
+                    all_effects
+                }
+            } else {
+                // Single unknown — try parameterized parsing.
+                let parsed = resolve_single_effect(unknown, journey);
+                if parsed.is_empty() {
+                    vec![Effect::Narrative(format!(
+                        "Something happened. [unhandled effect: {}]", unknown
+                    ))]
+                } else {
+                    parsed
+                }
+            }
+        }
+    }
+}
+
+/// Parse a single parameterized effect string like "resources:200"
+/// or "repair_module:engine:0.3". Returns empty vec if unrecognized.
+fn resolve_single_effect(effect: &str, journey: &Journey) -> Vec<Effect> {
+    // Try known simple effects first (delegate back to main match).
+    // Only include effects that won't trigger compound parsing themselves.
+    let known_simple = [
+        "buy_supplies", "buy_fuel", "buy_fuel_expensive", "buy_fuel_minimum",
+        "buy_supplies_expensive", "buy_supplies_and_fuel",
+        "negotiate_fuel", "seek_alternatives",
+        "open_trade", "field_repair", "ignore_damage",
+        "gather_intel", "check_jobs",
+        "rest", "write_log", "pass", "log_and_ignore",
+        "shore_leave", "hold_course",
+        "scavenge_supplies", "ration_supplies", "share_supplies",
+    ];
+    if known_simple.contains(&effect) {
+        return resolve_effects(effect, journey);
+    }
+
+    let parts: Vec<&str> = effect.splitn(3, ':').collect();
+
+    match parts.as_slice() {
+        ["resources", amount] => {
+            if let Ok(val) = amount.parse::<f64>() {
+                vec![Effect::Resources(val)]
+            } else {
+                vec![]
+            }
+        }
+        ["fuel", amount] => {
+            if let Ok(val) = amount.parse::<f32>() {
+                vec![Effect::Fuel(val)]
+            } else {
+                vec![]
+            }
+        }
+        ["hull", amount] => {
+            if let Ok(val) = amount.parse::<f32>() {
+                vec![Effect::Hull(val)]
+            } else {
+                vec![]
+            }
+        }
+        ["crew_stress", amount] => {
+            if let Ok(val) = amount.parse::<f32>() {
+                vec![Effect::CrewStress(val)]
+            } else {
+                vec![]
+            }
+        }
+        ["repair_module", target, amount] => {
+            let module = match *target {
+                "engine" => Some(ModuleTarget::Engine),
+                "sensors" => Some(ModuleTarget::Sensors),
+                "comms" => Some(ModuleTarget::Comms),
+                "weapons" => Some(ModuleTarget::Weapons),
+                "life_support" => Some(ModuleTarget::LifeSupport),
+                _ => None,
+            };
+            if let (Some(m), Ok(val)) = (module, amount.parse::<f32>()) {
+                vec![Effect::RepairModule { module: m, amount: val }]
+            } else {
+                vec![]
+            }
+        }
+        ["damage_module", target, amount] => {
+            let module = match *target {
+                "engine" => Some(ModuleTarget::Engine),
+                "sensors" => Some(ModuleTarget::Sensors),
+                "comms" => Some(ModuleTarget::Comms),
+                "weapons" => Some(ModuleTarget::Weapons),
+                "life_support" => Some(ModuleTarget::LifeSupport),
+                _ => None,
+            };
+            if let (Some(m), Ok(val)) = (module, amount.parse::<f32>()) {
+                vec![Effect::DamageModule { module: m, amount: val }]
+            } else {
+                vec![]
+            }
+        }
+        ["spawn_thread", thread_type, description] => {
+            let tt = match *thread_type {
+                "mystery" => ThreadType::Mystery,
+                "grudge" => ThreadType::Grudge,
+                "debt" => ThreadType::Debt,
+                "bond" | "relationship" => ThreadType::Relationship,
+                "secret" => ThreadType::Secret,
+                "clue" | "anomaly" => ThreadType::Anomaly,
+                "promise" => ThreadType::Promise,
+                _ => ThreadType::Mystery,
+            };
+            vec![Effect::SpawnThread {
+                thread_type: tt,
+                description: description.to_string(),
+            }]
+        }
+        ["narrative", text] => {
+            vec![Effect::Narrative(text.to_string())]
+        }
+        ["cargo", item, quantity] => {
+            if let Ok(qty) = quantity.parse::<u32>() {
+                vec![Effect::AddCargo {
+                    item: item.to_string(),
+                    quantity: qty,
+                }]
+            } else {
+                vec![]
+            }
+        }
+        _ => vec![],
     }
 }
 
@@ -651,6 +831,21 @@ pub fn apply_effects(
                         changes.push(format!("Fuel +{:.0}", actual));
                     } else {
                         changes.push(format!("Fuel {:.0}", actual));
+                    }
+                }
+            }
+
+            Effect::Supplies(delta) => {
+                let before = journey.ship.supplies;
+                journey.ship.supplies = (journey.ship.supplies + delta)
+                    .max(0.0)
+                    .min(journey.ship.supply_capacity);
+                let actual = journey.ship.supplies - before;
+                if actual.abs() > 0.01 {
+                    if actual > 0.0 {
+                        changes.push(format!("Supplies +{:.0}", actual));
+                    } else {
+                        changes.push(format!("Supplies {:.0}", actual));
                     }
                 }
             }
@@ -899,6 +1094,7 @@ mod tests {
     use std::collections::HashMap;
     use starbound_core::crew::*;
     use starbound_core::mission::*;
+    use starbound_core::reputation::PlayerProfile;
     use starbound_core::ship::*;
     use starbound_core::time::Timestamp;
 
@@ -948,6 +1144,8 @@ mod tests {
                 hull_condition: 0.8,
                 fuel: 50.0,
                 fuel_capacity: 100.0,
+                supplies: 80.0,
+                supply_capacity: 100.0,
                 cargo: HashMap::new(),
                 cargo_capacity: 50,
                 modules: ShipModules {
@@ -970,6 +1168,7 @@ mod tests {
             threads: vec![],
             event_log: vec![],
             civ_standings: HashMap::new(),
+            profile: PlayerProfile::new(),
         }
     }
 
@@ -1165,5 +1364,79 @@ mod tests {
         apply_effects(&effects, &mut journey, "Refueled");
 
         assert_eq!(journey.event_log.len(), 2);
+    }
+
+    // --- Compound effect parsing ---
+
+    #[test]
+    fn compound_effects_parse_semicolons() {
+        let journey = test_journey_with_crew();
+        let effects = resolve_effects("resources:200;buy_supplies", &journey);
+
+        // Should produce Resources(200) + the buy_supplies effects.
+        let has_resources = effects.iter().any(|e| matches!(e, Effect::Resources(v) if *v > 100.0));
+        let has_supplies = effects.iter().any(|e| matches!(e, Effect::Supplies(v) if *v > 0.0));
+
+        assert!(has_resources, "Should have resources effect");
+        assert!(has_supplies, "Should have supplies effect from buy_supplies");
+    }
+
+    #[test]
+    fn parameterized_repair_module() {
+        let journey = test_journey_with_crew();
+        let effects = resolve_effects("repair_module:engine:0.3", &journey);
+
+        let has_repair = effects.iter().any(|e| {
+            matches!(e, Effect::RepairModule { module: ModuleTarget::Engine, amount }
+                if (*amount - 0.3).abs() < 0.01)
+        });
+        assert!(has_repair, "Should parse repair_module:engine:0.3");
+    }
+
+    #[test]
+    fn parameterized_spawn_thread() {
+        let journey = test_journey_with_crew();
+        let effects = resolve_effects(
+            "spawn_thread:mystery:Something strange in the void",
+            &journey,
+        );
+
+        let has_thread = effects.iter().any(|e| {
+            matches!(e, Effect::SpawnThread { thread_type: ThreadType::Mystery, .. })
+        });
+        assert!(has_thread, "Should parse spawn_thread:mystery:description");
+    }
+
+    #[test]
+    fn compound_with_narrative() {
+        let journey = test_journey_with_crew();
+        let effects = resolve_effects(
+            "fuel:-2;narrative:The scan reveals nothing unusual.",
+            &journey,
+        );
+
+        let has_fuel = effects.iter().any(|e| matches!(e, Effect::Fuel(v) if *v < 0.0));
+        let has_narrative = effects.iter().any(|e| matches!(e, Effect::Narrative(_)));
+
+        assert!(has_fuel, "Should have fuel effect");
+        assert!(has_narrative, "Should have narrative effect");
+    }
+
+    #[test]
+    fn full_intent_effect_chain() {
+        let mut journey = test_journey_with_crew();
+        let effects = resolve_effects(
+            "resources:-300;hull:0.3;repair_module:engine:0.3;repair_module:sensors:0.2",
+            &journey,
+        );
+
+        let report = apply_effects(&effects, &mut journey, "Full repair");
+
+        // Resources should decrease.
+        assert!(journey.resources < 1000.0, "Resources should decrease");
+        // Hull should increase.
+        assert!(journey.ship.hull_condition > 0.9, "Hull should increase");
+        // Engine should be repaired.
+        assert!(journey.ship.modules.engine.condition > 0.9, "Engine should be repaired");
     }
 }
