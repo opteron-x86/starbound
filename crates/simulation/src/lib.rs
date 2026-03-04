@@ -5,6 +5,7 @@
 //! Day 3: Travel calculations — FTL-default with place-based dilation.
 
 pub mod generate;
+pub mod templates;
 pub mod travel;
 pub mod faction_ai;
 pub mod tick;

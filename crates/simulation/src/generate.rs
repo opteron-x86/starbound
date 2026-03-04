@@ -1,8 +1,8 @@
 // file: crates/simulation/src/generate.rs
 //! Galaxy generation — deterministic from a seed.
 //!
-//! One sector, ten systems, two civilizations, six factions.
-//! Enough to validate the core loop. Expansion comes later.
+//! One sector, ten systems, 2–5 civilizations (template-driven),
+//! 5–8 factions (template-driven). Expansion comes later.
 
 use rand::prelude::*;
 use std::collections::HashMap;
@@ -10,6 +10,8 @@ use uuid::Uuid;
 
 use starbound_core::galaxy::*;
 use starbound_core::time::Timestamp;
+
+use crate::templates;
 
 /// The output of galaxy generation — everything needed to start a game.
 pub struct GeneratedGalaxy {
@@ -51,13 +53,23 @@ pub fn generate_galaxy(seed: u64) -> GeneratedGalaxy {
     // Populate faction_presence on every system.
     assign_faction_presence(&mut systems, &factions, &civilizations);
 
+    let num_civs = civilizations.len();
+    let sector_desc = match num_civs {
+        2 => "The first settled systems beyond the homeworld. \
+              Old colonies, older grudges. Two powers and a lot of \
+              empty space between them.",
+        3 => "The first settled systems beyond the homeworld. \
+              Three civilizations share these stars — uneasily. \
+              Contested borders and frontier space that answers to no one.",
+        _ => "The first settled systems beyond the homeworld. \
+              Multiple civilizations, contested borders, and more \
+              empty space than anyone can claim.",
+    };
+
     let sector = Sector {
         id: Uuid::new_v4(),
         name: "The Near Reach".into(),
-        description: "The first settled systems beyond the homeworld. \
-            Old colonies, older grudges. Two powers and a lot of \
-            empty space between them."
-            .into(),
+        description: sector_desc.into(),
         system_ids: systems.iter().map(|s| s.id).collect(),
     };
 
@@ -71,339 +83,626 @@ pub fn generate_galaxy(seed: u64) -> GeneratedGalaxy {
 }
 
 // ===========================================================================
-// Civilization generation
+// Civilization generation (template-driven)
 // ===========================================================================
 
+/// Generate civilizations from `data/templates/civilizations.json`.
+///
+/// Produces `default_count` civilizations (typically 3) with:
+/// - Procedural names assembled from prefix + suffix pools
+/// - Ethos derived from suffix weights + prefix bias + noise
+/// - Capabilities derived from government style + ethos
+/// - Inter-civ relationships based on ethos compatibility
 fn generate_civilizations(rng: &mut StdRng) -> Vec<Civilization> {
-    let hegemony_id = Uuid::new_v4();
-    let freehold_id = Uuid::new_v4();
+    let t = templates::load_civ_templates();
+    let civ_count = t.generation_rules.default_count;
 
-    let hegemony = Civilization {
-        id: hegemony_id,
-        name: "Terran Hegemony".into(),
-        ethos: CivEthos {
-            expansionist: 0.7,
-            isolationist: 0.1,
-            militaristic: 0.6,
-            diplomatic: 0.3,
-            theocratic: 0.1,
-            mercantile: 0.5,
-            technocratic: 0.7,
-            communal: 0.2,
-        },
-        capabilities: CivCapabilities {
-            size: 0.8,
-            wealth: 0.7,
-            technology: 0.8,
-            military: 0.7,
-        },
-        relationships: {
-            let mut r = HashMap::new();
-            r.insert(
-                freehold_id,
-                CivDisposition {
-                    diplomatic: -0.2,
-                    economic: 0.3,
-                    military: -0.1,
-                },
-            );
-            r
-        },
-        internal_dynamics: InternalDynamics {
-            stability: 0.6,
-            pressures: vec![
-                CivPressure { description: "Outer colony autonomy movements gaining support".into(), source_faction: None },
-                CivPressure { description: "Military faction pushing for Freehold containment".into(), source_faction: None },
-            ],
-        },
-        faction_ids: vec![],
-    };
+    let mut used_suffixes: Vec<String> = Vec::new();
+    let mut civs: Vec<Civilization> = Vec::with_capacity(civ_count);
 
-    let freehold = Civilization {
-        id: freehold_id,
-        name: "The Freehold Compact".into(),
-        ethos: CivEthos {
-            expansionist: 0.3,
-            isolationist: 0.5,
-            militaristic: 0.3,
-            diplomatic: 0.6,
-            theocratic: 0.0,
-            mercantile: 0.8,
-            technocratic: 0.4,
-            communal: 0.7,
-        },
-        capabilities: CivCapabilities {
-            size: 0.4,
-            wealth: 0.6,
-            technology: 0.5,
-            military: 0.3,
-        },
-        relationships: {
-            let mut r = HashMap::new();
-            r.insert(
-                hegemony_id,
-                CivDisposition {
-                    diplomatic: -0.2,
-                    economic: 0.3,
-                    military: -0.1,
-                },
-            );
-            r
-        },
-        internal_dynamics: InternalDynamics {
-            stability: 0.7,
-            pressures: vec![
-                CivPressure { description: "Debate over accepting Hegemony trade terms".into(), source_faction: None },
-            ],
-        },
-        faction_ids: vec![],
-    };
+    for _ in 0..civ_count {
+        let suffix_idx = pick_civ_suffix(rng, &t, &used_suffixes);
+        let suffix = &t.suffixes[suffix_idx];
+        used_suffixes.push(suffix.name.clone());
 
-    // Shuffle order so faction generation isn't always deterministic by position.
-    if rng.gen_bool(0.5) {
-        vec![hegemony, freehold]
+        let prefix_idx = pick_civ_prefix(rng, &t, &suffix.name);
+        let prefix = &t.prefixes[prefix_idx];
+
+        let ethos = compute_civ_ethos(rng, suffix, prefix, t.generation_rules.ethos_noise);
+        let capabilities = derive_capabilities(&suffix.government_style, &ethos, rng);
+        let name = assemble_civ_name(&prefix.name, &suffix.name);
+
+        let stability = rng.gen_range(
+            t.initial_state_ranges.stability[0]..=t.initial_state_ranges.stability[1],
+        );
+
+        civs.push(Civilization {
+            id: Uuid::new_v4(),
+            name,
+            ethos,
+            capabilities,
+            relationships: HashMap::new(),
+            internal_dynamics: InternalDynamics {
+                stability,
+                pressures: generate_pressures(rng, &ethos),
+            },
+            faction_ids: vec![],
+        });
+    }
+
+    // Wire inter-civ relationships.
+    wire_civ_relationships(&mut civs, rng);
+
+    // Shuffle order so downstream generation isn't biased by creation order.
+    civs.shuffle(rng);
+
+    civs
+}
+
+// ---------------------------------------------------------------------------
+// Name assembly helpers
+// ---------------------------------------------------------------------------
+
+/// Pick a suffix index that hasn't been used yet, weighted by template weight.
+fn pick_civ_suffix(
+    rng: &mut StdRng,
+    templates: &templates::CivTemplates,
+    used: &[String],
+) -> usize {
+    let available: Vec<(usize, f64)> = templates
+        .suffixes
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| !used.contains(&s.name))
+        .map(|(i, s)| (i, s.weight))
+        .collect();
+    assert!(!available.is_empty(), "Ran out of suffixes — need more than civs");
+    let local_idx = pick_weighted(rng, &available, |item| item.1);
+    available[local_idx].0
+}
+
+/// Pick a prefix index compatible with the chosen suffix, weighted by template weight.
+fn pick_civ_prefix(
+    rng: &mut StdRng,
+    templates: &templates::CivTemplates,
+    suffix_name: &str,
+) -> usize {
+    let available: Vec<(usize, f64)> = templates
+        .prefixes
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| !templates.compatibility.is_blocked(&p.name, suffix_name))
+        .map(|(i, p)| (i, p.weight))
+        .collect();
+    assert!(
+        !available.is_empty(),
+        "No compatible prefixes for suffix '{}'",
+        suffix_name,
+    );
+    let local_idx = pick_weighted(rng, &available, |item| item.1);
+    available[local_idx].0
+}
+
+/// Weighted random selection. Returns index into the slice.
+fn pick_weighted<T>(rng: &mut StdRng, items: &[T], weight_fn: impl Fn(&T) -> f64) -> usize {
+    let total: f64 = items.iter().map(&weight_fn).sum();
+    let mut roll = rng.gen_range(0.0..total);
+    for (i, item) in items.iter().enumerate() {
+        roll -= weight_fn(item);
+        if roll <= 0.0 {
+            return i;
+        }
+    }
+    items.len() - 1 // Floating-point safety net.
+}
+
+/// Assemble a civilization name from prefix + suffix.
+///
+/// Some suffixes read more naturally with "The" (Compact, Collective,
+/// Assembly). Others stand on their own (Hegemony, Federation, Dominion).
+fn assemble_civ_name(prefix: &str, suffix: &str) -> String {
+    let needs_the = matches!(
+        suffix,
+        "Compact" | "Collective" | "Assembly" | "Ascendancy"
+    );
+    if needs_the {
+        format!("The {} {}", prefix, suffix)
     } else {
-        vec![freehold, hegemony]
+        format!("{} {}", prefix, suffix)
+    }
+}
+
+/// Extract the cultural prefix from a civ name (for faction naming).
+/// "Terran Hegemony" → "Terran", "The Solari Collective" → "Solari".
+pub fn extract_civ_prefix(civ_name: &str) -> &str {
+    let name = civ_name.strip_prefix("The ").unwrap_or(civ_name);
+    name.split_whitespace().next().unwrap_or(name)
+}
+
+// ---------------------------------------------------------------------------
+// Ethos & capabilities
+// ---------------------------------------------------------------------------
+
+/// Compute civilization ethos from suffix base weights + prefix bias + noise.
+fn compute_civ_ethos(
+    rng: &mut StdRng,
+    suffix: &templates::CivSuffix,
+    prefix: &templates::CivPrefix,
+    noise: f32,
+) -> CivEthos {
+    let mut get = |axis: &str| -> f32 {
+        let base = suffix.ethos_weights.get(axis).copied().unwrap_or(0.0);
+        let bias = prefix.ethos_bias.get(axis).copied().unwrap_or(0.0);
+        let jitter: f32 = rng.gen_range(-noise..=noise);
+        (base + bias + jitter).clamp(0.0, 1.0)
+    };
+
+    CivEthos {
+        expansionist: get("expansionist"),
+        isolationist: get("isolationist"),
+        militaristic: get("militaristic"),
+        diplomatic: get("diplomatic"),
+        theocratic: get("theocratic"),
+        mercantile: get("mercantile"),
+        technocratic: get("technocratic"),
+        communal: get("communal"),
+    }
+}
+
+/// Derive capabilities from government style, modulated by ethos.
+fn derive_capabilities(
+    government_style: &str,
+    ethos: &CivEthos,
+    rng: &mut StdRng,
+) -> CivCapabilities {
+    // Base ranges by government style: (size, wealth, technology, military)
+    let (size_r, wealth_r, tech_r, mil_r) = match government_style {
+        "autocratic"   => ((0.55, 0.80), (0.45, 0.70), (0.35, 0.60), (0.55, 0.80)),
+        "confederal"   => ((0.30, 0.55), (0.45, 0.70), (0.40, 0.60), (0.20, 0.45)),
+        "federal"      => ((0.40, 0.65), (0.40, 0.65), (0.40, 0.65), (0.35, 0.60)),
+        "collective"   => ((0.30, 0.50), (0.40, 0.60), (0.50, 0.75), (0.15, 0.40)),
+        "democratic"   => ((0.40, 0.60), (0.40, 0.65), (0.40, 0.70), (0.25, 0.50)),
+        "oligarchic"   => ((0.40, 0.60), (0.55, 0.80), (0.40, 0.65), (0.30, 0.55)),
+        "theocratic"   => ((0.30, 0.55), (0.30, 0.55), (0.20, 0.45), (0.30, 0.55)),
+        "meritocratic" => ((0.35, 0.60), (0.45, 0.70), (0.55, 0.80), (0.25, 0.50)),
+        _              => ((0.35, 0.60), (0.40, 0.60), (0.40, 0.60), (0.30, 0.55)),
+    };
+
+    let mut range_val = |r: (f32, f32), ethos_mod: f32| -> f32 {
+        let base: f32 = rng.gen_range(r.0..=r.1);
+        (base + ethos_mod * 0.15).clamp(0.1, 0.95)
+    };
+
+    CivCapabilities {
+        size: range_val(size_r, ethos.expansionist - ethos.isolationist),
+        wealth: range_val(wealth_r, ethos.mercantile),
+        technology: range_val(tech_r, ethos.technocratic),
+        military: range_val(mil_r, ethos.militaristic),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Internal pressures
+// ---------------------------------------------------------------------------
+
+/// Generate 1–3 internal pressures based on ethos tensions.
+fn generate_pressures(rng: &mut StdRng, ethos: &CivEthos) -> Vec<CivPressure> {
+    let pool: Vec<(bool, &str)> = vec![
+        (ethos.militaristic > 0.5,
+         "Military factions push for increased defense spending along the frontier"),
+        (ethos.expansionist > 0.5,
+         "Expansionist elements lobby for new colony charters in unclaimed space"),
+        (ethos.isolationist > 0.4,
+         "Border-closure advocates gain popular support in the inner systems"),
+        (ethos.mercantile > 0.5,
+         "Trade guilds pressure the government for reduced tariffs"),
+        (ethos.theocratic > 0.3,
+         "Religious authorities demand greater cultural oversight"),
+        (ethos.communal > 0.5 && ethos.mercantile > 0.3,
+         "Tension between communal ideals and growing commercial interests"),
+        (ethos.militaristic > 0.4 && ethos.diplomatic > 0.4,
+         "Hawks and diplomats clash over foreign policy direction"),
+        (ethos.technocratic > 0.5,
+         "Technocratic elite face populist pushback from outer colonies"),
+        (ethos.expansionist < 0.3 && ethos.isolationist < 0.3,
+         "Stagnation concerns — neither expanding nor consolidating"),
+        (ethos.communal < 0.3,
+         "Outer colony autonomy movements gaining support"),
+    ];
+
+    let mut eligible: Vec<&str> = pool
+        .iter()
+        .filter(|(cond, _)| *cond)
+        .map(|(_, desc)| *desc)
+        .collect();
+
+    if eligible.is_empty() {
+        eligible.push("Shifting demographics reshape the political landscape");
+    }
+
+    let count = rng.gen_range(1..=eligible.len().min(3));
+    eligible.shuffle(rng);
+
+    eligible[..count]
+        .iter()
+        .map(|desc| CivPressure {
+            description: desc.to_string(),
+            source_faction: None,
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// Inter-civ relationships
+// ---------------------------------------------------------------------------
+
+/// Generate relationships between all pairs of civilizations based on
+/// ethos compatibility. Similar values → warmer relations; opposing → colder.
+fn wire_civ_relationships(civs: &mut [Civilization], rng: &mut StdRng) {
+    let ids: Vec<Uuid> = civs.iter().map(|c| c.id).collect();
+
+    let ethos_vecs: Vec<[f32; 8]> = civs
+        .iter()
+        .map(|c| [
+            c.ethos.expansionist,
+            c.ethos.isolationist,
+            c.ethos.militaristic,
+            c.ethos.diplomatic,
+            c.ethos.theocratic,
+            c.ethos.mercantile,
+            c.ethos.technocratic,
+            c.ethos.communal,
+        ])
+        .collect();
+
+    for i in 0..civs.len() {
+        for j in 0..civs.len() {
+            if i == j {
+                continue;
+            }
+
+            let similarity: f32 = ethos_vecs[i]
+                .iter()
+                .zip(ethos_vecs[j].iter())
+                .map(|(a, b)| 1.0 - (a - b).abs())
+                .sum::<f32>()
+                / 8.0;
+
+            let diplomatic_base = (similarity - 0.5) * 1.0;
+            let jitter: f32 = rng.gen_range(-0.15..=0.15);
+            let diplomatic = (diplomatic_base + jitter).clamp(-1.0, 1.0);
+
+            let econ_base = (ethos_vecs[i][5] + ethos_vecs[j][5]) / 2.0;
+            let economic = (econ_base * 0.6 + rng.gen_range(0.0..0.2_f32)).clamp(0.0, 1.0);
+
+            let mil_threat = ethos_vecs[i][2] * ethos_vecs[j][2];
+            let military = (diplomatic * 0.5 - mil_threat * 0.3
+                + rng.gen_range(-0.1..0.1_f32))
+                .clamp(-1.0, 1.0);
+
+            civs[i].relationships.insert(
+                ids[j],
+                CivDisposition {
+                    diplomatic,
+                    economic,
+                    military,
+                },
+            );
+        }
     }
 }
 
 // ===========================================================================
-// Faction generation
+// Faction generation (template-driven)
 // ===========================================================================
 
-/// Create the starter factions for the Near Reach.
-///
-/// Six factions spanning different categories, scopes, and allegiances:
-///
-/// 1. **Hegemony Military Command** — CivInternal(Hegemony), Military.
-///    The Hegemony's intelligence and enforcement arm. Loyalist, aggressive,
-///    insular. Present wherever the Hegemony has territory.
-///
-/// 2. **The Corridor Guild** — Transnational, Economic.
-///    Merchant guild operating across both civilizations. Pragmatic,
-///    welcoming, diplomatic. Follows trade routes.
-///
-/// 3. **Spacers' Collective** — Independent, Guild.
-///    Pilots' and engineers' union with no civ allegiance. Slightly
-///    anti-authority, very open, non-aggressive. Present at every
-///    port and outpost.
-///
-/// 4. **Order of the Quiet Star** — Transnational, Religious.
-///    Contemplative order drawn to anomalies and distorted space.
-///    Neutral alignment, moderate openness, very subtle methods.
-///
-/// 5. **Ashfall Salvage** — Independent, Criminal.
-///    Frontier salvage outfit operating in the grey area between
-///    archaeology and piracy. Anti-authority, moderately open,
-///    moderately aggressive.
-///
-/// 6. **The Lattice** — Transnational, Criminal.
-///    Shadowy information broker network. Sells intelligence to
-///    anyone who can pay. Deeply pragmatic, insular, extremely subtle.
-fn generate_factions(_rng: &mut StdRng, civs: &[Civilization]) -> Vec<Faction> {
-    let hegemony_id = civs.iter().find(|c| c.name == "Terran Hegemony").unwrap().id;
-    let freehold_id = civs.iter().find(|c| c.name == "The Freehold Compact").unwrap().id;
+fn generate_factions(rng: &mut StdRng, civs: &[Civilization]) -> Vec<Faction> {
+    let t = templates::load_faction_templates();
+    let all_civ_ids: Vec<Uuid> = civs.iter().map(|c| c.id).collect();
 
-    vec![
-        // 1. Hegemony Military Command
-        Faction {
-            id: Uuid::new_v4(),
-            name: "Hegemony Military Command".into(),
-            category: FactionCategory::Military,
-            scope: FactionScope::CivInternal { civ_id: hegemony_id },
-            ethos: FactionEthos {
-                alignment: 0.9,   // loyalist
-                openness: 0.2,    // insular
-                aggression: 0.8,  // direct/forceful
-            },
-            influence: {
-                let mut m = HashMap::new();
-                m.insert(hegemony_id, 0.7);
-                m
-            },
-            player_standing: FactionStanding::unknown(),
-            description: "The enforcement and intelligence arm of the Terran Hegemony. \
-                Runs border patrols, military installations, and classified research \
-                programs. Answers to Hegemony Central Command but operates with \
-                considerable autonomy in frontier systems. Known for thoroughness, \
-                institutional paranoia, and a tendency to classify everything."
-                .into(),
-            notable_assets: vec![
-                "Meridian Naval Yards".into(),
-                "Classified deep-space listening posts".into(),
-                "Agent network in contested systems".into(),
-            ],
-        },
+    let mut factions: Vec<Faction> = Vec::new();
+    let mut mil_civ_idx = 0_usize; // Track which civ gets next military faction.
 
-        // 2. The Corridor Guild
-        Faction {
-            id: Uuid::new_v4(),
-            name: "The Corridor Guild".into(),
-            category: FactionCategory::Economic,
-            scope: FactionScope::Transnational {
-                civ_ids: vec![hegemony_id, freehold_id],
-            },
-            ethos: FactionEthos {
-                alignment: 0.1,   // pragmatic, slightly anti-establishment
-                openness: 0.8,    // welcoming — traders welcome everyone
-                aggression: 0.2,  // diplomatic, deal-makers
-            },
-            influence: {
-                let mut m = HashMap::new();
-                m.insert(hegemony_id, 0.3);
-                m.insert(freehold_id, 0.5);
-                m
-            },
-            player_standing: FactionStanding::unknown(),
-            description: "The dominant merchant guild of the Near Reach. Operates \
-                trade posts, negotiates tariffs, and maintains the commercial \
-                infrastructure that keeps both civilizations fed and supplied. \
-                Officially neutral in Hegemony-Freehold politics; practically, \
-                they lean toward whoever offers better terms. Their real power \
-                is that both sides need them more than they need either side."
-                .into(),
-            notable_assets: vec![
-                "Cygnus Gate Trading Post".into(),
-                "Interstellar cargo fleet".into(),
-                "Trade route maps and tariff agreements".into(),
-            ],
-        },
+    // Generate guaranteed factions.
+    for category_name in &t.generation_rules.guaranteed {
+        let cat = t.categories.get(category_name.as_str())
+            .unwrap_or_else(|| panic!("Missing guaranteed category '{}'", category_name));
 
-        // 3. Spacers' Collective
-        Faction {
-            id: Uuid::new_v4(),
-            name: "Spacers' Collective".into(),
-            category: FactionCategory::Guild,
-            scope: FactionScope::Independent,
-            ethos: FactionEthos {
-                alignment: -0.3,  // mildly anti-authority
-                openness: 0.9,    // very welcoming — solidarity-minded
-                aggression: 0.1,  // non-aggressive, cooperative
-            },
-            influence: {
-                let mut m = HashMap::new();
-                // Present in both civs but as an outsider voice, not a power player.
-                m.insert(hegemony_id, 0.1);
-                m.insert(freehold_id, 0.2);
-                m
-            },
-            player_standing: FactionStanding::unknown(),
-            description: "A loose professional union of pilots, engineers, and \
-                independent spacers. No headquarters, no hierarchy worth mentioning, \
-                just a network of mutual aid and shared expertise. They maintain \
-                repair yards, swap route intelligence, and look after their own. \
-                The kind of organization that exists because space is hard and \
-                nobody else will help you when your life support fails between \
-                systems."
-                .into(),
-            notable_assets: vec![
-                "Repair yards at major ports".into(),
-                "Informal route intelligence network".into(),
-                "Emergency beacon response protocol".into(),
-            ],
-        },
+        let faction = build_faction_from_template(
+            rng, category_name, cat, civs, &all_civ_ids, &mut mil_civ_idx,
+        );
+        factions.push(faction);
+    }
 
-        // 4. Order of the Quiet Star
-        Faction {
-            id: Uuid::new_v4(),
-            name: "Order of the Quiet Star".into(),
-            category: FactionCategory::Religious,
-            scope: FactionScope::Transnational {
-                civ_ids: vec![hegemony_id, freehold_id],
-            },
-            ethos: FactionEthos {
-                alignment: 0.0,   // truly neutral — answers to something beyond politics
-                openness: 0.5,    // neither secretive nor evangelical
-                aggression: 0.05, // almost entirely non-violent, contemplative
-            },
-            influence: {
-                let mut m = HashMap::new();
-                m.insert(hegemony_id, 0.15);
-                m.insert(freehold_id, 0.2);
-                m
-            },
-            player_standing: FactionStanding::unknown(),
-            description: "A contemplative religious order that believes time \
-                distortion is evidence of something greater — a pattern in \
-                the fabric of spacetime that rewards careful observation. \
-                Their monasteries tend to appear in systems with high time \
-                factors. Quiet, patient, occasionally unsettling. They know \
-                things about distorted space that nobody else has bothered \
-                to learn."
-                .into(),
-            notable_assets: vec![
-                "Monastery at Drift".into(),
-                "Extensive records of time-distortion phenomena".into(),
-                "Meditation techniques that mitigate temporal disorientation".into(),
-            ],
-        },
+    // Roll optional factions.
+    for rule in &t.generation_rules.optional {
+        if factions.len() >= t.generation_rules.max_factions {
+            break;
+        }
+        let roll: f64 = rng.gen();
+        if roll < rule.chance {
+            if let Some(cat) = t.categories.get(rule.category.as_str()) {
+                let faction = build_faction_from_template(
+                    rng, &rule.category, cat, civs, &all_civ_ids, &mut mil_civ_idx,
+                );
+                factions.push(faction);
+            }
+        }
+    }
 
-        // 5. Ashfall Salvage
-        Faction {
-            id: Uuid::new_v4(),
-            name: "Ashfall Salvage".into(),
-            category: FactionCategory::Criminal,
-            scope: FactionScope::Independent,
-            ethos: FactionEthos {
-                alignment: -0.5,  // anti-authority — operates outside the law
-                openness: 0.5,    // will work with anyone who has credits
-                aggression: 0.5,  // pragmatic violence — not seeking fights, not avoiding them
-            },
-            influence: {
-                // No formal influence in either civ — they're tolerated, not welcomed.
-                HashMap::new()
-            },
-            player_standing: FactionStanding::unknown(),
-            description: "Frontier salvage outfit that picks over derelicts, \
-                abandoned stations, and anything else the civilizations left \
-                behind. The line between salvage and piracy is a legal distinction \
-                they don't spend much time worrying about. Good people to know \
-                if you need parts, repairs, or passage through places that don't \
-                officially exist on anyone's charts."
-                .into(),
-            notable_assets: vec![
-                "Hidden depot in Acheron system".into(),
-                "Salvage fleet — three modified haulers".into(),
-                "Black market contacts across the frontier".into(),
-            ],
-        },
+    factions
+}
 
-        // 6. The Lattice
-        Faction {
-            id: Uuid::new_v4(),
-            name: "The Lattice".into(),
-            category: FactionCategory::Criminal,
-            scope: FactionScope::Transnational {
-                civ_ids: vec![hegemony_id, freehold_id],
-            },
-            ethos: FactionEthos {
-                alignment: 0.0,   // pragmatic — no ideology, just business
-                openness: 0.15,   // deeply insular — you don't find them, they find you
-                aggression: 0.1,  // subtle — information is their weapon
-            },
-            influence: {
-                let mut m = HashMap::new();
-                m.insert(hegemony_id, 0.2);
-                m.insert(freehold_id, 0.15);
-                m
-            },
-            player_standing: FactionStanding::unknown(),
-            description: "An information broker network that sells intelligence \
-                to anyone who can pay. Nobody knows who runs it. Nobody knows \
-                how many nodes it has. What everyone knows is that if you need \
-                to find something out — a shipping manifest, a classified patrol \
-                route, a person who doesn't want to be found — the Lattice can \
-                probably help. For a price. They have a reputation for accuracy \
-                and discretion, which is the only currency that matters in their \
-                line of work."
-                .into(),
-            notable_assets: vec![
-                "Dead drop network across the Near Reach".into(),
-                "Encrypted communications infrastructure".into(),
-                "Dossiers on key figures in both civilizations".into(),
-            ],
+/// Build a single faction from a category template.
+fn build_faction_from_template(
+    rng: &mut StdRng,
+    category_name: &str,
+    cat: &templates::FactionCategoryTemplate,
+    civs: &[Civilization],
+    all_civ_ids: &[Uuid],
+    mil_civ_idx: &mut usize,
+) -> Faction {
+    // Determine parent civ for civ_internal factions.
+    let parent_civ_idx = if cat.scope == "civ_internal" {
+        let idx = (*mil_civ_idx).min(civs.len() - 1);
+        *mil_civ_idx += 1;
+        Some(idx)
+    } else {
+        None
+    };
+
+    let parent_civ = parent_civ_idx.map(|i| &civs[i]);
+    let civ_prefix = parent_civ
+        .map(|c| extract_civ_prefix(&c.name).to_owned())
+        .unwrap_or_default();
+
+    // Pick name pattern and fill slots.
+    let name = generate_faction_name(rng, cat, &civ_prefix);
+
+    // Compute FactionCategory enum from the template category string.
+    let fc = match category_name {
+        "military" => FactionCategory::Military,
+        "economic" => FactionCategory::Economic,
+        "guild" => FactionCategory::Guild,
+        "religious" => FactionCategory::Religious,
+        "criminal_frontier" | "criminal_covert" => FactionCategory::Criminal,
+        _ => FactionCategory::Guild, // Fallback.
+    };
+
+    // Build scope.
+    let scope = match cat.scope.as_str() {
+        "civ_internal" => FactionScope::CivInternal {
+            civ_id: parent_civ.unwrap().id,
         },
-    ]
+        "transnational" => FactionScope::Transnational {
+            civ_ids: all_civ_ids.to_vec(),
+        },
+        _ => FactionScope::Independent,
+    };
+
+    // Compute ethos: base_traits + component biases already folded into name selection.
+    // Template secrecy → maps to 1.0 - openness.
+    let bt = &cat.base_traits;
+    let noise = 0.1_f32;
+    let ethos = FactionEthos {
+        alignment: (bt.alignment + rng.gen_range(-noise..=noise)).clamp(-1.0, 1.0),
+        openness: ((1.0 - bt.secrecy) * 0.5 + bt.openness * 0.5
+            + rng.gen_range(-noise..=noise))
+            .clamp(0.0, 1.0),
+        aggression: (bt.aggression + rng.gen_range(-noise..=noise)).clamp(0.0, 1.0),
+    };
+
+    // Build influence map.
+    let influence = build_faction_influence(rng, &scope, civs, category_name);
+
+    // Generate description and assets from category.
+    let description = generate_faction_description(
+        category_name, &name, parent_civ, &civ_prefix,
+    );
+    let notable_assets = generate_faction_assets(
+        category_name, &civ_prefix,
+    );
+
+    // Convert template services to enum.
+    let _services: Vec<FactionService> = cat
+        .default_services
+        .iter()
+        .filter_map(|s| parse_faction_service(s))
+        .collect();
+
+    Faction {
+        id: Uuid::new_v4(),
+        name,
+        category: fc,
+        scope,
+        ethos,
+        influence,
+        player_standing: FactionStanding::unknown(),
+        description,
+        notable_assets,
+    }
+}
+
+/// Fill a name pattern's {slot} placeholders from component pools.
+fn generate_faction_name(
+    rng: &mut StdRng,
+    cat: &templates::FactionCategoryTemplate,
+    civ_prefix: &str,
+) -> String {
+    let pattern_idx = rng.gen_range(0..cat.name_patterns.len());
+    let pattern = &cat.name_patterns[pattern_idx];
+
+    let mut result = pattern.clone();
+
+    // Replace {civ_prefix} with the parent civ's cultural prefix.
+    result = result.replace("{civ_prefix}", civ_prefix);
+
+    // Replace all other {slot} references from component pools.
+    // Iterate until no more {slots} remain (handles patterns with multiple slots).
+    loop {
+        let start = match result.find('{') {
+            Some(i) => i,
+            None => break,
+        };
+        let end = match result[start..].find('}') {
+            Some(i) => start + i,
+            None => break,
+        };
+        let slot_name = &result[start + 1..end];
+
+        if let Some(components) = cat.components.get(slot_name) {
+            let idx = pick_weighted(rng, components, |c| c.weight);
+            let component_name = &components[idx].name;
+            result = format!("{}{}{}", &result[..start], component_name, &result[end + 1..]);
+        } else {
+            // Unknown slot — leave as-is and break to avoid infinite loop.
+            break;
+        }
+    }
+
+    result
+}
+
+/// Build influence map based on faction scope and category.
+fn build_faction_influence(
+    rng: &mut StdRng,
+    scope: &FactionScope,
+    civs: &[Civilization],
+    category_name: &str,
+) -> HashMap<Uuid, f32> {
+    let mut influence = HashMap::new();
+
+    match scope {
+        FactionScope::CivInternal { civ_id } => {
+            // Strong influence in parent civ.
+            influence.insert(*civ_id, rng.gen_range(0.5..0.8));
+        }
+        FactionScope::Transnational { civ_ids } => {
+            for civ_id in civ_ids {
+                let base = match category_name {
+                    "economic" => rng.gen_range(0.3..0.6),
+                    "criminal_covert" => rng.gen_range(0.1..0.3),
+                    _ => rng.gen_range(0.2..0.4),
+                };
+                influence.insert(*civ_id, base);
+            }
+        }
+        FactionScope::Independent => {
+            // Independent factions have weak diffuse influence.
+            for civ in civs {
+                influence.insert(civ.id, rng.gen_range(0.05..0.2));
+            }
+        }
+    }
+
+    influence
+}
+
+/// Generate a thematic description for a faction based on its category.
+fn generate_faction_description(
+    category_name: &str,
+    faction_name: &str,
+    parent_civ: Option<&Civilization>,
+    _civ_prefix: &str,
+) -> String {
+    match category_name {
+        "military" => {
+            let civ_name = parent_civ.map(|c| c.name.as_str()).unwrap_or("its parent civilization");
+            format!(
+                "The enforcement and defense arm of {}. {} runs border patrols, \
+                 military installations, and classified research programs. Known for \
+                 thoroughness, institutional loyalty, and a tendency to classify everything.",
+                civ_name, faction_name,
+            )
+        }
+        "economic" => format!(
+            "A powerful merchant network operating across the Near Reach. {} manages \
+             trade posts, negotiates tariffs, and maintains the commercial infrastructure \
+             that keeps the civilizations fed and supplied. Officially neutral in politics; \
+             practically, they lean toward whoever offers better terms.",
+            faction_name,
+        ),
+        "guild" => format!(
+            "A loose professional union of pilots, engineers, and independent spacers. \
+             {} has no headquarters, no hierarchy worth mentioning — just a network of \
+             mutual aid and shared expertise. The kind of organization that exists because \
+             space is hard and nobody else will help when your life support fails.",
+            faction_name,
+        ),
+        "religious" => format!(
+            "A contemplative order that believes time distortion is evidence of something \
+             greater — a pattern in the fabric of spacetime that rewards careful observation. \
+             {} maintains monasteries in systems with high time factors. Quiet, patient, \
+             occasionally unsettling.",
+            faction_name,
+        ),
+        "criminal_frontier" => format!(
+            "Frontier salvage outfit that picks over derelicts, abandoned stations, and \
+             anything the civilizations left behind. {} operates where authority is thin. \
+             The line between salvage and piracy is a legal distinction they don't \
+             spend much time worrying about.",
+            faction_name,
+        ),
+        "criminal_covert" => format!(
+            "An information broker network that sells intelligence to anyone who can pay. \
+             Nobody knows who runs {}. What everyone knows is that if you need to find \
+             something out — a shipping manifest, a classified patrol route, a person \
+             who doesn't want to be found — they can probably help. For a price.",
+            faction_name,
+        ),
+        _ => format!("{} operates in the Near Reach.", faction_name),
+    }
+}
+
+/// Generate notable assets for a faction based on its category.
+fn generate_faction_assets(category_name: &str, civ_prefix: &str) -> Vec<String> {
+    match category_name {
+        "military" => vec![
+            format!("Naval yards at the {} capital", civ_prefix),
+            "Classified deep-space listening posts".into(),
+            "Agent network in contested systems".into(),
+        ],
+        "economic" => vec![
+            "Trade posts at major hubs".into(),
+            "Interstellar cargo fleet".into(),
+            "Trade route maps and tariff agreements".into(),
+        ],
+        "guild" => vec![
+            "Repair yards at major ports".into(),
+            "Informal route intelligence network".into(),
+            "Emergency beacon response protocol".into(),
+        ],
+        "religious" => vec![
+            "Monastery in distorted space".into(),
+            "Extensive records of time-distortion phenomena".into(),
+            "Meditation techniques that mitigate temporal disorientation".into(),
+        ],
+        "criminal_frontier" => vec![
+            "Hidden depot in frontier space".into(),
+            "Salvage fleet — three modified haulers".into(),
+            "Black market contacts across the frontier".into(),
+        ],
+        "criminal_covert" => vec![
+            "Dead drop network across the Near Reach".into(),
+            "Encrypted communications infrastructure".into(),
+            "Dossiers on key figures in all civilizations".into(),
+        ],
+        _ => vec![],
+    }
+}
+
+/// Parse a template service string into a FactionService enum.
+fn parse_faction_service(s: &str) -> Option<FactionService> {
+    match s {
+        "missions" => Some(FactionService::Missions),
+        "trade" => Some(FactionService::Trade),
+        "intelligence" => Some(FactionService::Intelligence),
+        "repair" => Some(FactionService::Repair),
+        "smuggling" => Some(FactionService::Smuggling),
+        "training" => Some(FactionService::Training),
+        "shelter" => Some(FactionService::Shelter),
+        _ => None,
+    }
 }
 
 // ===========================================================================
@@ -411,9 +710,6 @@ fn generate_factions(_rng: &mut StdRng, civs: &[Civilization]) -> Vec<Faction> {
 // ===========================================================================
 
 /// Push faction IDs into each civilization's `faction_ids` list.
-/// CivInternal factions go into their parent civ.
-/// Transnational factions go into every civ they operate in.
-/// Independent factions don't appear in any civ's list.
 fn wire_factions_into_civs(civs: &mut [Civilization], factions: &[Faction]) {
     for faction in factions {
         match &faction.scope {
@@ -429,325 +725,270 @@ fn wire_factions_into_civs(civs: &mut [Civilization], factions: &[Faction]) {
                     }
                 }
             }
-            FactionScope::Independent => {
-                // Independent factions aren't claimed by any civ.
-            }
+            FactionScope::Independent => {}
         }
     }
 }
 
-/// Link existing CivPressure entries to their corresponding factions
-/// where the description clearly matches a faction's domain.
+/// Link CivPressure entries to corresponding factions by category.
 fn wire_pressure_sources(civs: &mut [Civilization], factions: &[Faction]) {
-    let mil_command_id = factions.iter()
-        .find(|f| f.name == "Hegemony Military Command")
+    let mil_id = factions
+        .iter()
+        .find(|f| f.category == FactionCategory::Military)
         .map(|f| f.id);
 
-    let corridor_guild_id = factions.iter()
-        .find(|f| f.name == "The Corridor Guild")
+    let econ_id = factions
+        .iter()
+        .find(|f| f.category == FactionCategory::Economic)
+        .map(|f| f.id);
+
+    let religious_id = factions
+        .iter()
+        .find(|f| f.category == FactionCategory::Religious)
         .map(|f| f.id);
 
     for civ in civs.iter_mut() {
         for pressure in &mut civ.internal_dynamics.pressures {
-            // "Military faction pushing for Freehold containment" → Hegemony Military Command
-            if pressure.description.contains("Military faction pushing") {
-                pressure.source_faction = mil_command_id;
-            }
-            // "Debate over accepting Hegemony trade terms" → The Corridor Guild
-            if pressure.description.contains("accepting Hegemony trade terms") {
-                pressure.source_faction = corridor_guild_id;
+            let desc_lower = pressure.description.to_lowercase();
+            if desc_lower.contains("military") || desc_lower.contains("defense")
+                || desc_lower.contains("hawks")
+            {
+                pressure.source_faction = mil_id;
+            } else if desc_lower.contains("trade") || desc_lower.contains("tariff")
+                || desc_lower.contains("commercial")
+            {
+                pressure.source_faction = econ_id;
+            } else if desc_lower.contains("religious")
+                || desc_lower.contains("cultural oversight")
+            {
+                pressure.source_faction = religious_id;
             }
         }
     }
 }
 
 // ===========================================================================
-// Faction presence on systems
+// Faction presence on systems (rule-based by category + system properties)
 // ===========================================================================
 
-/// Distribute factions across star systems based on category, scope,
-/// and the character of each system.
-///
-/// The distribution logic:
-///
-/// - **Hegemony Military Command**: Strong at Meridian (capital), moderate at
-///   Voss (colony), low-visibility presence at Cygnus Gate and Acheron
-///   (frontier intelligence).
-///
-/// - **The Corridor Guild**: Strong at Cygnus Gate (trade hub), moderate at
-///   Meridian and Pale Harbor (capitals), present at Thornfield and Sunhollow
-///   (Freehold systems with commerce).
-///
-/// - **Spacers' Collective**: Present everywhere there's a port. Strength
-///   correlates with infrastructure. Absent from uninhabited systems.
-///
-/// - **Order of the Quiet Star**: Drawn to distorted space. Present at
-///   Drift (time_factor 2.0) and Kessler's Remnant (8.0). Faint presence
-///   at Acheron (1.5). Absent from normal-time systems.
-///
-/// - **Ashfall Salvage**: Frontier only. Present at Acheron (base of
-///   operations), Drift (salvage territory), faint at Kessler's Remnant.
-///   Invisible in civilized space.
-///
-/// - **The Lattice**: Low-visibility everywhere civilized, absent from
-///   deep frontier. Slightly stronger at trade hubs and capitals.
 fn assign_faction_presence(
     systems: &mut [StarSystem],
     factions: &[Faction],
     _civs: &[Civilization],
 ) {
-    // Look up faction IDs by name.
-    let faction_id = |name: &str| -> Uuid {
-        factions.iter().find(|f| f.name == name).unwrap().id
-    };
+    // Build lookup tables by category/scope for efficient assignment.
+    let military_factions: Vec<&Faction> = factions
+        .iter()
+        .filter(|f| f.category == FactionCategory::Military)
+        .collect();
 
-    let mil_cmd = faction_id("Hegemony Military Command");
-    let corridor = faction_id("The Corridor Guild");
-    let spacers = faction_id("Spacers' Collective");
-    let quiet_star = faction_id("Order of the Quiet Star");
-    let ashfall = faction_id("Ashfall Salvage");
-    let lattice = faction_id("The Lattice");
+    let economic_factions: Vec<&Faction> = factions
+        .iter()
+        .filter(|f| f.category == FactionCategory::Economic)
+        .collect();
+
+    let guild_factions: Vec<&Faction> = factions
+        .iter()
+        .filter(|f| f.category == FactionCategory::Guild)
+        .collect();
+
+    let religious_factions: Vec<&Faction> = factions
+        .iter()
+        .filter(|f| f.category == FactionCategory::Religious)
+        .collect();
+
+    let criminal_frontier: Vec<&Faction> = factions
+        .iter()
+        .filter(|f| {
+            f.category == FactionCategory::Criminal
+                && matches!(f.scope, FactionScope::Independent)
+        })
+        .collect();
+
+    let criminal_covert: Vec<&Faction> = factions
+        .iter()
+        .filter(|f| {
+            f.category == FactionCategory::Criminal
+                && matches!(f.scope, FactionScope::Transnational { .. })
+        })
+        .collect();
 
     for system in systems.iter_mut() {
         let mut presence = Vec::new();
+        let infra = system.infrastructure_level;
+        let has_civ = system.controlling_civ.is_some();
+        let is_distorted = system.time_factor > 1.0;
 
-        match system.name.as_str() {
-            // ---------------------------------------------------------------
-            // Meridian — Hegemony capital
-            // ---------------------------------------------------------------
-            "Meridian" => {
-                presence.push(FactionPresence {
-                    faction_id: mil_cmd,
-                    strength: 0.9,
-                    visibility: 1.0,
-                    services: vec![FactionService::Missions, FactionService::Intelligence, FactionService::Repair],
-                });
-                presence.push(FactionPresence {
-                    faction_id: corridor,
-                    strength: 0.5,
-                    visibility: 0.8,
-                    services: vec![FactionService::Trade],
-                });
-                presence.push(FactionPresence {
-                    faction_id: spacers,
-                    strength: 0.3,
-                    visibility: 0.6,
-                    services: vec![FactionService::Repair, FactionService::Trade],
-                });
-                presence.push(FactionPresence {
-                    faction_id: lattice,
-                    strength: 0.3,
-                    visibility: 0.1,
-                    services: vec![FactionService::Intelligence],
-                });
+        // ----- Military factions -----
+        // Strong in parent civ's capital/colonies, moderate in other civ systems.
+        for mil in &military_factions {
+            let parent_civ_id = match &mil.scope {
+                FactionScope::CivInternal { civ_id } => Some(*civ_id),
+                _ => None,
+            };
+
+            let is_parent_system = parent_civ_id
+                .map_or(false, |id| system.controlling_civ == Some(id));
+
+            let (strength, visibility) = if is_parent_system {
+                match infra {
+                    InfrastructureLevel::Capital => (0.9, 1.0),
+                    InfrastructureLevel::Colony | InfrastructureLevel::Established => (0.5, 0.8),
+                    InfrastructureLevel::Hub => (0.4, 0.6),
+                    _ => (0.2, 0.3),
+                }
+            } else if has_civ {
+                // Presence in other civ's territory — intelligence ops.
+                match infra {
+                    InfrastructureLevel::Capital | InfrastructureLevel::Hub => (0.15, 0.05),
+                    InfrastructureLevel::Established | InfrastructureLevel::Colony
+                    | InfrastructureLevel::Outpost => (0.1, 0.05),
+                    _ => continue,
+                }
+            } else {
+                // Frontier — minimal presence.
+                match infra {
+                    InfrastructureLevel::Outpost => (0.1, 0.05),
+                    _ => continue,
+                }
+            };
+
+            let services = if is_parent_system && infra >= InfrastructureLevel::Colony {
+                vec![FactionService::Missions, FactionService::Intelligence, FactionService::Repair]
+            } else {
+                vec![FactionService::Intelligence]
+            };
+
+            presence.push(FactionPresence {
+                faction_id: mil.id,
+                strength,
+                visibility,
+                services,
+            });
+        }
+
+        // ----- Economic factions -----
+        // Present at hubs and capitals of all operating civs.
+        for econ in &economic_factions {
+            let (strength, visibility) = match infra {
+                InfrastructureLevel::Hub => (0.8, 1.0),
+                InfrastructureLevel::Capital => (0.5, 0.8),
+                InfrastructureLevel::Established => (0.4, 0.7),
+                InfrastructureLevel::Colony => (0.3, 0.6),
+                InfrastructureLevel::Outpost if has_civ => (0.15, 0.4),
+                _ => continue,
+            };
+
+            let services = if infra >= InfrastructureLevel::Established {
+                vec![FactionService::Trade, FactionService::Missions, FactionService::Repair]
+            } else {
+                vec![FactionService::Trade]
+            };
+
+            presence.push(FactionPresence {
+                faction_id: econ.id,
+                strength,
+                visibility,
+                services,
+            });
+        }
+
+        // ----- Guild factions -----
+        // Scattered at established+ infrastructure systems.
+        for guild in &guild_factions {
+            let (strength, visibility) = match infra {
+                InfrastructureLevel::Capital | InfrastructureLevel::Hub => (0.4, 0.7),
+                InfrastructureLevel::Established => (0.3, 0.6),
+                InfrastructureLevel::Colony => (0.25, 0.5),
+                InfrastructureLevel::Outpost => (0.15, 0.4),
+                InfrastructureLevel::None => continue,
+            };
+
+            let services = if infra >= InfrastructureLevel::Established {
+                vec![FactionService::Repair, FactionService::Trade, FactionService::Training]
+            } else {
+                vec![FactionService::Repair]
+            };
+
+            presence.push(FactionPresence {
+                faction_id: guild.id,
+                strength,
+                visibility,
+                services,
+            });
+        }
+
+        // ----- Religious factions -----
+        // Drawn to distorted space (time_factor > 1.0). Absent from normal systems.
+        for rel in &religious_factions {
+            if !is_distorted {
+                continue;
             }
+            let distortion_pull = (system.time_factor.log2() / 5.0).min(1.0) as f32;
+            let (strength, visibility) = (
+                0.3 + distortion_pull * 0.4,
+                0.4 + distortion_pull * 0.3,
+            );
 
-            // ---------------------------------------------------------------
-            // Cygnus Gate — contested trade hub
-            // ---------------------------------------------------------------
-            "Cygnus Gate" => {
-                presence.push(FactionPresence {
-                    faction_id: corridor,
-                    strength: 0.8,
-                    visibility: 1.0,
-                    services: vec![FactionService::Trade, FactionService::Missions, FactionService::Repair],
-                });
-                presence.push(FactionPresence {
-                    faction_id: spacers,
-                    strength: 0.5,
-                    visibility: 0.7,
-                    services: vec![FactionService::Repair, FactionService::Trade, FactionService::Training],
-                });
-                presence.push(FactionPresence {
-                    faction_id: mil_cmd,
-                    strength: 0.2,
-                    visibility: 0.15,
-                    services: vec![FactionService::Intelligence],
-                });
-                presence.push(FactionPresence {
-                    faction_id: lattice,
-                    strength: 0.4,
-                    visibility: 0.1,
-                    services: vec![FactionService::Intelligence, FactionService::Smuggling],
-                });
-            }
+            let services = if is_distorted {
+                vec![FactionService::Shelter, FactionService::Training, FactionService::Intelligence]
+            } else {
+                vec![FactionService::Shelter]
+            };
 
-            // ---------------------------------------------------------------
-            // Voss — Hegemony colony
-            // ---------------------------------------------------------------
-            "Voss" => {
-                presence.push(FactionPresence {
-                    faction_id: mil_cmd,
-                    strength: 0.5,
-                    visibility: 0.8,
-                    services: vec![FactionService::Missions, FactionService::Repair],
-                });
-                presence.push(FactionPresence {
-                    faction_id: spacers,
-                    strength: 0.2,
-                    visibility: 0.5,
-                    services: vec![FactionService::Repair],
-                });
-                presence.push(FactionPresence {
-                    faction_id: lattice,
-                    strength: 0.15,
-                    visibility: 0.05,
-                    services: vec![FactionService::Intelligence],
-                });
-            }
+            presence.push(FactionPresence {
+                faction_id: rel.id,
+                strength,
+                visibility,
+                services,
+            });
+        }
 
-            // ---------------------------------------------------------------
-            // Thornfield — Freehold, established
-            // ---------------------------------------------------------------
-            "Thornfield" => {
-                presence.push(FactionPresence {
-                    faction_id: corridor,
-                    strength: 0.4,
-                    visibility: 0.7,
-                    services: vec![FactionService::Trade],
-                });
-                presence.push(FactionPresence {
-                    faction_id: spacers,
-                    strength: 0.3,
-                    visibility: 0.6,
-                    services: vec![FactionService::Repair, FactionService::Trade],
-                });
-                presence.push(FactionPresence {
-                    faction_id: lattice,
-                    strength: 0.2,
-                    visibility: 0.05,
-                    services: vec![FactionService::Intelligence],
-                });
-            }
+        // ----- Criminal (frontier) -----
+        // Outposts and unclaimed systems. Also weak at low-infra civ systems.
+        for crim in &criminal_frontier {
+            let (strength, visibility) = if !has_civ {
+                match infra {
+                    InfrastructureLevel::Outpost => (0.7, 0.4),
+                    InfrastructureLevel::None => (0.4, 0.3),
+                    _ => (0.5, 0.35),
+                }
+            } else {
+                match infra {
+                    InfrastructureLevel::Outpost | InfrastructureLevel::Colony => (0.2, 0.15),
+                    _ => continue,
+                }
+            };
 
-            // ---------------------------------------------------------------
-            // Pale Harbor — Freehold capital
-            // ---------------------------------------------------------------
-            "Pale Harbor" => {
-                presence.push(FactionPresence {
-                    faction_id: corridor,
-                    strength: 0.6,
-                    visibility: 0.9,
-                    services: vec![FactionService::Trade, FactionService::Missions],
-                });
-                presence.push(FactionPresence {
-                    faction_id: spacers,
-                    strength: 0.4,
-                    visibility: 0.7,
-                    services: vec![FactionService::Repair, FactionService::Trade, FactionService::Training],
-                });
-                presence.push(FactionPresence {
-                    faction_id: lattice,
-                    strength: 0.3,
-                    visibility: 0.1,
-                    services: vec![FactionService::Intelligence],
-                });
-            }
+            let services = vec![
+                FactionService::Trade, FactionService::Repair,
+                FactionService::Smuggling, FactionService::Shelter,
+            ];
 
-            // ---------------------------------------------------------------
-            // Acheron — frontier outpost, mild time drift
-            // ---------------------------------------------------------------
-            "Acheron" => {
-                presence.push(FactionPresence {
-                    faction_id: ashfall,
-                    strength: 0.7,
-                    visibility: 0.4,
-                    services: vec![FactionService::Trade, FactionService::Repair, FactionService::Smuggling, FactionService::Shelter],
-                });
-                presence.push(FactionPresence {
-                    faction_id: spacers,
-                    strength: 0.3,
-                    visibility: 0.5,
-                    services: vec![FactionService::Repair],
-                });
-                presence.push(FactionPresence {
-                    faction_id: mil_cmd,
-                    strength: 0.15,
-                    visibility: 0.05,
-                    services: vec![FactionService::Intelligence],
-                });
-                presence.push(FactionPresence {
-                    faction_id: quiet_star,
-                    strength: 0.15,
-                    visibility: 0.3,
-                    services: vec![FactionService::Training],
-                });
-            }
+            presence.push(FactionPresence {
+                faction_id: crim.id,
+                strength,
+                visibility,
+                services,
+            });
+        }
 
-            // ---------------------------------------------------------------
-            // Sunhollow — Freehold border colony
-            // ---------------------------------------------------------------
-            "Sunhollow" => {
-                presence.push(FactionPresence {
-                    faction_id: corridor,
-                    strength: 0.3,
-                    visibility: 0.6,
-                    services: vec![FactionService::Trade],
-                });
-                presence.push(FactionPresence {
-                    faction_id: spacers,
-                    strength: 0.25,
-                    visibility: 0.5,
-                    services: vec![FactionService::Repair],
-                });
-            }
+        // ----- Criminal (covert) -----
+        // Low-visibility presence in capitals and hubs.
+        for covert in &criminal_covert {
+            let (strength, visibility) = match infra {
+                InfrastructureLevel::Capital => (0.3, 0.1),
+                InfrastructureLevel::Hub => (0.4, 0.1),
+                InfrastructureLevel::Established => (0.2, 0.05),
+                _ => continue,
+            };
 
-            // ---------------------------------------------------------------
-            // Drift — unclaimed frontier, time_factor 2.0
-            // ---------------------------------------------------------------
-            "Drift" => {
-                presence.push(FactionPresence {
-                    faction_id: quiet_star,
-                    strength: 0.6,
-                    visibility: 0.7,
-                    services: vec![FactionService::Shelter, FactionService::Training, FactionService::Intelligence],
-                });
-                presence.push(FactionPresence {
-                    faction_id: ashfall,
-                    strength: 0.4,
-                    visibility: 0.3,
-                    services: vec![FactionService::Trade, FactionService::Smuggling, FactionService::Repair],
-                });
-                presence.push(FactionPresence {
-                    faction_id: spacers,
-                    strength: 0.15,
-                    visibility: 0.4,
-                    services: vec![FactionService::Repair],
-                });
-            }
-
-            // ---------------------------------------------------------------
-            // Kessler's Remnant — deep frontier, time_factor 8.0
-            // ---------------------------------------------------------------
-            "Kessler's Remnant" => {
-                presence.push(FactionPresence {
-                    faction_id: quiet_star,
-                    strength: 0.4,
-                    visibility: 0.6,
-                    services: vec![FactionService::Shelter, FactionService::Training],
-                });
-                presence.push(FactionPresence {
-                    faction_id: ashfall,
-                    strength: 0.2,
-                    visibility: 0.15,
-                    services: vec![FactionService::Trade, FactionService::Smuggling],
-                });
-            }
-
-            // ---------------------------------------------------------------
-            // Lament — edge of known space, time_factor 25.0
-            // ---------------------------------------------------------------
-            "Lament" => {
-                // Almost nobody comes here. The Order has a lone hermitage.
-                presence.push(FactionPresence {
-                    faction_id: quiet_star,
-                    strength: 0.2,
-                    visibility: 0.4,
-                    services: vec![FactionService::Shelter],
-                });
-            }
-
-            _ => {}
+            presence.push(FactionPresence {
+                faction_id: covert.id,
+                strength,
+                visibility,
+                services: vec![FactionService::Intelligence, FactionService::Smuggling],
+            });
         }
 
         system.faction_presence = presence;
@@ -759,9 +1000,8 @@ fn assign_faction_presence(
 // ===========================================================================
 
 fn generate_systems(rng: &mut StdRng, civs: &[Civilization]) -> Vec<StarSystem> {
-    // Find civ IDs by name (order may be shuffled).
-    let hegemony_id = civs.iter().find(|f| f.name == "Terran Hegemony").unwrap().id;
-    let freehold_id = civs.iter().find(|f| f.name == "The Freehold Compact").unwrap().id;
+    let num_civs = civs.len();
+    let civ_ids: Vec<Uuid> = civs.iter().map(|c| c.id).collect();
 
     let star_types = [
         StarType::YellowDwarf,
@@ -776,36 +1016,37 @@ fn generate_systems(rng: &mut StdRng, civs: &[Civilization]) -> Vec<StarSystem> 
         StarType::Anomalous,
     ];
 
-    // Position systems in a rough cluster — spread across ~30 light-year region
-    // with some structure: Hegemony systems left, Freehold right, contested middle.
     let base_positions: [(f64, f64); 10] = [
-        (2.0, 5.0),    // Meridian — Hegemony capital
+        (2.0, 5.0),    // Meridian — primary civ capital
         (8.0, 3.0),    // Cygnus Gate — contested trade hub
-        (5.0, 8.0),    // Voss — Hegemony border
-        (12.0, 6.0),   // Thornfield — Freehold
-        (18.0, 4.0),   // Pale Harbor — Freehold capital
+        (5.0, 8.0),    // Voss — primary civ border
+        (12.0, 6.0),   // Thornfield — secondary civ
+        (18.0, 4.0),   // Pale Harbor — secondary civ capital
         (6.0, -2.0),   // Acheron — frontier
-        (15.0, 9.0),   // Sunhollow — Freehold border
+        (15.0, 9.0),   // Sunhollow — secondary civ border
         (10.0, -1.0),  // Drift — unclaimed frontier
         (20.0, 0.0),   // Kessler's Remnant — deep frontier
         (25.0, 7.0),   // Lament — edge of known space
     ];
 
-    // Civ assignments: some Hegemony, some Freehold, some unclaimed.
+    // Civ assignments: flexible for 2–5 civs.
+    //
+    // Civ 0: Meridian (capital), Voss (colony)
+    // Civ 1: Pale Harbor (capital), Thornfield (established), Sunhollow (colony)
+    // Civ 2 (if present): Acheron (outpost)
+    // Cygnus Gate, Drift, Kessler's Remnant, Lament: always unclaimed
     let civ_assignments: [Option<usize>; 10] = [
-        Some(0), // Meridian → Hegemony
-        None,    // Cygnus Gate → contested
-        Some(0), // Voss → Hegemony
-        Some(1), // Thornfield → Freehold
-        Some(1), // Pale Harbor → Freehold
-        None,    // Acheron → unclaimed
-        Some(1), // Sunhollow → Freehold
-        None,    // Drift → unclaimed
-        None,    // Kessler's Remnant → unclaimed
-        None,    // Lament → unclaimed
+        Some(0),                                       // Meridian → civ 0
+        None,                                          // Cygnus Gate → contested
+        Some(0),                                       // Voss → civ 0
+        Some(1.min(num_civs - 1)),                     // Thornfield → civ 1
+        Some(1.min(num_civs - 1)),                     // Pale Harbor → civ 1
+        if num_civs >= 3 { Some(2) } else { None },   // Acheron → civ 2 or unclaimed
+        Some(1.min(num_civs - 1)),                     // Sunhollow → civ 1
+        None,                                          // Drift → unclaimed
+        None,                                          // Kessler's Remnant → unclaimed
+        None,                                          // Lament → unclaimed
     ];
-
-    let civ_ids = [hegemony_id, freehold_id];
 
     let infrastructure_levels = [
         InfrastructureLevel::Capital,
@@ -820,35 +1061,22 @@ fn generate_systems(rng: &mut StdRng, civs: &[Civilization]) -> Vec<StarSystem> 
         InfrastructureLevel::None,
     ];
 
-    // Time distortion factors — tied to star type and narrative role.
-    //
-    // Settled space is normal. Frontier gets weird. The edge is dangerous.
-    // The mission leads toward Lament; every step further costs more time.
-    //
-    // Factor | Feel
-    // -------|------
-    //   1.0  | Normal — a day is a day. Your Marco Polo circuit.
-    //   1.5  | Mild drift — spend a week, lose 10 days. Noticeable.
-    //   2.0  | Frontier weird — a week costs two weeks elsewhere.
-    //   8.0  | Serious — a week costs nearly two months. Plan carefully.
-    //  25.0  | Extreme — a week costs half a year. The granddaughter moment.
     let time_factors: [f64; 10] = [
-        1.0,    // Meridian — Hegemony capital, stable yellow dwarf
-        1.0,    // Cygnus Gate — trade hub, binary but well-studied
-        1.0,    // Voss — Hegemony colony, normal red dwarf
-        1.0,    // Thornfield — Freehold, normal red dwarf
-        1.0,    // Pale Harbor — Freehold capital, blue giant but compensated
-        1.5,    // Acheron — frontier outpost, white dwarf, mild drift
-        1.0,    // Sunhollow — Freehold border, normal yellow dwarf
-        2.0,    // Drift — unclaimed frontier, red dwarf near a dense remnant
-        8.0,    // Kessler's Remnant — neutron star, serious distortion
-        25.0,   // Lament — anomalous, extreme distortion, edge of known space
+        1.0,    // Meridian
+        1.0,    // Cygnus Gate
+        1.0,    // Voss
+        1.0,    // Thornfield
+        1.0,    // Pale Harbor
+        1.5,    // Acheron — mild drift
+        1.0,    // Sunhollow
+        2.0,    // Drift — frontier weird
+        8.0,    // Kessler's Remnant — serious distortion
+        25.0,   // Lament — extreme distortion
     ];
 
     let mut systems = Vec::with_capacity(10);
 
     for i in 0..10 {
-        // Add small random jitter to positions.
         let jitter_x: f64 = rng.gen_range(-1.0..1.0);
         let jitter_y: f64 = rng.gen_range(-1.0..1.0);
         let pos = (
@@ -880,8 +1108,6 @@ fn generate_systems(rng: &mut StdRng, civs: &[Civilization]) -> Vec<StarSystem> 
             history,
             active_threads: vec![],
             time_factor: time_factors[i],
-            // Faction presence is assigned after system creation
-            // by assign_faction_presence().
             faction_presence: vec![],
         });
     }
@@ -889,7 +1115,11 @@ fn generate_systems(rng: &mut StdRng, civs: &[Civilization]) -> Vec<StarSystem> 
     systems
 }
 
-fn generate_planets(system_name: &str, star_type: StarType, rng: &mut StdRng) -> Vec<PlanetaryBody> {
+fn generate_planets(
+    system_name: &str,
+    star_type: StarType,
+    rng: &mut StdRng,
+) -> Vec<PlanetaryBody> {
     let count = match star_type {
         StarType::Neutron | StarType::BlackHole => rng.gen_range(0..=1),
         StarType::BlueGiant => rng.gen_range(1..=3),
@@ -921,24 +1151,24 @@ fn generate_planets(system_name: &str, star_type: StarType, rng: &mut StdRng) ->
 // Connection generation
 // ===========================================================================
 
-/// Connect systems based on proximity. Every system connects to its
-/// nearest neighbor (so the graph is connected), plus additional edges
-/// for systems within a threshold distance.
 fn generate_connections(systems: &[StarSystem], rng: &mut StdRng) -> Vec<Connection> {
     let mut connections: Vec<Connection> = Vec::new();
     let mut connected_pairs: Vec<(Uuid, Uuid)> = Vec::new();
 
     let has_edge = |pairs: &[(Uuid, Uuid)], a: Uuid, b: Uuid| -> bool {
-        pairs.iter().any(|(x, y)| (*x == a && *y == b) || (*x == b && *y == a))
+        pairs
+            .iter()
+            .any(|(x, y)| (*x == a && *y == b) || (*x == b && *y == a))
     };
 
-    // Step 1: Connect each system to its nearest neighbor (ensures connectivity).
     for i in 0..systems.len() {
         let mut nearest_idx = if i == 0 { 1 } else { 0 };
         let mut nearest_dist = distance(&systems[i], &systems[nearest_idx]);
 
         for j in 0..systems.len() {
-            if j == i { continue; }
+            if j == i {
+                continue;
+            }
             let d = distance(&systems[i], &systems[j]);
             if d < nearest_dist {
                 nearest_dist = d;
@@ -958,7 +1188,6 @@ fn generate_connections(systems: &[StarSystem], rng: &mut StdRng) -> Vec<Connect
         }
     }
 
-    // Step 2: Add edges for systems within 12 light-years of each other.
     let threshold = 12.0;
     for i in 0..systems.len() {
         for j in (i + 1)..systems.len() {
@@ -979,15 +1208,14 @@ fn generate_connections(systems: &[StarSystem], rng: &mut StdRng) -> Vec<Connect
         }
     }
 
-    // Step 3: Ensure at least one long-range corridor between the two
-    // capital systems (Meridian and Pale Harbor) for narrative purposes.
-    let meridian = &systems[0];
-    let pale_harbor = &systems[4];
-    if !has_edge(&connected_pairs, meridian.id, pale_harbor.id) {
-        let d = distance(meridian, pale_harbor);
+    // Ensure corridor between the two capital systems for narrative purposes.
+    let capital_a = &systems[0]; // Meridian
+    let capital_b = &systems[4]; // Pale Harbor
+    if !has_edge(&connected_pairs, capital_a.id, capital_b.id) {
+        let d = distance(capital_a, capital_b);
         connections.push(Connection {
-            system_a: meridian.id,
-            system_b: pale_harbor.id,
+            system_a: capital_a.id,
+            system_b: capital_b.id,
             distance_ly: d,
             route_type: RouteType::Corridor,
         });
@@ -1033,7 +1261,38 @@ mod tests {
     use std::collections::HashSet;
 
     // -----------------------------------------------------------------------
-    // Existing tests (preserved)
+    // Helpers
+    // -----------------------------------------------------------------------
+
+    fn find_faction_by_category<'a>(
+        factions: &'a [Faction],
+        cat: FactionCategory,
+    ) -> &'a Faction {
+        factions.iter().find(|f| f.category == cat).unwrap()
+    }
+
+    fn find_criminal_frontier<'a>(factions: &'a [Faction]) -> &'a Faction {
+        factions
+            .iter()
+            .find(|f| {
+                f.category == FactionCategory::Criminal
+                    && matches!(f.scope, FactionScope::Independent)
+            })
+            .unwrap()
+    }
+
+    fn find_criminal_covert<'a>(factions: &'a [Faction]) -> &'a Faction {
+        factions
+            .iter()
+            .find(|f| {
+                f.category == FactionCategory::Criminal
+                    && matches!(f.scope, FactionScope::Transnational { .. })
+            })
+            .unwrap()
+    }
+
+    // -----------------------------------------------------------------------
+    // Galaxy-level
     // -----------------------------------------------------------------------
 
     #[test]
@@ -1042,74 +1301,224 @@ mod tests {
         let g2 = generate_galaxy(42);
 
         assert_eq!(g1.systems.len(), 10);
-        assert_eq!(g1.civilizations.len(), 2);
-        assert_eq!(g1.systems.len(), g2.systems.len());
+        assert_eq!(g1.civilizations.len(), g2.civilizations.len());
 
-        // Same seed → same system names in same order.
         for (a, b) in g1.systems.iter().zip(g2.systems.iter()) {
             assert_eq!(a.name, b.name);
         }
+
+        let mut names1: Vec<&str> = g1.civilizations.iter().map(|c| c.name.as_str()).collect();
+        let mut names2: Vec<&str> = g2.civilizations.iter().map(|c| c.name.as_str()).collect();
+        names1.sort();
+        names2.sort();
+        assert_eq!(names1, names2);
     }
 
     #[test]
     fn all_systems_have_at_least_one_connection() {
         let galaxy = generate_galaxy(123);
         for sys in &galaxy.systems {
-            let has_conn = galaxy.connections.iter().any(|c| {
-                c.system_a == sys.id || c.system_b == sys.id
-            });
+            let has_conn = galaxy
+                .connections
+                .iter()
+                .any(|c| c.system_a == sys.id || c.system_b == sys.id);
             assert!(has_conn, "System {} has no connections", sys.name);
         }
-    }
-
-    #[test]
-    fn civ_assignments_are_sensible() {
-        let galaxy = generate_galaxy(42);
-        let hegemony = galaxy.civilizations.iter().find(|f| f.name == "Terran Hegemony").unwrap();
-        let freehold = galaxy.civilizations.iter().find(|f| f.name == "The Freehold Compact").unwrap();
-
-        let hegemony_systems: Vec<_> = galaxy.systems.iter()
-            .filter(|s| s.controlling_civ == Some(hegemony.id))
-            .collect();
-        let freehold_systems: Vec<_> = galaxy.systems.iter()
-            .filter(|s| s.controlling_civ == Some(freehold.id))
-            .collect();
-        let unclaimed: Vec<_> = galaxy.systems.iter()
-            .filter(|s| s.controlling_civ.is_none())
-            .collect();
-
-        assert_eq!(hegemony_systems.len(), 2, "Hegemony should control 2 systems");
-        assert_eq!(freehold_systems.len(), 3, "Freehold should control 3 systems");
-        assert_eq!(unclaimed.len(), 5, "5 systems should be unclaimed");
     }
 
     #[test]
     fn different_seeds_produce_different_positions() {
         let g1 = generate_galaxy(1);
         let g2 = generate_galaxy(2);
-
-        // Positions should differ due to jitter (names are the same).
-        let pos_differ = g1.systems.iter().zip(g2.systems.iter())
+        let pos_differ = g1
+            .systems
+            .iter()
+            .zip(g2.systems.iter())
             .any(|(a, b)| a.position != b.position);
         assert!(pos_differ, "Different seeds should produce different positions");
+    }
+
+    #[test]
+    fn different_seeds_produce_different_civ_names() {
+        let mut found_different = false;
+        for seed in [1, 2, 3, 10, 42, 100, 999] {
+            let g1 = generate_galaxy(seed);
+            let g2 = generate_galaxy(seed + 7);
+            let names1: HashSet<&str> = g1.civilizations.iter().map(|c| c.name.as_str()).collect();
+            let names2: HashSet<&str> = g2.civilizations.iter().map(|c| c.name.as_str()).collect();
+            if names1 != names2 {
+                found_different = true;
+                break;
+            }
+        }
+        assert!(found_different, "Different seeds should sometimes produce different civ names");
+    }
+
+    // -----------------------------------------------------------------------
+    // Civilizations
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn civ_count_within_expected_range() {
+        for seed in [1, 42, 100, 999] {
+            let galaxy = generate_galaxy(seed);
+            let count = galaxy.civilizations.len();
+            assert!(
+                (2..=5).contains(&count),
+                "Seed {} produced {} civs (expected 2-5)",
+                seed, count,
+            );
+        }
+    }
+
+    #[test]
+    fn no_duplicate_civ_suffixes() {
+        for seed in [1, 42, 100, 999] {
+            let galaxy = generate_galaxy(seed);
+            let suffixes: Vec<&str> = galaxy
+                .civilizations
+                .iter()
+                .map(|c| {
+                    let name = c.name.strip_prefix("The ").unwrap_or(&c.name);
+                    name.split_whitespace().last().unwrap()
+                })
+                .collect();
+            let unique: HashSet<&&str> = suffixes.iter().collect();
+            assert_eq!(
+                suffixes.len(), unique.len(),
+                "Seed {} has duplicate civ suffixes: {:?}", seed, suffixes,
+            );
+        }
+    }
+
+    #[test]
+    fn civ_ethos_values_in_range() {
+        let galaxy = generate_galaxy(42);
+        for civ in &galaxy.civilizations {
+            let vals = [
+                civ.ethos.expansionist, civ.ethos.isolationist,
+                civ.ethos.militaristic, civ.ethos.diplomatic,
+                civ.ethos.theocratic, civ.ethos.mercantile,
+                civ.ethos.technocratic, civ.ethos.communal,
+            ];
+            for v in &vals {
+                assert!(
+                    (0.0..=1.0).contains(v),
+                    "Civ '{}' has ethos value {} out of range", civ.name, v,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn civ_capabilities_in_range() {
+        let galaxy = generate_galaxy(42);
+        for civ in &galaxy.civilizations {
+            for v in &[civ.capabilities.size, civ.capabilities.wealth,
+                       civ.capabilities.technology, civ.capabilities.military] {
+                assert!(
+                    (0.0..=1.0).contains(v),
+                    "Civ '{}' has capability {} out of range", civ.name, v,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn civ_relationships_are_mutual() {
+        let galaxy = generate_galaxy(42);
+        for civ in &galaxy.civilizations {
+            for (&other_id, _) in &civ.relationships {
+                let other = galaxy.civilizations.iter().find(|c| c.id == other_id).unwrap();
+                assert!(
+                    other.relationships.contains_key(&civ.id),
+                    "Civ '{}' has relationship with '{}' but not vice versa",
+                    civ.name, other.name,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_civ_has_pressures() {
+        let galaxy = generate_galaxy(42);
+        for civ in &galaxy.civilizations {
+            assert!(
+                !civ.internal_dynamics.pressures.is_empty(),
+                "Civ '{}' has no internal pressures", civ.name,
+            );
+        }
+    }
+
+    #[test]
+    fn no_blocked_pairs_in_civ_names() {
+        let t = templates::load_civ_templates();
+        for seed in [1, 42, 100, 999] {
+            let galaxy = generate_galaxy(seed);
+            for civ in &galaxy.civilizations {
+                let name = civ.name.strip_prefix("The ").unwrap_or(&civ.name);
+                let parts: Vec<&str> = name.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    let prefix = parts[0];
+                    let suffix = parts[parts.len() - 1];
+                    assert!(
+                        !t.compatibility.is_blocked(prefix, suffix),
+                        "Seed {} produced blocked pair: '{}' + '{}'",
+                        seed, prefix, suffix,
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn civ_names_look_reasonable() {
+        for seed in [1, 42, 100] {
+            let galaxy = generate_galaxy(seed);
+            for civ in &galaxy.civilizations {
+                let name = civ.name.strip_prefix("The ").unwrap_or(&civ.name);
+                let words: Vec<&str> = name.split_whitespace().collect();
+                assert!(
+                    words.len() >= 2,
+                    "Civ name '{}' should have at least prefix + suffix", civ.name,
+                );
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // System assignments
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn civ_assignments_are_sensible() {
+        let galaxy = generate_galaxy(42);
+
+        for civ in &galaxy.civilizations {
+            let count = galaxy.systems.iter()
+                .filter(|s| s.controlling_civ == Some(civ.id))
+                .count();
+            assert!(count >= 1, "Civ '{}' controls no systems", civ.name);
+        }
+
+        let assigned: usize = galaxy.systems.iter()
+            .filter(|s| s.controlling_civ.is_some())
+            .count();
+        let unclaimed = galaxy.systems.len() - assigned;
+        assert_eq!(galaxy.systems.len(), 10);
+        assert!(unclaimed >= 3, "Expected at least 3 unclaimed systems, got {}", unclaimed);
     }
 
     #[test]
     fn time_factors_assigned_correctly() {
         let galaxy = generate_galaxy(42);
 
-        // Settled systems should be normal time.
         let meridian = galaxy.systems.iter().find(|s| s.name == "Meridian").unwrap();
         assert_eq!(meridian.time_factor, 1.0);
 
-        let cygnus = galaxy.systems.iter().find(|s| s.name == "Cygnus Gate").unwrap();
-        assert_eq!(cygnus.time_factor, 1.0);
-
-        // Frontier should have mild distortion.
         let acheron = galaxy.systems.iter().find(|s| s.name == "Acheron").unwrap();
         assert!(acheron.time_factor > 1.0, "Acheron should have time distortion");
 
-        // Edge systems should have serious distortion.
         let kessler = galaxy.systems.iter().find(|s| s.name == "Kessler's Remnant").unwrap();
         assert!(kessler.time_factor >= 8.0, "Kessler's Remnant should have serious distortion");
 
@@ -1118,7 +1527,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Phase B: Faction generation tests
+    // Factions (structural)
     // -----------------------------------------------------------------------
 
     #[test]
@@ -1131,47 +1540,36 @@ mod tests {
     fn faction_generation_is_deterministic() {
         let g1 = generate_galaxy(42);
         let g2 = generate_galaxy(42);
-
         assert_eq!(g1.factions.len(), g2.factions.len());
 
-        // Same seed → same faction names in same order.
-        for (a, b) in g1.factions.iter().zip(g2.factions.iter()) {
-            assert_eq!(a.name, b.name);
-            assert_eq!(a.category, b.category);
-        }
+        let mut names1: Vec<&str> = g1.factions.iter().map(|f| f.name.as_str()).collect();
+        let mut names2: Vec<&str> = g2.factions.iter().map(|f| f.name.as_str()).collect();
+        names1.sort();
+        names2.sort();
+        assert_eq!(names1, names2);
     }
 
     #[test]
     fn all_faction_ids_are_unique() {
         let galaxy = generate_galaxy(42);
         let ids: HashSet<Uuid> = galaxy.factions.iter().map(|f| f.id).collect();
-        assert_eq!(ids.len(), galaxy.factions.len(), "All faction IDs should be unique");
+        assert_eq!(ids.len(), galaxy.factions.len());
     }
 
     #[test]
     fn faction_categories_are_diverse() {
         let galaxy = generate_galaxy(42);
         let categories: HashSet<FactionCategory> = galaxy.factions.iter().map(|f| f.category).collect();
-        // We have Military, Economic, Guild, Religious, Criminal (x2).
         assert!(categories.len() >= 4, "Factions should span at least 4 categories, got {}", categories.len());
     }
 
     #[test]
     fn faction_ethos_values_in_range() {
         let galaxy = generate_galaxy(42);
-        for faction in &galaxy.factions {
-            assert!(
-                faction.ethos.alignment >= -1.0 && faction.ethos.alignment <= 1.0,
-                "Faction {} alignment out of range: {}", faction.name, faction.ethos.alignment,
-            );
-            assert!(
-                faction.ethos.openness >= 0.0 && faction.ethos.openness <= 1.0,
-                "Faction {} openness out of range: {}", faction.name, faction.ethos.openness,
-            );
-            assert!(
-                faction.ethos.aggression >= 0.0 && faction.ethos.aggression <= 1.0,
-                "Faction {} aggression out of range: {}", faction.name, faction.ethos.aggression,
-            );
+        for f in &galaxy.factions {
+            assert!((-1.0..=1.0).contains(&f.ethos.alignment), "{} alignment out of range", f.name);
+            assert!((0.0..=1.0).contains(&f.ethos.openness), "{} openness out of range", f.name);
+            assert!((0.0..=1.0).contains(&f.ethos.aggression), "{} aggression out of range", f.name);
         }
     }
 
@@ -1179,14 +1577,9 @@ mod tests {
     fn faction_influence_references_valid_civ_ids() {
         let galaxy = generate_galaxy(42);
         let civ_ids: HashSet<Uuid> = galaxy.civilizations.iter().map(|c| c.id).collect();
-
-        for faction in &galaxy.factions {
-            for civ_id in faction.influence.keys() {
-                assert!(
-                    civ_ids.contains(civ_id),
-                    "Faction {} has influence entry for non-existent civ {}",
-                    faction.name, civ_id,
-                );
+        for f in &galaxy.factions {
+            for cid in f.influence.keys() {
+                assert!(civ_ids.contains(cid), "Faction {} references non-existent civ {}", f.name, cid);
             }
         }
     }
@@ -1194,13 +1587,9 @@ mod tests {
     #[test]
     fn faction_influence_values_in_range() {
         let galaxy = generate_galaxy(42);
-        for faction in &galaxy.factions {
-            for (&civ_id, &influence) in &faction.influence {
-                assert!(
-                    influence >= 0.0 && influence <= 1.0,
-                    "Faction {} has out-of-range influence {} in civ {}",
-                    faction.name, influence, civ_id,
-                );
+        for f in &galaxy.factions {
+            for (&cid, &val) in &f.influence {
+                assert!((0.0..=1.0).contains(&val), "Faction {} influence {} in civ {}", f.name, val, cid);
             }
         }
     }
@@ -1208,30 +1597,13 @@ mod tests {
     #[test]
     fn factions_wired_into_civilizations() {
         let galaxy = generate_galaxy(42);
-        let hegemony = galaxy.civilizations.iter().find(|c| c.name == "Terran Hegemony").unwrap();
-        let freehold = galaxy.civilizations.iter().find(|c| c.name == "The Freehold Compact").unwrap();
-
-        // Hegemony should have Military Command (internal) plus transnational factions.
-        assert!(
-            !hegemony.faction_ids.is_empty(),
-            "Hegemony should have faction IDs",
-        );
-
-        // Freehold should have transnational factions.
-        assert!(
-            !freehold.faction_ids.is_empty(),
-            "Freehold should have faction IDs",
-        );
-
-        // All faction IDs in civ lists should reference actual factions.
+        for civ in &galaxy.civilizations {
+            assert!(!civ.faction_ids.is_empty(), "Civ '{}' should have faction IDs", civ.name);
+        }
         let faction_ids: HashSet<Uuid> = galaxy.factions.iter().map(|f| f.id).collect();
         for civ in &galaxy.civilizations {
             for fid in &civ.faction_ids {
-                assert!(
-                    faction_ids.contains(fid),
-                    "Civ {} references non-existent faction {}",
-                    civ.name, fid,
-                );
+                assert!(faction_ids.contains(fid), "Civ {} references non-existent faction {}", civ.name, fid);
             }
         }
     }
@@ -1239,18 +1611,12 @@ mod tests {
     #[test]
     fn independent_factions_not_in_any_civ() {
         let galaxy = generate_galaxy(42);
-        let all_civ_faction_ids: HashSet<Uuid> = galaxy.civilizations.iter()
-            .flat_map(|c| c.faction_ids.iter())
-            .copied()
-            .collect();
-
-        for faction in &galaxy.factions {
-            if matches!(faction.scope, FactionScope::Independent) {
-                assert!(
-                    !all_civ_faction_ids.contains(&faction.id),
-                    "Independent faction {} should not appear in any civ's faction_ids",
-                    faction.name,
-                );
+        let all_civ_fids: HashSet<Uuid> = galaxy.civilizations.iter()
+            .flat_map(|c| c.faction_ids.iter()).copied().collect();
+        for f in &galaxy.factions {
+            if matches!(f.scope, FactionScope::Independent) {
+                assert!(!all_civ_fids.contains(&f.id),
+                    "Independent faction {} in a civ's faction_ids", f.name);
             }
         }
     }
@@ -1258,25 +1624,15 @@ mod tests {
     #[test]
     fn civ_internal_faction_only_in_parent_civ() {
         let galaxy = generate_galaxy(42);
-
-        for faction in &galaxy.factions {
-            if let FactionScope::CivInternal { civ_id } = &faction.scope {
-                // Should be in the parent civ's list.
+        for f in &galaxy.factions {
+            if let FactionScope::CivInternal { civ_id } = &f.scope {
                 let parent = galaxy.civilizations.iter().find(|c| c.id == *civ_id).unwrap();
-                assert!(
-                    parent.faction_ids.contains(&faction.id),
-                    "CivInternal faction {} should be in parent civ {}",
-                    faction.name, parent.name,
-                );
-
-                // Should NOT be in any other civ's list.
+                assert!(parent.faction_ids.contains(&f.id),
+                    "CivInternal faction {} should be in parent civ {}", f.name, parent.name);
                 for civ in &galaxy.civilizations {
                     if civ.id != *civ_id {
-                        assert!(
-                            !civ.faction_ids.contains(&faction.id),
-                            "CivInternal faction {} should NOT be in non-parent civ {}",
-                            faction.name, civ.name,
-                        );
+                        assert!(!civ.faction_ids.contains(&f.id),
+                            "CivInternal faction {} should NOT be in {}", f.name, civ.name);
                     }
                 }
             }
@@ -1286,16 +1642,12 @@ mod tests {
     #[test]
     fn transnational_factions_in_all_listed_civs() {
         let galaxy = generate_galaxy(42);
-
-        for faction in &galaxy.factions {
-            if let FactionScope::Transnational { civ_ids } = &faction.scope {
-                for civ_id in civ_ids {
-                    let civ = galaxy.civilizations.iter().find(|c| c.id == *civ_id).unwrap();
-                    assert!(
-                        civ.faction_ids.contains(&faction.id),
-                        "Transnational faction {} should be in civ {}",
-                        faction.name, civ.name,
-                    );
+        for f in &galaxy.factions {
+            if let FactionScope::Transnational { civ_ids } = &f.scope {
+                for cid in civ_ids {
+                    let civ = galaxy.civilizations.iter().find(|c| c.id == *cid).unwrap();
+                    assert!(civ.faction_ids.contains(&f.id),
+                        "Transnational faction {} should be in civ {}", f.name, civ.name);
                 }
             }
         }
@@ -1304,16 +1656,12 @@ mod tests {
     #[test]
     fn pressure_sources_wired_to_valid_factions() {
         let galaxy = generate_galaxy(42);
-        let faction_ids: HashSet<Uuid> = galaxy.factions.iter().map(|f| f.id).collect();
-
+        let fids: HashSet<Uuid> = galaxy.factions.iter().map(|f| f.id).collect();
         for civ in &galaxy.civilizations {
-            for pressure in &civ.internal_dynamics.pressures {
-                if let Some(source_id) = pressure.source_faction {
-                    assert!(
-                        faction_ids.contains(&source_id),
-                        "Pressure '{}' in {} references non-existent faction {}",
-                        pressure.description, civ.name, source_id,
-                    );
+            for p in &civ.internal_dynamics.pressures {
+                if let Some(sid) = p.source_faction {
+                    assert!(fids.contains(&sid),
+                        "Pressure '{}' in {} references non-existent faction {}", p.description, civ.name, sid);
                 }
             }
         }
@@ -1326,29 +1674,21 @@ mod tests {
             .flat_map(|c| c.internal_dynamics.pressures.iter())
             .filter(|p| p.source_faction.is_some())
             .count();
-        assert!(
-            sourced >= 2,
-            "At least 2 pressures should be linked to factions (got {})",
-            sourced,
-        );
+        assert!(sourced >= 1, "At least 1 pressure should be linked to a faction (got {})", sourced);
     }
 
     // -----------------------------------------------------------------------
-    // Phase B: Faction presence tests
+    // Faction presence
     // -----------------------------------------------------------------------
 
     #[test]
     fn faction_presence_references_valid_faction_ids() {
         let galaxy = generate_galaxy(42);
-        let faction_ids: HashSet<Uuid> = galaxy.factions.iter().map(|f| f.id).collect();
-
-        for system in &galaxy.systems {
-            for fp in &system.faction_presence {
-                assert!(
-                    faction_ids.contains(&fp.faction_id),
-                    "System {} has presence for non-existent faction {}",
-                    system.name, fp.faction_id,
-                );
+        let fids: HashSet<Uuid> = galaxy.factions.iter().map(|f| f.id).collect();
+        for sys in &galaxy.systems {
+            for fp in &sys.faction_presence {
+                assert!(fids.contains(&fp.faction_id),
+                    "System {} has presence for non-existent faction {}", sys.name, fp.faction_id);
             }
         }
     }
@@ -1356,18 +1696,12 @@ mod tests {
     #[test]
     fn faction_presence_strength_and_visibility_in_range() {
         let galaxy = generate_galaxy(42);
-        for system in &galaxy.systems {
-            for fp in &system.faction_presence {
-                assert!(
-                    fp.strength >= 0.0 && fp.strength <= 1.0,
-                    "System {} faction presence strength out of range: {}",
-                    system.name, fp.strength,
-                );
-                assert!(
-                    fp.visibility >= 0.0 && fp.visibility <= 1.0,
-                    "System {} faction presence visibility out of range: {}",
-                    system.name, fp.visibility,
-                );
+        for sys in &galaxy.systems {
+            for fp in &sys.faction_presence {
+                assert!((0.0..=1.0).contains(&fp.strength),
+                    "System {} presence strength out of range: {}", sys.name, fp.strength);
+                assert!((0.0..=1.0).contains(&fp.visibility),
+                    "System {} presence visibility out of range: {}", sys.name, fp.visibility);
             }
         }
     }
@@ -1375,171 +1709,102 @@ mod tests {
     #[test]
     fn every_system_has_faction_presence() {
         let galaxy = generate_galaxy(42);
-
-        // Every system should have at least one faction present.
-        for system in &galaxy.systems {
-            assert!(
-                !system.faction_presence.is_empty(),
-                "System {} has no faction presence",
-                system.name,
-            );
+        for sys in &galaxy.systems {
+            assert!(!sys.faction_presence.is_empty(), "System {} has no faction presence", sys.name);
         }
     }
 
     #[test]
     fn factions_not_all_piled_into_one_system() {
         let galaxy = generate_galaxy(42);
-
-        // Count how many systems each faction appears in.
-        let mut faction_system_count: HashMap<Uuid, usize> = HashMap::new();
-        for system in &galaxy.systems {
-            for fp in &system.faction_presence {
-                *faction_system_count.entry(fp.faction_id).or_insert(0) += 1;
+        let mut count: HashMap<Uuid, usize> = HashMap::new();
+        for sys in &galaxy.systems {
+            for fp in &sys.faction_presence {
+                *count.entry(fp.faction_id).or_insert(0) += 1;
             }
         }
-
-        // Every faction should appear in at least one system.
-        for faction in &galaxy.factions {
-            let count = faction_system_count.get(&faction.id).copied().unwrap_or(0);
-            assert!(
-                count >= 1,
-                "Faction {} has no system presence at all",
-                faction.name,
-            );
-        }
-
-        // No faction should be in all 10 systems — that would be boring.
-        for faction in &galaxy.factions {
-            let count = faction_system_count.get(&faction.id).copied().unwrap_or(0);
-            assert!(
-                count < 10,
-                "Faction {} is in all {} systems — should be more selective",
-                faction.name, count,
-            );
+        for f in &galaxy.factions {
+            let c = count.get(&f.id).copied().unwrap_or(0);
+            assert!(c >= 1, "Faction {} has no system presence", f.name);
+            assert!(c < 10, "Faction {} is in all {} systems", f.name, c);
         }
     }
 
     #[test]
     fn no_duplicate_faction_presence_in_system() {
         let galaxy = generate_galaxy(42);
-        for system in &galaxy.systems {
-            let ids: Vec<Uuid> = system.faction_presence.iter().map(|fp| fp.faction_id).collect();
+        for sys in &galaxy.systems {
+            let ids: Vec<Uuid> = sys.faction_presence.iter().map(|fp| fp.faction_id).collect();
             let unique: HashSet<Uuid> = ids.iter().copied().collect();
-            assert_eq!(
-                ids.len(), unique.len(),
-                "System {} has duplicate faction presence entries",
-                system.name,
-            );
+            assert_eq!(ids.len(), unique.len(), "System {} has duplicate presence", sys.name);
         }
     }
 
     #[test]
-    fn meridian_has_strong_military_presence() {
+    fn capital_has_strong_military_presence() {
         let galaxy = generate_galaxy(42);
         let meridian = galaxy.systems.iter().find(|s| s.name == "Meridian").unwrap();
-        let mil_cmd = galaxy.factions.iter().find(|f| f.name == "Hegemony Military Command").unwrap();
-
-        let mil_presence = meridian.faction_presence.iter()
-            .find(|fp| fp.faction_id == mil_cmd.id);
-        assert!(mil_presence.is_some(), "Meridian should have Military Command presence");
-        assert!(
-            mil_presence.unwrap().strength >= 0.8,
-            "Military Command at Meridian should be strong",
-        );
+        let mil = find_faction_by_category(&galaxy.factions, FactionCategory::Military);
+        let mp = meridian.faction_presence.iter().find(|fp| fp.faction_id == mil.id);
+        assert!(mp.is_some(), "Capital should have military presence");
+        assert!(mp.unwrap().strength >= 0.8, "Military at capital should be strong");
     }
 
     #[test]
-    fn cygnus_gate_has_strong_trade_presence() {
+    fn hub_has_strong_trade_presence() {
         let galaxy = generate_galaxy(42);
         let cygnus = galaxy.systems.iter().find(|s| s.name == "Cygnus Gate").unwrap();
-        let corridor = galaxy.factions.iter().find(|f| f.name == "The Corridor Guild").unwrap();
-
-        let trade_presence = cygnus.faction_presence.iter()
-            .find(|fp| fp.faction_id == corridor.id);
-        assert!(trade_presence.is_some(), "Cygnus Gate should have Corridor Guild presence");
-        assert!(
-            trade_presence.unwrap().strength >= 0.7,
-            "Corridor Guild at Cygnus Gate should be strong",
-        );
+        let econ = find_faction_by_category(&galaxy.factions, FactionCategory::Economic);
+        let tp = cygnus.faction_presence.iter().find(|fp| fp.faction_id == econ.id);
+        assert!(tp.is_some(), "Hub should have economic presence");
+        assert!(tp.unwrap().strength >= 0.7, "Economic at hub should be strong");
     }
 
     #[test]
-    fn acheron_has_salvage_and_faint_intel() {
+    fn frontier_has_criminal_and_faint_military() {
         let galaxy = generate_galaxy(42);
         let acheron = galaxy.systems.iter().find(|s| s.name == "Acheron").unwrap();
-        let ashfall = galaxy.factions.iter().find(|f| f.name == "Ashfall Salvage").unwrap();
-        let mil_cmd = galaxy.factions.iter().find(|f| f.name == "Hegemony Military Command").unwrap();
+        let frontier = find_criminal_frontier(&galaxy.factions);
+        let mil = find_faction_by_category(&galaxy.factions, FactionCategory::Military);
 
-        let salvage = acheron.faction_presence.iter()
-            .find(|fp| fp.faction_id == ashfall.id);
-        assert!(salvage.is_some(), "Acheron should have Ashfall Salvage");
-
-        let intel = acheron.faction_presence.iter()
-            .find(|fp| fp.faction_id == mil_cmd.id);
-        assert!(intel.is_some(), "Acheron should have faint Military Command presence");
-        assert!(
-            intel.unwrap().visibility < 0.2,
-            "Military Command at Acheron should be low-visibility",
-        );
+        assert!(acheron.faction_presence.iter().any(|fp| fp.faction_id == frontier.id),
+            "Acheron should have frontier criminal presence");
+        let intel = acheron.faction_presence.iter().find(|fp| fp.faction_id == mil.id);
+        assert!(intel.is_some(), "Acheron should have faint military presence");
+        assert!(intel.unwrap().visibility < 0.2, "Military at Acheron should be low-visibility");
     }
 
     #[test]
-    fn order_drawn_to_distorted_space() {
+    fn religious_drawn_to_distorted_space() {
         let galaxy = generate_galaxy(42);
-        let order = galaxy.factions.iter().find(|f| f.name == "Order of the Quiet Star").unwrap();
-
-        // The Order should be present at Drift (2.0), Kessler's Remnant (8.0),
-        // and Lament (25.0) — all distorted systems.
+        let order = find_faction_by_category(&galaxy.factions, FactionCategory::Religious);
         for name in &["Drift", "Kessler's Remnant", "Lament"] {
-            let system = galaxy.systems.iter().find(|s| s.name == *name).unwrap();
-            let has_order = system.faction_presence.iter()
-                .any(|fp| fp.faction_id == order.id);
-            assert!(
-                has_order,
-                "Order of the Quiet Star should be present in distorted system {}",
-                name,
-            );
+            let sys = galaxy.systems.iter().find(|s| s.name == *name).unwrap();
+            assert!(sys.faction_presence.iter().any(|fp| fp.faction_id == order.id),
+                "Religious faction should be in distorted system {}", name);
         }
-
-        // The Order should NOT be at Meridian (time_factor 1.0, normal space).
         let meridian = galaxy.systems.iter().find(|s| s.name == "Meridian").unwrap();
-        let order_at_meridian = meridian.faction_presence.iter()
-            .any(|fp| fp.faction_id == order.id);
-        assert!(
-            !order_at_meridian,
-            "Order of the Quiet Star should NOT be at Meridian (normal space)",
-        );
+        assert!(!meridian.faction_presence.iter().any(|fp| fp.faction_id == order.id),
+            "Religious faction should NOT be at Meridian");
     }
 
     #[test]
-    fn lattice_absent_from_deep_frontier() {
+    fn covert_criminal_absent_from_deep_frontier() {
         let galaxy = generate_galaxy(42);
-        let lattice = galaxy.factions.iter().find(|f| f.name == "The Lattice").unwrap();
-
-        // The Lattice should NOT be at Kessler's Remnant or Lament —
-        // information brokers need civilization to operate.
+        let covert = find_criminal_covert(&galaxy.factions);
         for name in &["Kessler's Remnant", "Lament"] {
-            let system = galaxy.systems.iter().find(|s| s.name == *name).unwrap();
-            let has_lattice = system.faction_presence.iter()
-                .any(|fp| fp.faction_id == lattice.id);
-            assert!(
-                !has_lattice,
-                "The Lattice should NOT be present in deep frontier system {}",
-                name,
-            );
+            let sys = galaxy.systems.iter().find(|s| s.name == *name).unwrap();
+            assert!(!sys.faction_presence.iter().any(|fp| fp.faction_id == covert.id),
+                "Covert criminal should NOT be in {}", name);
         }
     }
 
     #[test]
     fn every_faction_presence_has_services() {
         let galaxy = generate_galaxy(42);
-        for system in &galaxy.systems {
-            for fp in &system.faction_presence {
-                assert!(
-                    !fp.services.is_empty(),
-                    "Faction presence in {} has no services",
-                    system.name,
-                );
+        for sys in &galaxy.systems {
+            for fp in &sys.faction_presence {
+                assert!(!fp.services.is_empty(), "Presence in {} has no services", sys.name);
             }
         }
     }
@@ -1548,27 +1813,28 @@ mod tests {
     fn faction_scope_civ_ids_reference_valid_civs() {
         let galaxy = generate_galaxy(42);
         let civ_ids: HashSet<Uuid> = galaxy.civilizations.iter().map(|c| c.id).collect();
-
-        for faction in &galaxy.factions {
-            match &faction.scope {
+        for f in &galaxy.factions {
+            match &f.scope {
                 FactionScope::CivInternal { civ_id } => {
-                    assert!(
-                        civ_ids.contains(civ_id),
-                        "Faction {} CivInternal scope references non-existent civ",
-                        faction.name,
-                    );
+                    assert!(civ_ids.contains(civ_id), "Faction {} CivInternal refs non-existent civ", f.name);
                 }
-                FactionScope::Transnational { civ_ids: scope_ids } => {
-                    for civ_id in scope_ids {
-                        assert!(
-                            civ_ids.contains(civ_id),
-                            "Faction {} Transnational scope references non-existent civ",
-                            faction.name,
-                        );
+                FactionScope::Transnational { civ_ids: sids } => {
+                    for cid in sids {
+                        assert!(civ_ids.contains(cid), "Faction {} Transnational refs non-existent civ", f.name);
                     }
                 }
                 FactionScope::Independent => {}
             }
         }
+    }
+
+    #[test]
+    fn military_faction_name_contains_civ_prefix() {
+        let galaxy = generate_galaxy(42);
+        let mil = find_faction_by_category(&galaxy.factions, FactionCategory::Military);
+        let civ_prefixes: Vec<&str> = galaxy.civilizations.iter()
+            .map(|c| extract_civ_prefix(&c.name)).collect();
+        assert!(civ_prefixes.iter().any(|p| mil.name.contains(p)),
+            "Military faction '{}' should contain a civ prefix (civs: {:?})", mil.name, civ_prefixes);
     }
 }

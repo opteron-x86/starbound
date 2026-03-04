@@ -401,8 +401,8 @@ mod tests {
         let sectors = save.load_all_sectors().expect("load sectors");
 
         assert_eq!(systems.len(), 10);
-        assert_eq!(civs.len(), 2);
-        assert_eq!(factions.len(), 6);
+        assert_eq!(civs.len(), galaxy.civilizations.len());
+        assert_eq!(factions.len(), galaxy.factions.len());
         assert_eq!(connections.len(), galaxy.connections.len());
         assert_eq!(sectors.len(), 1);
         assert_eq!(sectors[0].name, "The Near Reach");
@@ -442,19 +442,19 @@ mod tests {
         .expect("save galaxy");
 
         let factions = save.load_all_factions().expect("load factions");
-        assert_eq!(factions.len(), 6);
+        assert_eq!(factions.len(), galaxy.factions.len());
 
-        // Verify specific faction round-trips.
+        // Verify military faction round-trips (find by category, not name).
         let mil_cmd = factions.iter()
-            .find(|f| f.name == "Hegemony Military Command")
-            .expect("Military Command exists");
+            .find(|f| f.category == FactionCategory::Military)
+            .expect("Military faction exists");
         assert_eq!(mil_cmd.category, FactionCategory::Military);
         assert!(!mil_cmd.influence.is_empty());
         assert!(!mil_cmd.notable_assets.is_empty());
 
         // Verify individual faction load.
         let loaded = save.load_faction(mil_cmd.id).expect("load one").expect("exists");
-        assert_eq!(loaded.name, "Hegemony Military Command");
+        assert_eq!(loaded.name, mil_cmd.name);
         assert_eq!(loaded.category, FactionCategory::Military);
     }
 
@@ -476,8 +476,8 @@ mod tests {
         let civs = save.load_all_civilizations().expect("load civs");
         let factions = save.load_all_factions().expect("load factions");
 
-        assert_eq!(civs.len(), 2, "Should have exactly 2 civilizations");
-        assert_eq!(factions.len(), 6, "Should have exactly 6 factions");
+        assert_eq!(civs.len(), galaxy.civilizations.len(), "Civ count should match generated");
+        assert_eq!(factions.len(), galaxy.factions.len(), "Faction count should match generated");
 
         // Names should not overlap.
         let civ_names: Vec<&str> = civs.iter().map(|c| c.name.as_str()).collect();
@@ -629,7 +629,7 @@ mod tests {
             assert_eq!(systems.len(), 10);
 
             let factions = save.load_all_factions().expect("load factions");
-            assert_eq!(factions.len(), 6);
+            assert_eq!(factions.len(), galaxy.factions.len());
         }
 
         // Clean up.
