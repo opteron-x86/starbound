@@ -284,7 +284,7 @@ fn new_game(seed: u64) -> GameState {
     let galaxy = generate_galaxy(seed);
 
     let start_system = galaxy.systems.iter()
-        .find(|s| s.name == "Cygnus Gate")
+        .find(|s| s.id == galaxy.start_system_id)
         .unwrap_or(&galaxy.systems[0]);
 
     let journey = Journey {
@@ -517,6 +517,7 @@ fn display_galactic_news(tick_result: &TickResult, _gs: &GameState) {
             TickEventCategory::Diplomacy => "  ▸",
             TickEventCategory::Military => "  ▸",
             TickEventCategory::Internal => "  ▸",
+            TickEventCategory::Faction => "  ▸",
         };
 
         for line in wrap_text(&format!("{} {}", icon, event.description), 60) {
@@ -826,19 +827,34 @@ fn display_title() {
     println!();
 }
 
-fn display_intro() {
+fn display_intro(gs: &GameState) {
     clear_screen();
     println!();
     println!("{}", DIVIDER);
     println!();
 
-    for line in wrap_text(
+    let start_name = gs.current_system().name.clone();
+    let civ_names: Vec<String> = gs.galaxy.civilizations.iter()
+        .take(2)
+        .map(|c| c.name.clone())
+        .collect();
+    let civ_context = if civ_names.len() >= 2 {
+        format!("halfway between {} territory and the {}",
+            civ_names[0], civ_names[1])
+    } else {
+        "at the edge of civilized space".into()
+    };
+
+    let intro = format!(
         "You stand on the bridge of the Persistence, docked at \
-         Cygnus Gate — a transit station in contested space, \
-         halfway between Hegemony territory and the Freehold \
-         Compact. Neither faction claims it officially. Both \
-         keep an eye on it.", 60
-    ) { println!("  {}", line); }
+         {} — a transit station in contested space, {}. \
+         No single power claims it officially. All of them \
+         keep an eye on it.",
+        start_name, civ_context
+    );
+    for line in wrap_text(&intro, 60) {
+        println!("  {}", line);
+    }
     println!();
 
     for line in wrap_text(
@@ -866,7 +882,7 @@ fn display_intro() {
 // ---------------------------------------------------------------------------
 
 fn game_loop(gs: &mut GameState) {
-    display_intro();
+    display_intro(gs);
 
     loop {
         clear_screen();

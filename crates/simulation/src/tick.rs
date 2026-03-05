@@ -9,6 +9,7 @@ use starbound_core::galaxy::*;
 use starbound_core::time::Timestamp;
 
 use super::faction_ai::{evaluate_civ, next_infrastructure_level, FactionAction};
+use super::faction_tick::tick_factions;
 use super::generate::GeneratedGalaxy;
 
 const DAYS_PER_TICK: f64 = 365.25;
@@ -36,6 +37,7 @@ pub enum TickEventCategory {
     Diplomacy,
     Military,
     Internal,
+    Faction,
 }
 
 #[derive(Debug)]
@@ -68,6 +70,9 @@ pub fn tick_galaxy(
             events.extend(tick_events);
         }
         apply_passive_effects(galaxy, tick, tick_day, rng, &mut events);
+
+        // Faction presence drift, expansion, and pruning.
+        tick_factions(galaxy, tick, tick_day, rng, &mut events);
     }
     TickResult { ticks_run: num_ticks, days_consumed: num_ticks as f64 * DAYS_PER_TICK, events }
 }

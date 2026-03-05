@@ -131,6 +131,9 @@ const CIV_TEMPLATES_JSON: &str =
 const FACTION_TEMPLATES_JSON: &str =
     include_str!("../../../data/templates/factions.json");
 
+const SYSTEM_TEMPLATES_JSON: &str =
+    include_str!("../../../data/templates/star_systems.json");
+
 /// Load and deserialize civilization templates from the embedded JSON.
 pub fn load_civ_templates() -> CivTemplates {
     serde_json::from_str(CIV_TEMPLATES_JSON)
@@ -141,6 +144,64 @@ pub fn load_civ_templates() -> CivTemplates {
 pub fn load_faction_templates() -> FactionTemplates {
     serde_json::from_str(FACTION_TEMPLATES_JSON)
         .expect("factions.json should be valid — this is a compile-time embed")
+}
+
+/// Load and deserialize star system templates from the embedded JSON.
+pub fn load_system_templates() -> SystemTemplates {
+    serde_json::from_str(SYSTEM_TEMPLATES_JSON)
+        .expect("star_systems.json should be valid — this is a compile-time embed")
+}
+
+// ===========================================================================
+// Star system templates
+// ===========================================================================
+
+/// Top-level structure for `star_systems.json`.
+#[derive(Debug, Deserialize)]
+pub struct SystemTemplates {
+    pub generation_rules: SystemGenerationRules,
+    pub star_types: Vec<StarTypeWeight>,
+    pub standalone_names: Vec<NameEntry>,
+    pub compound_prefixes: Vec<NameEntry>,
+    pub compound_suffixes: Vec<NameEntry>,
+    pub explorer_surnames: Vec<WeightedName>,
+    pub explorer_suffixes: Vec<WeightedName>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SystemGenerationRules {
+    pub system_count: usize,
+    pub min_systems: usize,
+    pub max_systems: usize,
+    pub spatial_spread: f64,
+    pub min_distance_between_systems: f64,
+    pub connection_threshold_ly: f64,
+    pub time_factor_frontier_min: f64,
+    pub time_factor_frontier_max: f64,
+    pub time_factor_deep_frontier_min: f64,
+    pub time_factor_deep_frontier_max: f64,
+    pub unclaimed_fraction: f64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StarTypeWeight {
+    #[serde(rename = "type")]
+    pub star_type: String,
+    pub weight: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct NameEntry {
+    pub name: String,
+    pub weight: f64,
+    #[serde(default)]
+    pub flavor: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct WeightedName {
+    pub name: String,
+    pub weight: f64,
 }
 
 // ===========================================================================

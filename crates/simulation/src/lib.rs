@@ -8,4 +8,5 @@ pub mod generate;
 pub mod templates;
 pub mod travel;
 pub mod faction_ai;
+pub mod faction_tick;
 pub mod tick;

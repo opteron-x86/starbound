@@ -407,24 +407,26 @@ mod tests {
         assert_eq!(sectors.len(), 1);
         assert_eq!(sectors[0].name, "The Near Reach");
 
-        // Verify a specific system round-trips correctly.
-        let meridian = systems.iter().find(|s| s.name == "Meridian").expect("Meridian exists");
-        assert_eq!(meridian.star_type, StarType::YellowDwarf);
-        assert!(meridian.controlling_civ.is_some());
+        // Verify a capital system round-trips correctly.
+        let capital = systems.iter()
+            .find(|s| s.infrastructure_level == InfrastructureLevel::Capital)
+            .expect("Should have at least one capital");
+        assert!(capital.controlling_civ.is_some());
 
         // Verify faction_presence survived the round trip.
         assert!(
-            !meridian.faction_presence.is_empty(),
-            "Meridian should have faction presence after round-trip",
+            !capital.faction_presence.is_empty(),
+            "Capital {} should have faction presence after round-trip",
+            capital.name,
         );
 
         // Verify connections for a specific system.
-        let meridian_conns = save.load_connections_for(meridian.id).expect("load connections");
-        assert!(!meridian_conns.is_empty(), "Meridian should have connections");
+        let capital_conns = save.load_connections_for(capital.id).expect("load connections");
+        assert!(!capital_conns.is_empty(), "Capital {} should have connections", capital.name);
 
         // Verify individual system load.
-        let loaded = save.load_system(meridian.id).expect("load one").expect("exists");
-        assert_eq!(loaded.name, "Meridian");
+        let loaded = save.load_system(capital.id).expect("load one").expect("exists");
+        assert_eq!(loaded.name, capital.name);
     }
 
     #[test]

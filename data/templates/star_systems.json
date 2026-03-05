@@ -1,38 +1,484 @@
 {
   "_schema": "starbound.entity_template.star_systems.v1",
-  "_description": "Star system name generation templates. TODO: Full implementation. Systems should feel like real places — some named by explorers, some by corporations, some by the cultures that settled them. Naming style should reflect who claimed the system.",
-
-  "_design_notes": [
-    "Explorer-named: Descriptive or personal (Kepler's Remnant, Pale Harbor, Thornfield)",
-    "Corporate-named: Functional designations (Station 14-Gamma, Waypoint Bravo)",
-    "Culture-named: Reflects parent civilization flavor tags (a 'Kestari' civ names systems differently than an 'Iron' civ)",
-    "Ancient/unclaimed: Catalog designations (HD 189733, Gliese 581) or evocative names from early surveys",
-    "The time_factor should influence naming — distorted systems might have eerie or warning-style names"
+  "_description": "Star system procedural generation templates.",
+  "generation_rules": {
+    "system_count": 10,
+    "min_systems": 8,
+    "max_systems": 14,
+    "spatial_spread": 25.0,
+    "min_distance_between_systems": 3.0,
+    "connection_threshold_ly": 12.0,
+    "time_factor_frontier_min": 1.5,
+    "time_factor_frontier_max": 3.0,
+    "time_factor_deep_frontier_min": 4.0,
+    "time_factor_deep_frontier_max": 10.0,
+    "unclaimed_fraction": 0.3
+  },
+  "star_types": [
+    {
+      "type": "yellow_dwarf",
+      "weight": 3.0
+    },
+    {
+      "type": "red_dwarf",
+      "weight": 3.0
+    },
+    {
+      "type": "binary",
+      "weight": 1.5
+    },
+    {
+      "type": "blue_giant",
+      "weight": 0.8
+    },
+    {
+      "type": "white_dwarf",
+      "weight": 1.0
+    },
+    {
+      "type": "neutron",
+      "weight": 0.5
+    },
+    {
+      "type": "black_hole",
+      "weight": 0.2
+    },
+    {
+      "type": "anomalous",
+      "weight": 0.3
+    }
   ],
-
-  "prefixes": [
-    { "name": "Cygnus", "weight": 1.0, "flavor": ["stellar", "bright"] },
-    { "name": "Pale", "weight": 0.8, "flavor": ["remote", "quiet"] },
-    { "name": "Thorn", "weight": 0.7, "flavor": ["hostile", "defensive"] },
-    { "name": "Drift", "weight": 0.8, "flavor": ["frontier", "nomadic"] },
-    { "name": "Meridian", "weight": 0.8, "flavor": ["central", "important"] },
-    { "name": "Acheron", "weight": 0.6, "flavor": ["mythological", "ominous"] },
-    { "name": "Kessler", "weight": 0.6, "flavor": ["explorer_named", "historical"] },
-    { "name": "Ember", "weight": 0.7, "flavor": ["dying", "warm"] },
-    { "name": "Cairn", "weight": 0.5, "flavor": ["marker", "memorial"] },
-    { "name": "Solace", "weight": 0.5, "flavor": ["refuge", "peaceful"] }
+  "infrastructure_by_role": {
+    "capital": "capital",
+    "core": "established",
+    "colony": "colony",
+    "hub": "hub",
+    "outpost": "outpost",
+    "frontier": "outpost",
+    "wilderness": "none"
+  },
+  "standalone_names": [
+    {
+      "name": "Meridian",
+      "weight": 1.0,
+      "flavor": [
+        "central"
+      ]
+    },
+    {
+      "name": "Acheron",
+      "weight": 0.8,
+      "flavor": [
+        "ominous"
+      ]
+    },
+    {
+      "name": "Voss",
+      "weight": 0.9,
+      "flavor": [
+        "sharp"
+      ]
+    },
+    {
+      "name": "Lament",
+      "weight": 0.7,
+      "flavor": [
+        "remote"
+      ]
+    },
+    {
+      "name": "Sunhollow",
+      "weight": 0.8,
+      "flavor": [
+        "warm"
+      ]
+    },
+    {
+      "name": "Ashfall",
+      "weight": 0.7,
+      "flavor": [
+        "hostile"
+      ]
+    },
+    {
+      "name": "Quietus",
+      "weight": 0.6,
+      "flavor": [
+        "still"
+      ]
+    },
+    {
+      "name": "Verdance",
+      "weight": 0.7,
+      "flavor": [
+        "living"
+      ]
+    },
+    {
+      "name": "Sable",
+      "weight": 0.6,
+      "flavor": [
+        "dark"
+      ]
+    },
+    {
+      "name": "Crucible",
+      "weight": 0.7,
+      "flavor": [
+        "trial"
+      ]
+    },
+    {
+      "name": "Pilgrim",
+      "weight": 0.6,
+      "flavor": [
+        "spiritual"
+      ]
+    },
+    {
+      "name": "Solace",
+      "weight": 0.7,
+      "flavor": [
+        "peaceful"
+      ]
+    },
+    {
+      "name": "Hearthstone",
+      "weight": 0.6,
+      "flavor": [
+        "home"
+      ]
+    },
+    {
+      "name": "Windfall",
+      "weight": 0.7,
+      "flavor": [
+        "abundant"
+      ]
+    },
+    {
+      "name": "Obsidian",
+      "weight": 0.5,
+      "flavor": [
+        "volcanic"
+      ]
+    },
+    {
+      "name": "Cairn",
+      "weight": 0.6,
+      "flavor": [
+        "memorial"
+      ]
+    },
+    {
+      "name": "Bastion",
+      "weight": 0.7,
+      "flavor": [
+        "fortress"
+      ]
+    },
+    {
+      "name": "Ember",
+      "weight": 0.7,
+      "flavor": [
+        "dying"
+      ]
+    },
+    {
+      "name": "Requiem",
+      "weight": 0.5,
+      "flavor": [
+        "solemn"
+      ]
+    },
+    {
+      "name": "Thornfield",
+      "weight": 0.8,
+      "flavor": [
+        "settled"
+      ]
+    },
+    {
+      "name": "Mistveil",
+      "weight": 0.6,
+      "flavor": [
+        "hidden"
+      ]
+    },
+    {
+      "name": "Covenant",
+      "weight": 0.6,
+      "flavor": [
+        "pact"
+      ]
+    },
+    {
+      "name": "Rampart",
+      "weight": 0.7,
+      "flavor": [
+        "defensive"
+      ]
+    },
+    {
+      "name": "Candor",
+      "weight": 0.6,
+      "flavor": [
+        "clear"
+      ]
+    }
   ],
-
-  "suffixes": [
-    { "name": "Gate", "weight": 1.0, "flavor": ["hub", "connected"] },
-    { "name": "Harbor", "weight": 0.8, "flavor": ["safe", "port"] },
-    { "name": "Reach", "weight": 0.7, "flavor": ["frontier", "distant"] },
-    { "name": "Crossing", "weight": 0.7, "flavor": ["junction", "trade"] },
-    { "name": "Station", "weight": 0.8, "flavor": ["functional", "constructed"] },
-    { "name": "'s Remnant", "weight": 0.5, "flavor": ["ruins", "history"] },
-    { "name": "Deep", "weight": 0.6, "flavor": ["far", "isolated"] },
-    { "name": "Point", "weight": 0.7, "flavor": ["navigation", "reference"] }
+  "compound_prefixes": [
+    {
+      "name": "Cygnus",
+      "weight": 1.0,
+      "flavor": [
+        "stellar"
+      ]
+    },
+    {
+      "name": "Pale",
+      "weight": 0.8,
+      "flavor": [
+        "remote"
+      ]
+    },
+    {
+      "name": "Iron",
+      "weight": 0.7,
+      "flavor": [
+        "industrial"
+      ]
+    },
+    {
+      "name": "Black",
+      "weight": 0.6,
+      "flavor": [
+        "dark"
+      ]
+    },
+    {
+      "name": "Silver",
+      "weight": 0.7,
+      "flavor": [
+        "bright"
+      ]
+    },
+    {
+      "name": "Frost",
+      "weight": 0.6,
+      "flavor": [
+        "cold"
+      ]
+    },
+    {
+      "name": "Storm",
+      "weight": 0.7,
+      "flavor": [
+        "violent"
+      ]
+    },
+    {
+      "name": "Ghost",
+      "weight": 0.5,
+      "flavor": [
+        "abandoned"
+      ]
+    },
+    {
+      "name": "Haven",
+      "weight": 0.8,
+      "flavor": [
+        "safe"
+      ]
+    },
+    {
+      "name": "Blind",
+      "weight": 0.5,
+      "flavor": [
+        "hidden"
+      ]
+    },
+    {
+      "name": "Signal",
+      "weight": 0.5,
+      "flavor": [
+        "mystery"
+      ]
+    },
+    {
+      "name": "Crown",
+      "weight": 0.6,
+      "flavor": [
+        "royal"
+      ]
+    },
+    {
+      "name": "Dead",
+      "weight": 0.4,
+      "flavor": [
+        "lifeless"
+      ]
+    },
+    {
+      "name": "New",
+      "weight": 0.7,
+      "flavor": [
+        "colony"
+      ]
+    }
   ],
-
-  "_todo": "Expand with: standalone names, catalog designations, civ-specific naming patterns, distorted-space naming pool, system descriptor words (binary, ringed, dark, etc.)"
+  "compound_suffixes": [
+    {
+      "name": "Gate",
+      "weight": 1.0,
+      "flavor": [
+        "hub"
+      ]
+    },
+    {
+      "name": "Harbor",
+      "weight": 0.8,
+      "flavor": [
+        "port"
+      ]
+    },
+    {
+      "name": "Reach",
+      "weight": 0.7,
+      "flavor": [
+        "frontier"
+      ]
+    },
+    {
+      "name": "Crossing",
+      "weight": 0.7,
+      "flavor": [
+        "trade"
+      ]
+    },
+    {
+      "name": "Point",
+      "weight": 0.7,
+      "flavor": [
+        "navigation"
+      ]
+    },
+    {
+      "name": "Deep",
+      "weight": 0.5,
+      "flavor": [
+        "isolated"
+      ]
+    },
+    {
+      "name": "Watch",
+      "weight": 0.6,
+      "flavor": [
+        "military"
+      ]
+    },
+    {
+      "name": "Fall",
+      "weight": 0.5,
+      "flavor": [
+        "decline"
+      ]
+    },
+    {
+      "name": "Rest",
+      "weight": 0.5,
+      "flavor": [
+        "haven"
+      ]
+    },
+    {
+      "name": "Drift",
+      "weight": 0.6,
+      "flavor": [
+        "nomadic"
+      ]
+    },
+    {
+      "name": "Mark",
+      "weight": 0.5,
+      "flavor": [
+        "boundary"
+      ]
+    },
+    {
+      "name": "Edge",
+      "weight": 0.6,
+      "flavor": [
+        "border"
+      ]
+    }
+  ],
+  "explorer_surnames": [
+    {
+      "name": "Kessler",
+      "weight": 1.0
+    },
+    {
+      "name": "Chen",
+      "weight": 0.8
+    },
+    {
+      "name": "Okafor",
+      "weight": 0.8
+    },
+    {
+      "name": "Vasquez",
+      "weight": 0.7
+    },
+    {
+      "name": "Strand",
+      "weight": 0.7
+    },
+    {
+      "name": "Mikkelsen",
+      "weight": 0.6
+    },
+    {
+      "name": "Torren",
+      "weight": 0.7
+    },
+    {
+      "name": "Ashby",
+      "weight": 0.6
+    },
+    {
+      "name": "Patel",
+      "weight": 0.8
+    },
+    {
+      "name": "Volkov",
+      "weight": 0.7
+    }
+  ],
+  "explorer_suffixes": [
+    {
+      "name": "'s Remnant",
+      "weight": 1.0
+    },
+    {
+      "name": "'s Folly",
+      "weight": 0.7
+    },
+    {
+      "name": "'s Claim",
+      "weight": 0.6
+    },
+    {
+      "name": "'s Landing",
+      "weight": 0.8
+    },
+    {
+      "name": "'s Beacon",
+      "weight": 0.6
+    },
+    {
+      "name": "'s Vigil",
+      "weight": 0.5
+    }
+  ]
 }
