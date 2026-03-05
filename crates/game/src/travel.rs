@@ -160,6 +160,7 @@ mod tests {
             civ_standings: HashMap::new(),
             profile: PlayerProfile::new(),
             active_contracts: vec![],
+            current_location: None,
         }
     }
 
@@ -176,7 +177,7 @@ mod tests {
 
         let mut journey = test_journey(system_a, 100.0);
         let plan = plan_travel(&conn, &journey.ship, TravelMode::Ftl, system_a);
-        let outcome = execute_travel(&mut journey, &plan, "Cygnus Gate").unwrap();
+        let outcome = execute_travel(&mut journey, &plan, "Destination").unwrap();
 
         // Player moved.
         assert_eq!(journey.current_system, system_b);
@@ -278,7 +279,7 @@ mod tests {
         let mut journey = test_journey(system_a, 100.0);
         let supplies_before = journey.ship.supplies;
         let plan = plan_travel(&conn, &journey.ship, TravelMode::Ftl, system_a);
-        let outcome = execute_travel(&mut journey, &plan, "Cygnus Gate").unwrap();
+        let outcome = execute_travel(&mut journey, &plan, "Destination").unwrap();
 
         // Supplies should have been consumed.
         assert!(outcome.supplies_consumed > 0.0);

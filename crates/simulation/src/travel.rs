@@ -372,14 +372,13 @@ mod tests {
             name: "Test System".into(),
             position: (0.0, 0.0),
             star_type: starbound_core::galaxy::StarType::YellowDwarf,
-            planetary_bodies: vec![],
+            locations: vec![],
             controlling_civ: None,
             infrastructure_level: starbound_core::galaxy::InfrastructureLevel::Colony,
             history: vec![],
             active_threads: vec![],
             time_factor,
             faction_presence: vec![],
-            economy: None,
         }
     }
 

@@ -210,6 +210,7 @@ pub fn run_pipeline<'a>(
     config: &PipelineConfig,
     rng: &mut StdRng,
     intent: Option<PlayerIntent>,
+    location_type: Option<&str>,
 ) -> PipelineResult<'a> {
     // -----------------------------------------------------------------------
     // Stage 0 — Intent filter (player-initiated actions only)
@@ -271,6 +272,7 @@ pub fn run_pipeline<'a>(
         system,
         journey,
         galactic_years_since_last_visit,
+        location_type: location_type.map(|s| s.to_string()),
     };
 
     // For intent mode, we need to intersect context-matched events with
@@ -583,14 +585,13 @@ mod tests {
             name: "Test".into(),
             position: (0.0, 0.0),
             star_type: StarType::YellowDwarf,
-            planetary_bodies: vec![],
+            locations: vec![],
             controlling_civ: faction,
             infrastructure_level: infra,
             history: vec![],
             active_threads: vec![],
                 time_factor: 1.0,
             faction_presence: vec![],
-            economy: None,
         }
     }
 
@@ -648,6 +649,7 @@ mod tests {
             civ_standings: HashMap::new(),
             profile: PlayerProfile::new(),
             active_contracts: vec![],
+            current_location: None,
         }
     }
 
@@ -683,6 +685,7 @@ mod tests {
         let result = run_pipeline(
             &events, &system, &journey, None, &state, &config, &mut rng,
             None,
+            None,
         );
 
         match result {
@@ -711,6 +714,7 @@ mod tests {
         let result = run_pipeline(
             &events, &system, &journey, None, &state, &config, &mut rng,
             None,
+            None,
         );
 
         assert!(matches!(result, PipelineResult::Silence { .. }));
@@ -734,6 +738,7 @@ mod tests {
 
         let result = run_pipeline(
             &events, &system, &journey, None, &state, &config, &mut rng,
+            None,
             None,
         );
 
@@ -760,6 +765,7 @@ mod tests {
             let result = run_pipeline(
                 &events, &system, &journey, None,
                 &PipelineState::default(), &config, &mut rng,
+                None,
                 None,
             );
             if let PipelineResult::Event { event, .. } = result {
@@ -798,6 +804,7 @@ mod tests {
             let mut rng = StdRng::seed_from_u64(seed);
             let result = run_pipeline(
                 &events, &system, &journey, None, &state, &config, &mut rng,
+                None,
                 None,
             );
             if let PipelineResult::Event { event, .. } = result {
@@ -840,6 +847,7 @@ mod tests {
                 &events, &system, &journey_early, None,
                 &PipelineState::default(), &config, &mut rng,
                 None,
+                None,
             ) {
                 if event.encounter_type == "novel" { novel_early += 1; }
             }
@@ -848,6 +856,7 @@ mod tests {
             if let PipelineResult::Event { event, .. } = run_pipeline(
                 &events, &system, &journey_late, None,
                 &PipelineState::default(), &config, &mut rng,
+                None,
                 None,
             ) {
                 if event.encounter_type == "novel" { novel_late += 1; }
@@ -891,8 +900,8 @@ mod tests {
         let mut rng1 = StdRng::seed_from_u64(999);
         let mut rng2 = StdRng::seed_from_u64(999);
 
-        let r1 = run_pipeline(&events, &system, &journey, None, &state, &config, &mut rng1, None);
-        let r2 = run_pipeline(&events, &system, &journey, None, &state, &config, &mut rng2, None);
+        let r1 = run_pipeline(&events, &system, &journey, None, &state, &config, &mut rng1, None, None);
+        let r2 = run_pipeline(&events, &system, &journey, None, &state, &config, &mut rng2, None, None);
 
         match (r1, r2) {
             (PipelineResult::Event { event: e1, .. }, PipelineResult::Event { event: e2, .. }) => {
@@ -926,6 +935,7 @@ mod tests {
         let result = run_pipeline(
             &events, &system, &journey, None, &state_stale, &config, &mut rng,
             None,
+            None,
         );
 
         // With 100% silence chance, this must be silent.
@@ -954,6 +964,7 @@ mod tests {
                 &events, &system, &journey, None,
                 &PipelineState::default(), &config, &mut rng,
                 Some(PlayerIntent::Trade),
+                None,
             ) {
                 assert!(
                     event.intents.contains(&"trade".to_string()),
@@ -982,6 +993,7 @@ mod tests {
             &events, &system, &journey, None,
             &PipelineState::default(), &config, &mut rng,
             Some(PlayerIntent::Trade),
+            None,
         );
 
         // Intent mode should NOT be silenced even with 100% silence chance.
@@ -1008,6 +1020,7 @@ mod tests {
             if let PipelineResult::Event { event, .. } = run_pipeline(
                 &events, &system, &journey, None,
                 &PipelineState::default(), &config, &mut rng,
+                None,
                 None,
             ) {
                 assert!(
@@ -1036,6 +1049,7 @@ mod tests {
             &events, &system, &journey, None,
             &PipelineState::default(), &config, &mut rng,
             Some(PlayerIntent::Recruit),
+            None,
         );
 
         assert!(

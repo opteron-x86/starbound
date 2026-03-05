@@ -430,14 +430,13 @@ mod tests {
             name: name.into(),
             position: (0.0, 0.0),
             star_type: StarType::YellowDwarf,
-            planetary_bodies: vec![],
+            locations: vec![],
             controlling_civ: faction,
             infrastructure_level: InfrastructureLevel::Colony,
             history: vec![],
             active_threads: vec![],
             time_factor: 1.0,
             faction_presence: vec![],
-            economy: None,
         }
     }
 

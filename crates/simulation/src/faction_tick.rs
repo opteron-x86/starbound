@@ -669,20 +669,25 @@ mod tests {
             tick_factions(&mut galaxy_unstable, tick, day, &mut rng_u, &mut events_u);
         }
 
-        // Find covert criminal (transnational scope).
-        let covert = galaxy_stable.factions.iter().find(|f| {
+        // Find covert criminal (transnational scope) in each galaxy separately.
+        let covert_s = galaxy_stable.factions.iter().find(|f| {
             f.category == FactionCategory::Criminal
                 && matches!(f.scope, FactionScope::Transnational { .. })
         });
-        if let Some(covert) = covert {
+        let covert_u = galaxy_unstable.factions.iter().find(|f| {
+            f.category == FactionCategory::Criminal
+                && matches!(f.scope, FactionScope::Transnational { .. })
+        });
+
+        if let (Some(cs), Some(cu)) = (covert_s, covert_u) {
             let total_stable: f32 = galaxy_stable.systems.iter()
                 .flat_map(|s| s.faction_presence.iter())
-                .filter(|fp| fp.faction_id == covert.id)
+                .filter(|fp| fp.faction_id == cs.id)
                 .map(|fp| fp.strength)
                 .sum();
             let total_unstable: f32 = galaxy_unstable.systems.iter()
                 .flat_map(|s| s.faction_presence.iter())
-                .filter(|fp| fp.faction_id == covert.id)
+                .filter(|fp| fp.faction_id == cu.id)
                 .map(|fp| fp.strength)
                 .sum();
             assert!(

@@ -18,6 +18,8 @@ pub struct Npc {
     pub faction_id: Option<Uuid>,
     /// The system where this NPC lives.
     pub home_system_id: Uuid,
+    /// The specific location within the system (station, planet, etc.).
+    pub home_location_id: Option<Uuid>,
     /// How this NPC feels about the player (-1.0 to 1.0).
     /// Starts at 0.0 (neutral). Shifts through interaction.
     pub disposition: f32,
@@ -46,6 +48,7 @@ impl Npc {
             title: title.into(),
             faction_id,
             home_system_id,
+            home_location_id: None,
             disposition: 0.0,
             bio: bio.into(),
             motivations: Vec::new(),

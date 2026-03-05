@@ -25,6 +25,9 @@ pub struct Contract {
     pub contract_type: ContractType,
     /// Where the work takes you.
     pub destination_system_id: Uuid,
+    /// Specific location at the destination (None = any location in system).
+    #[serde(default)]
+    pub destination_location_id: Option<Uuid>,
     /// Where to return for payment (usually the issuer's home system).
     pub origin_system_id: Uuid,
     /// Credits paid on completion.
@@ -89,6 +92,7 @@ impl Contract {
             description: description.into(),
             contract_type: ContractType::Delivery,
             destination_system_id,
+            destination_location_id: None,
             origin_system_id,
             reward_credits,
             cargo_given: Some((cargo.clone(), cargo_quantity)),

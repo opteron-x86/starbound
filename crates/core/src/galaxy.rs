@@ -20,10 +20,11 @@ pub struct StarSystem {
     /// 2D position in the galaxy (light-years from origin).
     pub position: (f64, f64),
     pub star_type: StarType,
-    pub planetary_bodies: Vec<PlanetaryBody>,
+    /// Visitable places within this system — stations, planets, moons, belts.
+    pub locations: Vec<Location>,
     /// Which civilization controls this system, if any.
     pub controlling_civ: Option<Uuid>,
-    /// Rough measure of development: stations, trade, population.
+    /// Rough measure of overall development (max of location infrastructures).
     pub infrastructure_level: InfrastructureLevel,
     /// Significant events that have occurred here, most recent last.
     pub history: Vec<HistoryEntry>,
@@ -41,10 +42,6 @@ pub struct StarSystem {
     /// strength 0.9 / visibility 1.0. The Corridor Guild might be
     /// here too — strength 0.3, visibility 0.1.
     pub faction_presence: Vec<FactionPresence>,
-    /// The local economy — prices, production, demand. None for
-    /// uninhabited systems.
-    #[serde(default)]
-    pub economy: Option<SystemEconomy>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Display, EnumString)]
@@ -61,14 +58,85 @@ pub enum StarType {
     Anomalous,
 }
 
+// ---------------------------------------------------------------------------
+// Locations — visitable places within a star system
+// ---------------------------------------------------------------------------
+
+/// A visitable place within a star system. Stations, planets, moons,
+/// asteroid belts, deep space anomalies.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PlanetaryBody {
+pub struct Location {
+    pub id: Uuid,
     pub name: String,
-    pub body_type: BodyType,
-    /// Free-text notable features for LLM context.
-    pub features: Vec<String>,
+    pub location_type: LocationType,
+    /// Distance from the star in AU. Drives sublight travel time.
+    pub orbital_distance: f32,
+    /// Infrastructure at this specific location.
+    pub infrastructure: InfrastructureLevel,
+    /// Who controls this location (faction ID, may differ from system civ).
+    pub controlling_faction: Option<Uuid>,
+    /// Economy at this location. Different locations in the same system
+    /// can have different prices.
+    pub economy: Option<SystemEconomy>,
+    /// Short description for display.
+    pub description: String,
+    /// What the player can do here.
+    pub services: Vec<LocationService>,
+    /// Is this location known to the player? Hidden locations show as "???".
+    #[serde(default = "default_discovered")]
+    pub discovered: bool,
 }
 
+fn default_discovered() -> bool { true }
+
+/// What kind of place this is.
+#[derive(Debug, Clone, Serialize, Deserialize, Display)]
+#[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum LocationType {
+    /// Orbital station — trade hub, military base, guild hall.
+    Station,
+    /// Planet surface — colony, city, outpost.
+    PlanetSurface { body_type: BodyType },
+    /// Moon of a planet.
+    Moon { parent_body: String, body_type: BodyType },
+    /// Asteroid belt — mining ops, hideouts, salvage.
+    AsteroidBelt,
+    /// Deep space point of interest — anomaly, derelict, signal source.
+    DeepSpace,
+    /// Megastructure — ringworld, dyson sphere, ancient construct.
+    Megastructure { kind: String },
+}
+
+/// What the player can do at a location.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Display, EnumString)]
+#[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum LocationService {
+    Docking,
+    Trade,
+    Repair,
+    Refuel,
+    Contracts,
+    Recruitment,
+    Rumors,
+}
+
+impl LocationType {
+    /// Broad category string for encounter matching.
+    pub fn category_str(&self) -> &'static str {
+        match self {
+            LocationType::Station => "station",
+            LocationType::PlanetSurface { .. } => "planet_surface",
+            LocationType::Moon { .. } => "moon",
+            LocationType::AsteroidBelt => "asteroid_belt",
+            LocationType::DeepSpace => "deep_space",
+            LocationType::Megastructure { .. } => "megastructure",
+        }
+    }
+}
+
+/// Body type for planets, moons, and surfaces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Display, EnumString)]
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]

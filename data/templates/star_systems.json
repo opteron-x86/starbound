@@ -65,6 +65,7 @@
         "central"
       ]
     },
+    
     {
       "name": "Acheron",
       "weight": 0.8,
@@ -224,6 +225,314 @@
       "weight": 0.6,
       "flavor": [
         "clear"
+      ]
+    },
+    {
+      "name": "Sirius",
+      "weight": 1.0,
+      "flavor": [
+        "bright"
+      ]
+    },
+    {
+      "name": "Vega",
+      "weight": 0.9,
+      "flavor": [
+        "bright"
+      ]
+    },
+    {
+      "name": "Altair",
+      "weight": 0.9,
+      "flavor": [
+        "swift"
+      ]
+    },
+    {
+      "name": "Arcturus",
+      "weight": 0.8,
+      "flavor": [
+        "ancient"
+      ]
+    },
+    {
+      "name": "Rigel",
+      "weight": 0.9,
+      "flavor": [
+        "luminous"
+      ]
+    },
+    {
+      "name": "Betelgeuse",
+      "weight": 0.7,
+      "flavor": [
+        "dying"
+      ]
+    },
+    {
+      "name": "Antares",
+      "weight": 0.8,
+      "flavor": [
+        "hostile"
+      ]
+    },
+    {
+      "name": "Aldebaran",
+      "weight": 0.8,
+      "flavor": [
+        "ancient"
+      ]
+    },
+    {
+      "name": "Polaris",
+      "weight": 0.9,
+      "flavor": [
+        "central"
+      ]
+    },
+    {
+      "name": "Deneb",
+      "weight": 0.8,
+      "flavor": [
+        "distant"
+      ]
+    },
+    {
+      "name": "Procyon",
+      "weight": 0.8,
+      "flavor": [
+        "warm"
+      ]
+    },
+    {
+      "name": "Fomalhaut",
+      "weight": 0.7,
+      "flavor": [
+        "remote"
+      ]
+    },
+    {
+      "name": "Capella",
+      "weight": 0.8,
+      "flavor": [
+        "warm"
+      ]
+    },
+    {
+      "name": "Regulus",
+      "weight": 0.8,
+      "flavor": [
+        "royal"
+      ]
+    },
+    {
+      "name": "Spica",
+      "weight": 0.8,
+      "flavor": [
+        "bright"
+      ]
+    },
+    {
+      "name": "Canopus",
+      "weight": 0.8,
+      "flavor": [
+        "luminous"
+      ]
+    },
+    {
+      "name": "Bellatrix",
+      "weight": 0.7,
+      "flavor": [
+        "warlike"
+      ]
+    },
+    {
+      "name": "Algol",
+      "weight": 0.6,
+      "flavor": [
+        "ominous"
+      ]
+    },
+    {
+      "name": "Achernar",
+      "weight": 0.7,
+      "flavor": [
+        "remote"
+      ]
+    },
+    {
+      "name": "Alphard",
+      "weight": 0.6,
+      "flavor": [
+        "solitary"
+      ]
+    },
+    {
+      "name": "Thuban",
+      "weight": 0.6,
+      "flavor": [
+        "ancient"
+      ]
+    },
+    {
+      "name": "Rasalhague",
+      "weight": 0.6,
+      "flavor": [
+        "stellar"
+      ]
+    },
+    {
+      "name": "Mintaka",
+      "weight": 0.7,
+      "flavor": [
+        "stellar"
+      ]
+    },
+    {
+      "name": "Alnilam",
+      "weight": 0.7,
+      "flavor": [
+        "luminous"
+      ]
+    },
+    {
+      "name": "Shaula",
+      "weight": 0.6,
+      "flavor": [
+        "hostile"
+      ]
+    },
+    {
+      "name": "Kochab",
+      "weight": 0.6,
+      "flavor": [
+        "ancient"
+      ]
+    },
+    {
+      "name": "Schedar",
+      "weight": 0.6,
+      "flavor": [
+        "settled"
+      ]
+    },
+    {
+      "name": "Mirfak",
+      "weight": 0.7,
+      "flavor": [
+        "bright"
+      ]
+    },
+    {
+      "name": "Hadar",
+      "weight": 0.7,
+      "flavor": [
+        "luminous"
+      ]
+    },
+    {
+      "name": "Dubhe",
+      "weight": 0.6,
+      "flavor": [
+        "ancient"
+      ]
+    },
+    {
+      "name": "Nunki",
+      "weight": 0.5,
+      "flavor": [
+        "ancient"
+      ]
+    },
+    {
+      "name": "Saiph",
+      "weight": 0.7,
+      "flavor": [
+        "sharp"
+      ]
+    },
+    {
+      "name": "Elnath",
+      "weight": 0.6,
+      "flavor": [
+        "sharp"
+      ]
+    },
+    {
+      "name": "Alhena",
+      "weight": 0.6,
+      "flavor": [
+        "bright"
+      ]
+    },
+    {
+      "name": "Mira",
+      "weight": 0.6,
+      "flavor": [
+        "dying"
+      ]
+    },
+    {
+      "name": "Alcyone",
+      "weight": 0.7,
+      "flavor": [
+        "peaceful"
+      ]
+    },
+    {
+      "name": "Sabik",
+      "weight": 0.5,
+      "flavor": [
+        "stellar"
+      ]
+    },
+    {
+      "name": "Nashira",
+      "weight": 0.5,
+      "flavor": [
+        "peaceful"
+      ]
+    },
+    {
+      "name": "Tarazed",
+      "weight": 0.6,
+      "flavor": [
+        "luminous"
+      ]
+    },
+    {
+      "name": "Izar",
+      "weight": 0.6,
+      "flavor": [
+        "bright"
+      ]
+    },
+    {
+      "name": "Markab",
+      "weight": 0.6,
+      "flavor": [
+        "stellar"
+      ]
+    },
+    {
+      "name": "Enif",
+      "weight": 0.5,
+      "flavor": [
+        "remote"
+      ]
+    },
+    {
+      "name": "Diphda",
+      "weight": 0.5,
+      "flavor": [
+        "remote"
+      ]
+    },
+    {
+      "name": "Algieba",
+      "weight": 0.6,
+      "flavor": [
+        "warm"
       ]
     }
   ],

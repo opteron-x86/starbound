@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::io::{self, Write};
 
 use rand::rngs::StdRng;
+use rand::Rng;
 use rand::SeedableRng;
 use uuid::Uuid;
 
@@ -156,11 +157,60 @@ impl GameState {
         );
     }
 
-    /// Get all living NPCs at the player's current system.
+    /// Get all living NPCs at the player's current location.
+    /// If at system edge (no location), returns no NPCs.
     fn npcs_here(&self) -> Vec<&Npc> {
+        let loc_id = match self.journey.current_location {
+            Some(id) => id,
+            None => return vec![], // At system edge — no NPCs in open space.
+        };
+        self.galaxy.npcs.iter()
+            .filter(|n| {
+                n.home_system_id == self.journey.current_system
+                    && n.alive
+                    && n.home_location_id == Some(loc_id)
+            })
+            .collect()
+    }
+
+    /// Get all living NPCs in the current system (any location).
+    fn npcs_in_system(&self) -> Vec<&Npc> {
         self.galaxy.npcs.iter()
             .filter(|n| n.home_system_id == self.journey.current_system && n.alive)
             .collect()
+    }
+
+    /// Look up a location name by ID within the current system.
+    fn location_name(&self, loc_id: Uuid) -> &str {
+        self.current_system().locations.iter()
+            .find(|l| l.id == loc_id)
+            .map(|l| l.name.as_str())
+            .unwrap_or("Unknown")
+    }
+
+    /// Get the current location (if docked).
+    fn current_location(&self) -> Option<&Location> {
+        self.journey.current_location.and_then(|loc_id| {
+            self.current_system().locations.iter().find(|l| l.id == loc_id)
+        })
+    }
+
+    /// Get the economy at the current location.
+    fn current_economy(&self) -> Option<&SystemEconomy> {
+        self.current_location().and_then(|loc| loc.economy.as_ref())
+    }
+
+    /// Get the primary dockable location (highest infrastructure with docking).
+    fn primary_location(&self) -> Option<&Location> {
+        let sys = self.current_system();
+        sys.locations.iter()
+            .filter(|l| l.services.contains(&LocationService::Docking))
+            .max_by_key(|l| l.infrastructure)
+    }
+
+    /// Get the current location type as a string for encounter matching.
+    fn current_location_type_str(&self) -> Option<String> {
+        self.current_location().map(|l| l.location_type.category_str().to_string())
     }
 
     /// Find an NPC by ID (mutable access via index).
@@ -306,6 +356,7 @@ fn new_game(seed: u64) -> GameState {
             },
         },
         current_system: start_system.id,
+        current_location: None,
         time: Timestamp::zero(),
         resources: 500.0,
         mission: MissionState {
@@ -355,11 +406,32 @@ fn display_system_info(gs: &GameState) {
     println!("  Star: {}  |  Infrastructure: {}",
         sys.star_type, sys.infrastructure_level);
 
-    if !sys.planetary_bodies.is_empty() {
-        let body_names: Vec<&str> = sys.planetary_bodies.iter()
-            .map(|b| b.name.as_str())
+    if !sys.locations.is_empty() {
+        let dockable: Vec<&Location> = sys.locations.iter()
+            .filter(|l| l.discovered && !l.services.is_empty())
             .collect();
-        println!("  Bodies: {}", body_names.join(", "));
+        let scannable: Vec<&Location> = sys.locations.iter()
+            .filter(|l| l.discovered && l.services.is_empty())
+            .collect();
+        let hidden = sys.locations.iter().filter(|l| !l.discovered).count();
+
+        if !dockable.is_empty() {
+            println!();
+            for loc in &dockable {
+                let infra_str = if loc.infrastructure != InfrastructureLevel::None {
+                    format!(" [{}]", loc.infrastructure)
+                } else { String::new() };
+                println!("  · {} — {}{}", loc.name, loc.location_type, infra_str);
+            }
+        }
+        if !scannable.is_empty() {
+            for loc in &scannable {
+                println!("  · {} — {} (no docking)", loc.name, loc.location_type);
+            }
+        }
+        if hidden > 0 {
+            println!("  · {} unidentified signal{}", hidden, if hidden == 1 { "" } else { "s" });
+        }
     }
 
     if let Some(years) = gs.galactic_years_since_last_visit() {
@@ -401,23 +473,53 @@ fn display_system_info(gs: &GameState) {
         }
     }
 
-    // NPCs present at this system.
-    let npcs = gs.npcs_here();
-    if !npcs.is_empty() {
-        println!();
-        for npc in &npcs {
-            let faction_str = npc.faction_id
-                .map(|fid| gs.faction_name(fid).to_string())
-                .unwrap_or_else(|| "Independent".into());
-            println!("  {} — {} ({})", npc.name, npc.title, faction_str);
+    // NPCs — show those at current location when docked, or system overview.
+    if gs.journey.current_location.is_some() {
+        let npcs = gs.npcs_here();
+        if !npcs.is_empty() {
+            println!();
+            for npc in &npcs {
+                let faction_str = npc.faction_id
+                    .map(|fid| gs.faction_name(fid).to_string())
+                    .unwrap_or_else(|| "Independent".into());
+                println!("  {} — {} ({})", npc.name, npc.title, faction_str);
+            }
+        }
+    } else {
+        // At system edge — show overview of who's where.
+        let npcs = gs.npcs_in_system();
+        if !npcs.is_empty() {
+            println!();
+            for npc in &npcs {
+                let faction_str = npc.faction_id
+                    .map(|fid| gs.faction_name(fid).to_string())
+                    .unwrap_or_else(|| "Independent".into());
+                let loc_str = npc.home_location_id
+                    .map(|lid| gs.location_name(lid).to_string())
+                    .unwrap_or_else(|| "unknown".into());
+                println!("  {} — {} ({}, at {})", npc.name, npc.title, faction_str, loc_str);
+            }
         }
     }
 
-    // Economy summary — fuel and supply prices.
-    if let Some(ref econ) = sys.economy {
-        println!();
-        println!("  Fuel: {:.1} cr/unit  |  Supplies: {:.1} cr/unit",
-            econ.fuel_price, econ.supply_price);
+    // Economy summary — fuel and supply prices from the primary station.
+    if let Some(loc) = gs.primary_location() {
+        if let Some(ref econ) = loc.economy {
+            println!();
+            println!("  Fuel: {:.1} cr/unit  |  Supplies: {:.1} cr/unit  (at {})",
+                econ.fuel_price, econ.supply_price, loc.name);
+        }
+    }
+
+    // Show current location.
+    if let Some(loc) = gs.current_location() {
+        if loc.services.contains(&LocationService::Docking) {
+            println!("\n  Docked: {}", loc.name);
+        } else {
+            println!("\n  Orbiting: {}", loc.name);
+        }
+    } else {
+        println!("\n  Position: System edge");
     }
 }
 
@@ -884,26 +986,41 @@ fn display_intro(gs: &GameState) {
 fn game_loop(gs: &mut GameState) {
     display_intro(gs);
 
+    // Auto-dock at the start system's primary location.
+    if gs.journey.current_location.is_none() {
+        if let Some(loc) = gs.primary_location() {
+            gs.journey.current_location = Some(loc.id);
+        }
+    }
+
     loop {
         clear_screen();
         display_system_info(gs);
         display_ship_status(gs);
 
+        let is_docked = gs.journey.current_location.is_some();
+
         println!("\n  What do you do?");
-        println!("  1) Travel        2) Actions");
-        println!("  3) People        4) Contracts");
-        println!("  5) Crew          6) Mission");
-        println!("  7) Log           8) Threads");
-        println!("  9) Quit");
+        if is_docked {
+            println!("  1) Navigate      2) Actions");
+            println!("  3) People        4) Contracts");
+            println!("  5) Crew          6) Mission");
+            println!("  7) Log           8) Threads");
+            println!("  9) Quit");
+        } else {
+            println!("  1) Navigate      5) Crew");
+            println!("  6) Mission       7) Log");
+            println!("  8) Threads       9) Quit");
+        }
         println!();
 
         let choice = prompt("  > ");
 
         match choice.as_str() {
-            "1" | "travel" => travel_menu(gs),
-            "2" | "actions" | "act" => action_menu(gs),
-            "3" | "people" | "talk" => people_menu(gs),
-            "4" | "contracts" => display_contracts(gs),
+            "1" | "navigate" | "nav" => system_map(gs),
+            "2" | "actions" | "act" if is_docked => action_menu(gs),
+            "3" | "people" | "talk" if is_docked => people_menu(gs),
+            "4" | "contracts" if is_docked => display_contracts(gs),
             "5" | "crew" => {
                 display_crew_detail(gs);
                 pause();
@@ -930,42 +1047,310 @@ fn game_loop(gs: &mut GameState) {
 }
 
 // ---------------------------------------------------------------------------
+// System map — intra-system navigation
+// ---------------------------------------------------------------------------
+
+fn system_map(gs: &mut GameState) {
+    loop {
+        clear_screen();
+        let sys = gs.current_system();
+        display_header(&format!("{} — System Map", sys.name));
+
+        let current_dist = gs.current_location()
+            .map(|l| l.orbital_distance)
+            .unwrap_or(0.0); // system edge = 0 AU
+
+        let current_loc_name = gs.current_location()
+            .map(|l| l.name.clone())
+            .unwrap_or_else(|| "System edge".into());
+
+        println!("\n  Current position: {} ({:.1} AU)", current_loc_name, current_dist);
+        println!();
+
+        // List all discovered locations.
+        let sys = gs.current_system();
+        let mut locs: Vec<&Location> = sys.locations.iter()
+            .filter(|l| l.discovered)
+            .collect();
+        locs.sort_by(|a, b| a.orbital_distance.partial_cmp(&b.orbital_distance).unwrap());
+
+        for (i, loc) in locs.iter().enumerate() {
+            let dist = (loc.orbital_distance - current_dist).abs();
+            let travel_hours = dist * 12.0;
+            let is_here = gs.journey.current_location == Some(loc.id);
+
+            let services_str = if loc.services.is_empty() {
+                "no services".into()
+            } else {
+                loc.services.iter()
+                    .map(|s| format!("{}", s))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+
+            if is_here {
+                let here_label = if loc.services.contains(&LocationService::Docking) {
+                    "DOCKED"
+                } else {
+                    "ORBITING"
+                };
+                println!("  {}) {} — {} [{}]", i + 1, loc.name, loc.location_type, here_label);
+                println!("     {}", services_str);
+            } else {
+                let time_str = if travel_hours < 1.0 {
+                    "< 1 hour".into()
+                } else if travel_hours < 24.0 {
+                    format!("{:.0} hours", travel_hours)
+                } else {
+                    format!("{:.1} days", travel_hours / 24.0)
+                };
+                println!("  {}) {} — {} ({:.1} AU, {})",
+                    i + 1, loc.name, loc.location_type, loc.orbital_distance, time_str);
+                println!("     {}", services_str);
+            }
+        }
+
+        // Hidden locations.
+        let hidden_count = sys.locations.iter().filter(|l| !l.discovered).count();
+        if hidden_count > 0 {
+            println!("\n  {} unidentified signal{} detected",
+                hidden_count, if hidden_count == 1 { "" } else { "s" });
+        }
+
+        println!();
+        if hidden_count > 0 {
+            println!("  s) Scan system (reveal hidden locations)");
+        }
+        println!("  j) FTL Jump (leave system)");
+        println!("  0) Back");
+        println!();
+
+        let input = prompt("  > ");
+        let input = input.trim().to_lowercase();
+
+        if input == "0" || input == "back" {
+            return;
+        }
+
+        if input == "j" || input == "jump" || input == "ftl" {
+            travel_menu(gs);
+            return;
+        }
+
+        if input == "s" || input == "scan" {
+            run_system_scan(gs);
+            continue;
+        }
+
+        // Navigate to a location.
+        if let Ok(idx) = input.parse::<usize>() {
+            if idx >= 1 && idx <= locs.len() {
+                let target_id = locs[idx - 1].id;
+
+                if gs.journey.current_location == Some(target_id) {
+                    println!("  You're already here.");
+                    pause();
+                    continue;
+                }
+
+                navigate_to_location(gs, target_id, current_dist);
+                return;
+            }
+        }
+    }
+}
+
+/// Sublight travel to a location within the current system.
+/// Costs personal time and supplies. Fires an encounter on arrival.
+fn navigate_to_location(gs: &mut GameState, target_id: Uuid, from_dist: f32) {
+    // Snapshot target info before borrowing gs mutably.
+    let (target_name, target_desc, target_dist, can_dock) = {
+        let sys = gs.current_system();
+        let target = sys.locations.iter().find(|l| l.id == target_id)
+            .expect("Target location should exist");
+        (
+            target.name.clone(),
+            target.description.clone(),
+            target.orbital_distance,
+            target.services.contains(&LocationService::Docking),
+        )
+    };
+
+    let dist = (target_dist - from_dist).abs();
+    let travel_hours = dist * 12.0;
+    let travel_days = travel_hours / 24.0;
+
+    // Apply time costs.
+    gs.journey.time.personal_days += travel_days as f64;
+    let sys_tf = gs.current_system().time_factor;
+    gs.journey.time.galactic_days += travel_days as f64 * sys_tf;
+
+    // Supply consumption during transit.
+    let crew_count = gs.journey.crew.len() as f32;
+    let supply_cost = crew_count * 0.1 * travel_days;
+    gs.journey.ship.supplies = (gs.journey.ship.supplies - supply_cost).max(0.0);
+
+    // Transit narrative.
+    clear_screen();
+    display_header("Sublight Transit");
+    println!();
+
+    if travel_hours < 1.0 {
+        println!("  Short burn to {}.", target_name);
+    } else if travel_hours < 24.0 {
+        println!("  {:.0} hours at sublight to {}.", travel_hours, target_name);
+    } else {
+        println!("  {:.1} days at sublight to {}.", travel_days, target_name);
+    }
+    println!();
+
+    for line in wrap_text(&target_desc, 60) {
+        println!("  {}", line);
+    }
+
+    // Set location.
+    gs.journey.current_location = Some(target_id);
+
+    if can_dock {
+        println!("\n  Docked at {}.", target_name);
+    } else {
+        println!("\n  Entering orbit around {}.", target_name);
+    }
+
+    // Check contract progress at this location.
+    check_contract_progress(gs);
+
+    pause();
+
+    // --- Fire encounter pipeline on location arrival ---
+    let system = gs.current_system().clone();
+    let years_since = gs.galactic_years_since_last_visit();
+    let loc_type = gs.current_location_type_str();
+
+    let result = run_pipeline(
+        &gs.events, &system, &gs.journey, years_since,
+        &gs.pipeline_state, &gs.pipeline_config, &mut gs.rng,
+        None,
+        loc_type.as_deref(),
+    );
+
+    match result {
+        PipelineResult::Event { event, .. } => {
+            let event = event.clone();
+            run_encounter_chain(gs, &event);
+        }
+        PipelineResult::Silence { .. } => {
+            gs.pipeline_state.record_silence();
+            // No message on silence at a location — the description was enough.
+        }
+    }
+}
+
+/// Scan the system to reveal hidden locations.
+fn run_system_scan(gs: &mut GameState) {
+    clear_screen();
+    display_header("System Scan");
+    println!();
+
+    // Scan costs a small amount of time.
+    gs.journey.time.personal_days += 0.1; // ~2.4 hours
+    let sys_tf = gs.current_system().time_factor;
+    gs.journey.time.galactic_days += 0.1 * sys_tf;
+
+    // Sensor condition affects scan quality.
+    let sensor_cond = gs.journey.ship.modules.sensors.condition;
+
+    let sys_id = gs.journey.current_system;
+    let system = gs.galaxy.systems.iter_mut()
+        .find(|s| s.id == sys_id)
+        .expect("Current system should exist");
+
+    let mut revealed = Vec::new();
+    for loc in &mut system.locations {
+        if !loc.discovered {
+            // Higher sensor condition = higher chance of revealing.
+            // Base 60% + 30% from sensors = 90% at full condition.
+            let chance = 0.6 + sensor_cond as f64 * 0.3;
+            let roll: f64 = gs.rng.gen();
+            if roll < chance {
+                loc.discovered = true;
+                revealed.push(loc.name.clone());
+            }
+        }
+    }
+
+    if revealed.is_empty() {
+        let hidden_remaining = system.locations.iter().filter(|l| !l.discovered).count();
+        if hidden_remaining > 0 {
+            println!("  Sensors sweep the system... nothing new resolves.");
+            println!("  {} signal{} remain unresolved.",
+                hidden_remaining, if hidden_remaining == 1 { "" } else { "s" });
+            if sensor_cond < 0.5 {
+                println!("\n  Sensor array at {:.0}% — degraded scans may be missing contacts.",
+                    sensor_cond * 100.0);
+            }
+        } else {
+            println!("  Sensors report all contacts mapped. No new signals.");
+        }
+    } else {
+        println!("  Sensors sweep the system...\n");
+        for name in &revealed {
+            println!("  ▸ New contact resolved: {}", name);
+        }
+        let hidden_remaining = system.locations.iter().filter(|l| !l.discovered).count();
+        if hidden_remaining > 0 {
+            println!("\n  {} signal{} still unresolved.",
+                hidden_remaining, if hidden_remaining == 1 { "" } else { "s" });
+        }
+    }
+
+    // Fire a scan encounter (for events like "your scan attracts attention").
+    let system_clone = gs.current_system().clone();
+    let years_since = gs.galactic_years_since_last_visit();
+    let loc_type = gs.current_location_type_str();
+    let result = run_pipeline(
+        &gs.events, &system_clone, &gs.journey, years_since,
+        &gs.pipeline_state, &gs.pipeline_config, &mut gs.rng,
+        Some(PlayerIntent::Scan),
+        loc_type.as_deref(),
+    );
+
+    match result {
+        PipelineResult::Event { event, .. } => {
+            let event = event.clone();
+            println!();
+            run_encounter_chain(gs, &event);
+        }
+        PipelineResult::Silence { .. } => {
+            gs.pipeline_state.record_silence();
+        }
+    }
+
+    pause();
+}
+
+// ---------------------------------------------------------------------------
 // Action menu — player-initiated encounters
 // ---------------------------------------------------------------------------
 
-/// Determine which actions are available at the current system.
+/// Determine which actions are available at the current location.
 fn available_actions(gs: &GameState) -> Vec<PlayerIntent> {
-    let system = gs.current_system();
     let mut actions = Vec::new();
 
-    // Scan is always available — you can always point your sensors at something.
-    actions.push(PlayerIntent::Scan);
-
-    // Investigate is always available — curiosity doesn't need infrastructure.
+    // Investigate is always available — examine what's at this location.
     actions.push(PlayerIntent::Investigate);
 
-    // Trade requires at least an outpost.
-    let infra_rank = match system.infrastructure_level {
-        starbound_core::galaxy::InfrastructureLevel::None => 0,
-        starbound_core::galaxy::InfrastructureLevel::Outpost => 1,
-        starbound_core::galaxy::InfrastructureLevel::Colony => 2,
-        starbound_core::galaxy::InfrastructureLevel::Established => 3,
-        starbound_core::galaxy::InfrastructureLevel::Hub => 4,
-        starbound_core::galaxy::InfrastructureLevel::Capital => 5,
-    };
-
-    if infra_rank >= 1 {
-        actions.push(PlayerIntent::Trade);
-    }
-
-    // Repair requires at least an outpost.
-    if infra_rank >= 1 {
-        actions.push(PlayerIntent::Repair);
-    }
-
-    // Resupply requires at least an outpost.
-    if infra_rank >= 1 {
-        actions.push(PlayerIntent::Resupply);
+    // Other actions depend on the current location's services.
+    if let Some(loc) = gs.current_location() {
+        if loc.services.contains(&LocationService::Trade) {
+            actions.push(PlayerIntent::Trade);
+        }
+        if loc.services.contains(&LocationService::Repair) {
+            actions.push(PlayerIntent::Repair);
+        }
+        if loc.services.contains(&LocationService::Refuel) || loc.services.contains(&LocationService::Trade) {
+            actions.push(PlayerIntent::Resupply);
+        }
     }
 
     actions
@@ -1011,10 +1396,10 @@ fn action_menu(gs: &mut GameState) {
 // ---------------------------------------------------------------------------
 
 fn trade_screen(gs: &mut GameState) {
-    let economy = match gs.current_system().economy.clone() {
+    let economy = match gs.current_economy().cloned() {
         Some(e) => e,
         None => {
-            println!("\n  No trade facilities here.");
+            println!("\n  No trade facilities at this location.");
             pause();
             return;
         }
@@ -1312,10 +1697,10 @@ fn match_trade_good(name: &str) -> Option<TradeGood> {
 // ---------------------------------------------------------------------------
 
 fn resupply_screen(gs: &mut GameState) {
-    let economy = match gs.current_system().economy.clone() {
+    let economy = match gs.current_economy().cloned() {
         Some(e) => e,
         None => {
-            println!("\n  No resupply facilities here.");
+            println!("\n  No resupply facilities at this location.");
             pause();
             return;
         }
@@ -1374,7 +1759,9 @@ fn resupply_screen(gs: &mut GameState) {
 // ---------------------------------------------------------------------------
 
 fn repair_screen(gs: &mut GameState) {
-    let infra = gs.current_system().infrastructure_level;
+    let infra = gs.current_location()
+        .map(|l| l.infrastructure)
+        .unwrap_or(InfrastructureLevel::None);
     let infra_rank = match infra {
         InfrastructureLevel::None => { println!("  No repair facilities."); pause(); return; }
         InfrastructureLevel::Outpost => 1,
@@ -1526,11 +1913,13 @@ fn repair_screen(gs: &mut GameState) {
 fn run_intent_encounter(gs: &mut GameState, intent: PlayerIntent) {
     let system = gs.current_system().clone();
     let years_since = gs.galactic_years_since_last_visit();
+    let loc_type = gs.current_location_type_str();
 
     let result = run_pipeline(
         &gs.events, &system, &gs.journey, years_since,
         &gs.pipeline_state, &gs.pipeline_config, &mut gs.rng,
         Some(intent),
+        loc_type.as_deref(),
     );
 
     match result {
@@ -1733,8 +2122,18 @@ fn offer_contracts(gs: &mut GameState, npc_idx: usize) {
     }
     println!();
 
-    let dest_name = gs.system_name(contract.destination_system_id).to_string();
-    println!("  Destination: {}", dest_name);
+    let dest_sys_name = gs.system_name(contract.destination_system_id).to_string();
+    let dest_display = if let Some(loc_id) = contract.destination_location_id {
+        let loc_name = gs.galaxy.systems.iter()
+            .find(|s| s.id == contract.destination_system_id)
+            .and_then(|s| s.locations.iter().find(|l| l.id == loc_id))
+            .map(|l| l.name.as_str())
+            .unwrap_or("unknown");
+        format!("{} ({} system)", loc_name, dest_sys_name)
+    } else {
+        dest_sys_name
+    };
+    println!("  Destination: {}", dest_display);
     println!("  Reward: {:.0} credits", contract.reward_credits);
     if let Some((ref cargo, qty)) = contract.cargo_given {
         println!("  Cargo provided: {} x{}", cargo, qty);
@@ -1793,8 +2192,20 @@ fn generate_contract_for_npc(gs: &GameState, npc_idx: usize) -> Option<Contract>
     // Pick a connected system as destination (deterministic from NPC id).
     let conn_idx = (npc.id.as_u128() as usize) % connections.len();
     let conn = &connections[conn_idx];
-    let dest_id = if conn.system_a == home_id { conn.system_b } else { conn.system_a };
-    let dest_name = gs.system_name(dest_id);
+    let dest_sys_id = if conn.system_a == home_id { conn.system_b } else { conn.system_a };
+    let dest_sys_name = gs.system_name(dest_sys_id);
+
+    // Find the primary dockable location at the destination for delivery.
+    let dest_system = gs.galaxy.systems.iter().find(|s| s.id == dest_sys_id);
+    let dest_location = dest_system.and_then(|sys| {
+        sys.locations.iter()
+            .filter(|l| l.services.contains(&LocationService::Docking))
+            .max_by_key(|l| l.infrastructure)
+    });
+    let dest_loc_id = dest_location.map(|l| l.id);
+    let dest_loc_name = dest_location
+        .map(|l| l.name.as_str())
+        .unwrap_or(dest_sys_name);
 
     // Generate based on faction category.
     let category = npc.faction_id
@@ -1803,72 +2214,72 @@ fn generate_contract_for_npc(gs: &GameState, npc_idx: usize) -> Option<Contract>
 
     let (title, desc, cargo_name, cargo_qty, reward) = match category {
         Some(FactionCategory::Guild) => (
-            format!("Deliver repair components to {}", dest_name),
+            format!("Deliver repair components to {}", dest_loc_name),
             format!(
                 "\"We've got a maintenance backlog at {}. \
                  Standard repair components — nothing exotic, but they \
                  need them yesterday. Deliver, get the dock master to sign off, \
                  and come back for your pay.\"",
-                dest_name
+                dest_loc_name
             ),
             "Repair components",
             8,
             200.0,
         ),
         Some(FactionCategory::Military) => (
-            format!("Transport sealed cargo to {}", dest_name),
+            format!("Transport sealed cargo to {}", dest_loc_name),
             format!(
                 "\"Military business. Sealed containers, don't ask what's inside. \
                  Take them to {} garrison, hand them over, bring back the receipt. \
                  Standard courier rate.\"",
-                dest_name
+                dest_loc_name
             ),
             "Sealed military cargo",
             5,
             250.0,
         ),
         Some(FactionCategory::Economic) => (
-            format!("Supply run to {}", dest_name),
+            format!("Supply run to {}", dest_loc_name),
             format!(
                 "\"The market at {} is running short on manufactured goods. \
                  We've got a shipment ready to go. Deliver it, collect payment \
                  on delivery, and bring back our cut.\"",
-                dest_name
+                dest_loc_name
             ),
             "Manufactured goods",
             12,
             180.0,
         ),
         Some(FactionCategory::Criminal) => (
-            format!("Discreet delivery to {}", dest_name),
+            format!("Discreet delivery to {}", dest_sys_name),
             format!(
                 "\"I've got a package. It needs to get to {} without anyone \
                  asking questions. No manifests, no declarations. \
                  You handle it clean, I make it worth your while.\"",
-                dest_name
+                dest_sys_name
             ),
             "Unmarked cargo",
             3,
             300.0,
         ),
         Some(FactionCategory::Religious) => (
-            format!("Deliver relics to {}", dest_name),
+            format!("Deliver relics to {}", dest_loc_name),
             format!(
                 "\"These artifacts need to reach the monastery at {}. \
                  They're delicate — not physically, but... spiritually. \
                  Handle them with respect. The Order will remember your service.\"",
-                dest_name
+                dest_loc_name
             ),
             "Religious artifacts",
             4,
             150.0,
         ),
         _ => (
-            format!("Courier run to {}", dest_name),
+            format!("Courier run to {}", dest_loc_name),
             format!(
                 "\"Standard job. Take this cargo to {}, hand it off, \
                  come back with confirmation. Simple work, fair pay.\"",
-                dest_name
+                dest_loc_name
             ),
             "General cargo",
             6,
@@ -1876,17 +2287,20 @@ fn generate_contract_for_npc(gs: &GameState, npc_idx: usize) -> Option<Contract>
         ),
     };
 
-    Some(Contract::delivery(
+    let mut contract = Contract::delivery(
         npc.id,
         npc.faction_id,
         title,
         desc,
         home_id,
-        dest_id,
+        dest_sys_id,
         cargo_name,
         cargo_qty,
         reward,
-    ))
+    );
+    contract.destination_location_id = dest_loc_id;
+
+    Some(contract)
 }
 
 fn turn_in_contract(gs: &mut GameState, npc_idx: usize) {
@@ -1960,14 +2374,27 @@ fn display_contracts(gs: &GameState) {
     if !active.is_empty() {
         println!();
         for contract in &active {
-            let dest = gs.system_name(contract.destination_system_id);
-            let origin = gs.system_name(contract.origin_system_id);
+            let dest_sys = gs.system_name(contract.destination_system_id);
+            let origin_sys = gs.system_name(contract.origin_system_id);
+
+            // Build destination string with location if known.
+            let dest_str = if let Some(loc_id) = contract.destination_location_id {
+                let loc_name = gs.galaxy.systems.iter()
+                    .find(|s| s.id == contract.destination_system_id)
+                    .and_then(|s| s.locations.iter().find(|l| l.id == loc_id))
+                    .map(|l| l.name.as_str())
+                    .unwrap_or("unknown location");
+                format!("{} ({} system)", loc_name, dest_sys)
+            } else {
+                dest_sys.to_string()
+            };
+
             let status = match contract.state {
                 ContractState::Active => {
-                    format!("Deliver to {} — then return to {}", dest, origin)
+                    format!("Deliver to {} — then return to {}", dest_str, origin_sys)
                 }
                 ContractState::ReadyToComplete => {
-                    format!("Return to {} to collect payment", origin)
+                    format!("Return to {} to collect payment", origin_sys)
                 }
                 _ => "Unknown".into(),
             };
@@ -1999,6 +2426,7 @@ fn display_contracts(gs: &GameState) {
 /// Call this on arrival at a new system.
 fn check_contract_progress(gs: &mut GameState) {
     let current_system = gs.journey.current_system;
+    let current_location = gs.journey.current_location;
     let mut messages: Vec<String> = Vec::new();
 
     for contract in &mut gs.journey.active_contracts {
@@ -2008,25 +2436,32 @@ fn check_contract_progress(gs: &mut GameState) {
 
         match contract.contract_type {
             ContractType::Delivery => {
-                // Delivery: arrived at destination with the cargo?
-                if contract.destination_system_id == current_system {
-                    if let Some((ref cargo_name, qty)) = contract.cargo_required {
-                        let held = gs.journey.ship.cargo.get(cargo_name).copied().unwrap_or(0);
-                        if held >= qty {
-                            // Remove the cargo.
-                            let remaining = held - qty;
-                            if remaining == 0 {
-                                gs.journey.ship.cargo.remove(cargo_name);
-                            } else {
-                                gs.journey.ship.cargo.insert(cargo_name.clone(), remaining);
-                            }
-                            contract.state = ContractState::ReadyToComplete;
-                            messages.push(format!(
-                                "Contract objective complete: {}. Delivered {} x{}. \
-                                 Return to the contract issuer to collect payment.",
-                                contract.title, cargo_name, qty,
-                            ));
+                // Must be at the right system.
+                if contract.destination_system_id != current_system {
+                    continue;
+                }
+                // If contract specifies a location, must be at that location.
+                if let Some(dest_loc) = contract.destination_location_id {
+                    if current_location != Some(dest_loc) {
+                        continue;
+                    }
+                }
+                // Check cargo.
+                if let Some((ref cargo_name, qty)) = contract.cargo_required {
+                    let held = gs.journey.ship.cargo.get(cargo_name).copied().unwrap_or(0);
+                    if held >= qty {
+                        let remaining = held - qty;
+                        if remaining == 0 {
+                            gs.journey.ship.cargo.remove(cargo_name);
+                        } else {
+                            gs.journey.ship.cargo.insert(cargo_name.clone(), remaining);
                         }
+                        contract.state = ContractState::ReadyToComplete;
+                        messages.push(format!(
+                            "Contract objective complete: {}. Delivered {} x{}. \
+                             Return to the contract issuer to collect payment.",
+                            contract.title, cargo_name, qty,
+                        ));
                     }
                 }
             }
@@ -2168,6 +2603,9 @@ fn execute_travel_and_arrive(gs: &mut GameState, plan: &TravelPlan, dest_name: &
     // Record visit.
     gs.record_visit();
 
+    // Player arrives at system edge — not yet docked.
+    gs.journey.current_location = None;
+
     // Check if any active contracts advance at this system.
     check_contract_progress(gs);
 
@@ -2179,36 +2617,14 @@ fn execute_travel_and_arrive(gs: &mut GameState, plan: &TravelPlan, dest_name: &
         }
     }
 
-    // Run encounter pipeline.
-    let system = gs.current_system().clone();
-    let years_since = gs.galactic_years_since_last_visit();
+    // Show arrival summary.
+    clear_screen();
+    display_header(&format!("Arriving at {}", dest_name));
+    display_system_info(gs);
+    pause();
 
-    let result = run_pipeline(
-        &gs.events, &system, &gs.journey, years_since,
-        &gs.pipeline_state, &gs.pipeline_config, &mut gs.rng,
-        None,
-    );
-
-    match result {
-        PipelineResult::Event { event, .. } => {
-            let event = event.clone();
-            run_encounter_chain(gs, &event);
-        }
-        PipelineResult::Silence { .. } => {
-            gs.pipeline_state.record_silence();
-
-            clear_screen();
-            display_header(dest_name);
-            println!();
-            for line in wrap_text(
-                "Nothing demands your attention. The system is quiet. \
-                 Your crew goes about their routines. The ship hums. \
-                 Outside, stars burn with indifference.", 60,
-            ) { println!("  {}", line); }
-
-            pause();
-        }
-    }   
+    // Open system map so player can pick where to go.
+    system_map(gs);
 }
 
 // ---------------------------------------------------------------------------

@@ -23,6 +23,8 @@ pub struct MatchContext<'a> {
     pub journey: &'a Journey,
     /// Galactic years since the player last visited this system (None if first visit).
     pub galactic_years_since_last_visit: Option<f64>,
+    /// The type of location the player is currently at (None if at system edge).
+    pub location_type: Option<String>,
 }
 
 /// Filter seed events to those whose requirements match the current context.
@@ -187,6 +189,21 @@ fn requirements_met(req: &ContextRequirements, ctx: &MatchContext) -> bool {
         }
     }
 
+    // Location type filter.
+    if !req.location_types.is_empty() {
+        match &ctx.location_type {
+            Some(loc_type) => {
+                if !req.location_types.iter().any(|lt| lt == loc_type) {
+                    return false;
+                }
+            }
+            None => {
+                // At system edge — location-specific events don't fire here.
+                return false;
+            }
+        }
+    }
+
     true
 }
 
@@ -208,6 +225,7 @@ fn specificity(req: &ContextRequirements) -> usize {
     if req.faction_min_strength.is_some() { score += 1; }
     if req.faction_max_visibility.is_some() { score += 1; }
     if req.time_factor_min.is_some() { score += 2; }
+    if !req.location_types.is_empty() { score += 2; } // Location-specific events are highly targeted.
     score
 }
 
@@ -252,14 +270,13 @@ mod tests {
             name: "Test System".into(),
             position: (0.0, 0.0),
             star_type: StarType::YellowDwarf,
-            planetary_bodies: vec![],
+            locations: vec![],
             controlling_civ: faction,
             infrastructure_level: infra,
             history: vec![],
             active_threads: vec![],
             time_factor: 1.0,
             faction_presence: vec![],
-            economy: None,
         }
     }
 
@@ -334,6 +351,7 @@ mod tests {
             civ_standings: HashMap::new(),
             profile: PlayerProfile::new(),
             active_contracts: vec![],
+            current_location: None,
         }
     }
 
@@ -350,6 +368,7 @@ mod tests {
             system: &system,
             journey: &journey,
             galactic_years_since_last_visit: None,
+            location_type: Some("station".into()),
         };
 
         let matched = match_events(&events, &ctx);
@@ -367,6 +386,7 @@ mod tests {
             system: &system,
             journey: &journey,
             galactic_years_since_last_visit: None,
+            location_type: None,
         };
 
         let matched = match_events(&events, &ctx);
@@ -383,6 +403,7 @@ mod tests {
         let ctx = MatchContext {
             system: &system,
             journey: &journey,
+            location_type: Some("planet_surface".into()),
             galactic_years_since_last_visit: Some(80.0),
         };
 
@@ -400,6 +421,7 @@ mod tests {
         let ctx = MatchContext {
             system: &system,
             journey: &journey,
+            location_type: None,
             galactic_years_since_last_visit: Some(60.0),
         };
 
@@ -423,6 +445,7 @@ mod tests {
             system: &system,
             journey: &journey,
             galactic_years_since_last_visit: None,
+            location_type: None,
         };
 
         let matched = match_events(&events, &ctx);
@@ -454,6 +477,7 @@ mod tests {
             system: &system,
             journey: &journey,
             galactic_years_since_last_visit: None,
+            location_type: Some("station".into()),
         };
 
         let matched = match_events(&events, &ctx);
@@ -472,6 +496,7 @@ mod tests {
             system: &system,
             journey: &journey,
             galactic_years_since_last_visit: None,
+            location_type: None,
         };
 
         let matched = match_events(&events, &ctx);
@@ -501,6 +526,7 @@ mod tests {
             system: &system,
             journey: &journey,
             galactic_years_since_last_visit: None,
+            location_type: Some("station".into()),
         };
 
         let matched = match_events(&events, &ctx);
@@ -529,6 +555,7 @@ mod tests {
             system: &normal,
             journey: &journey,
             galactic_years_since_last_visit: None,
+            location_type: None,
         };
 
         let matched = match_events(&events, &ctx);
@@ -552,6 +579,7 @@ mod tests {
             system: &distorted,
             journey: &journey,
             galactic_years_since_last_visit: None,
+            location_type: Some("deep_space".into()),
         };
 
         let matched2 = match_events(&events, &ctx2);
@@ -579,6 +607,7 @@ mod tests {
             system: &system,
             journey: &journey,
             galactic_years_since_last_visit: None,
+            location_type: None,
         };
 
         let matched = match_events(&events, &ctx);
@@ -613,6 +642,7 @@ mod tests {
             system: &system,
             journey: &journey,
             galactic_years_since_last_visit: None,
+            location_type: None,
         };
 
         let matched = match_events(&events, &ctx);

@@ -21,6 +21,10 @@ pub struct Journey {
     pub ship: Ship,
     /// Which system the player is currently in.
     pub current_system: Uuid,
+    /// Which location within the system the player is at.
+    /// None means at the system edge (just arrived, or in sublight transit).
+    #[serde(default)]
+    pub current_location: Option<Uuid>,
     /// The dual timeline — personal and galactic time elapsed.
     pub time: Timestamp,
     /// Generic resource units (credits, trade goods, etc.).

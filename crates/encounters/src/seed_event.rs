@@ -83,6 +83,17 @@ pub struct ContextRequirements {
     /// The system's time distortion factor must be at least this value.
     /// Used for encounters tied to anomalous spacetime.
     pub time_factor_min: Option<f64>,
+
+    // -------------------------------------------------------------------
+    // Location type requirements (intra-system navigation)
+    // -------------------------------------------------------------------
+
+    /// Location types where this event can fire.
+    /// Empty = fires anywhere. Non-empty = only at these location types.
+    /// Uses LocationType category strings: "station", "planet_surface",
+    /// "moon", "asteroid_belt", "deep_space", "megastructure".
+    #[serde(default)]
+    pub location_types: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------

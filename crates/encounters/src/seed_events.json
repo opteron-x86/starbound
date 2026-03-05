@@ -5,7 +5,10 @@
     "tone": "melancholy",
     "context_requirements": {
       "infrastructure_min": "outpost",
-      "time_since_last_visit_galactic_years_min": 20.0
+      "time_since_last_visit_galactic_years_min": 20.0,
+      "location_types": [
+        "station"
+      ]
     },
     "text": "The docking clamps engage with a sound you almost remember. The station looks the same from outside \u2014 same silhouette against the starfield, same running lights cycling through their pattern. But the frequency is different. Someone changed the timing.\n\nInside, the corridors have been repainted. The old murals are gone, covered by something cleaner and less interesting. A directory board lists businesses you don't recognize. The air recyclers have a different smell \u2014 not unpleasant, just not the one you knew.\n\nA maintenance worker glances at your ship registry, then at you, then back at the registry. She doesn't say anything. She just nods, slowly, and goes back to her work.\n\nYou're listed in the station's historical records, probably. A name from before she was born.",
     "choices": [
@@ -76,7 +79,12 @@
     "id": "distress_signal",
     "encounter_type": "novel",
     "tone": "tense",
-    "context_requirements": {},
+    "context_requirements": {
+      "location_types": [
+        "deep_space",
+        "asteroid_belt"
+      ]
+    },
     "text": "Your comms officer adjusts her console twice before saying anything.\n\n\"Signal. Automated distress beacon, standard Hegemony format. But the encoding is... old. This protocol was deprecated decades ago.\"\n\nThe signal resolves into coordinates \u2014 a point in the outer system, near the gas giant's third moon. No ship appears on sensors. Just the signal, repeating patiently in a language nobody uses anymore.\n\nIt could be a ship that's been drifting since before you left your last port. It could be a lure. It could be someone who's been waiting a very long time for help that was never coming.",
     "choices": [
       {
@@ -138,7 +146,10 @@
     "encounter_type": "mundane",
     "tone": "mundane",
     "context_requirements": {
-      "infrastructure_min": "colony"
+      "infrastructure_min": "colony",
+      "location_types": [
+        "station"
+      ]
     },
     "text": "A freighter captain catches you at the docking bay airlock. She's got the look of someone who's been waiting for any ship to pull in \u2014 tired, caffeinated, leaning against a cargo loader like it's the only thing keeping her upright.\n\n\"You heading rimward? I've got medical supplies that were supposed to go to Thornfield three months ago. Contractor fell through. I can't make the run myself \u2014 engine coil's shot. Pay's decent. Nothing fancy, just getting boxes from here to there.\"\n\nShe slides a manifest across. Standard pharmaceuticals, sealed crates. The kind of cargo that's straightforward until it isn't.",
     "choices": [
@@ -335,6 +346,10 @@
       "infrastructure_max": "outpost",
       "tags": [
         "ancient"
+      ],
+      "location_types": [
+        "deep_space",
+        "planet_surface"
       ]
     },
     "text": "It doesn't show up on sensors until you're almost on top of it.\n\nA structure, orbiting the outermost planet at a distance that shouldn't be stable. No power readings. No heat signature. But it's there \u2014 angular, enormous, made of something your sensors can't identify. The material doesn't reflect light the way anything should. It's like looking at a hole in the shape of architecture.\n\nYour science officer pulls up comparative databases and comes back with nothing. No known civilization has built with this material. No record of this structure in any survey.\n\nIt's been here longer than anyone has been looking.\n\nThe crew is quiet. Everyone finds a reason to be near a viewport.",
@@ -423,7 +438,10 @@
     "tone": "tense",
     "context_requirements": {
       "faction_controlled": true,
-      "infrastructure_min": "colony"
+      "infrastructure_min": "colony",
+      "location_types": [
+        "station"
+      ]
     },
     "text": "Two {faction.name} patrol ships slide into formation around you before your comms officer can even open a channel.\n\n\"Vessel, you are entering controlled space. Transmit registration, cargo manifest, and crew roster. Do not deviate from your current heading.\"\n\nThe voice is professional but flat \u2014 someone who says this sentence forty times a shift. Your ship's registration is valid, probably. Your cargo is legal, mostly. Your crew roster is accurate, as far as anyone knows.\n\nThe patrol ships match your speed exactly. Patient. Unhurried. They have nowhere else to be.",
     "choices": [
@@ -481,7 +499,12 @@
     "id": "derelict_encounter",
     "encounter_type": "novel",
     "tone": "melancholy",
-    "context_requirements": {},
+    "context_requirements": {
+      "location_types": [
+        "deep_space",
+        "asteroid_belt"
+      ]
+    },
     "text": "The ship is dead. No power, no atmosphere, turning slowly end over end in a decaying orbit. Your sensors read the hull markings \u2014 a freighter, civilian registration, last port of call unknown.\n\nThe damage isn't weapons fire. It's neglect. Systems failed one by one over what looks like months. The logs, if any survived, might tell the story. Or they might just be a list of things that stopped working, ending mid-sentence.\n\nSomeone lived here once. Flew this ship, ate meals in that galley, slept in those quarters. Chose a heading and opened the throttle and believed they were going somewhere that mattered.\n\nYour engineer says it might have salvageable parts. Your navigator says nothing.",
     "choices": [
       {
@@ -547,7 +570,10 @@
     "encounter_type": "mundane",
     "tone": "mundane",
     "context_requirements": {
-      "infrastructure_min": "hub"
+      "infrastructure_min": "hub",
+      "location_types": [
+        "station"
+      ]
     },
     "text": "The station is alive with traffic. Cargo haulers queue for docking clearance. Merchants argue prices in three languages over open channels. A food vendor has set up a stall in the docking bay concourse, and the smell of something fried and heavily spiced cuts through the recycled air.\n\nYour quartermaster is already compiling a shopping list. Your engineer is scanning the parts vendors. Someone on the crew \u2014 you're not sure who \u2014 has already left the ship.\n\nFor a few hours, the universe feels small and human and manageable. There are prices and schedules and people complaining about the docking fees. It's almost like being somewhere normal.",
     "choices": [
@@ -900,7 +926,11 @@
     "tone": "melancholy",
     "context_requirements": {
       "infrastructure_min": "outpost",
-      "infrastructure_max": "colony"
+      "infrastructure_max": "colony",
+      "location_types": [
+        "planet_surface",
+        "moon"
+      ]
     },
     "text": "The colony is there on sensors \u2014 structures, power grid, atmospheric processors \u2014 but nobody answers the hail.\n\nFrom orbit, the settlement looks intact. Buildings standing, roads visible, landing pad clear. But there are no lights. No heat signatures. No electromagnetic noise of a living community \u2014 no broadcasts, no chatter, no machines running their daily cycles.\n\nThe atmospheric processors are still working, slowly, on automatic. They'll keep going for years without maintenance. The air will be breathable for anyone who arrives. But nobody is arriving and nobody is breathing it.\n\nThe colony logs, if they still exist down there, might explain where everyone went. Or they might just stop, mid-entry, on an ordinary day.",
     "choices": [
@@ -959,7 +989,10 @@
     "encounter_type": "novel",
     "tone": "wonder",
     "context_requirements": {
-      "infrastructure_max": "outpost"
+      "infrastructure_max": "outpost",
+      "location_types": [
+        "deep_space"
+      ]
     },
     "text": "It's not a distress call and it's not a beacon. Your comms officer can't classify it because it doesn't fit any classification.\n\nThe signal is mathematical \u2014 that much is clear. Repeating sequences with internal structure, prime number intervals, nested patterns that resolve and then complicate. It's coming from deep in the outer system, past the last planetary orbit, from a point in space where nothing should be.\n\n\"It's not random,\" your science officer says, unnecessarily. \"And it's not any encoding I recognize.\"\n\nThe signal has been broadcasting for a while. Your sensors can estimate power output, and at this level, whatever is generating it has been running for a long time. Centuries, minimum.\n\nPatient. Unhurried. Waiting for someone to listen.",
     "choices": [
@@ -1209,7 +1242,11 @@
     "tone": "wonder",
     "context_requirements": {
       "infrastructure_min": "colony",
-      "time_since_last_visit_galactic_years_min": 50.0
+      "time_since_last_visit_galactic_years_min": 50.0,
+      "location_types": [
+        "planet_surface",
+        "moon"
+      ]
     },
     "text": "The colony at {system.name} has grown.\n\nLast time you were here \u2014 your time, months ago; their time, generations \u2014 it was a cluster of prefabs and determination. Now there's a city. Not a large city, not by any standard that matters, but a real one. Streets with names. A school. Arguments about zoning.\n\nA delegation meets you at the landing pad. They're formal, a little nervous. You recognize the family resemblance in the lead official \u2014 the jaw, the way she stands. Her grandmother stood in this same spot when it was bare soil and hope.\n\nThere's a monument near the landing pad. A plaque with names on it. Founders. You recognize some of them.\n\nThe official follows your gaze. \"We teach about the early days in school,\" she says. \"The children think it's ancient history.\"",
     "choices": [
@@ -1281,7 +1318,10 @@
     "context_requirements": {
       "faction_category_present": "economic",
       "faction_min_strength": 0.4,
-      "infrastructure_min": "established"
+      "infrastructure_min": "established",
+      "location_types": [
+        "station"
+      ]
     },
     "text": "The trade board at the station is chaos. Prices are shifting in real time \u2014 fuel up twelve percent, then down eight, then up again. A Corridor Guild representative stands near the exchange terminal, watching numbers move with the calm of someone who already knows how this ends.\n\nYour navigator leans over. \"They're squeezing out the independents. Anyone who bought at yesterday's rate is underwater.\"\n\nThe Guild rep catches you watching and raises a hand \u2014 not a wave, exactly. An acknowledgment. The kind that comes with an invitation attached.\n\n\"Captain. If you're looking to move cargo, we can offer preferred rates. Our logistics network is... comprehensive.\"",
     "choices": [
@@ -1350,7 +1390,10 @@
     "context_requirements": {
       "faction_category_present": "criminal",
       "faction_max_visibility": 0.3,
-      "infrastructure_min": "colony"
+      "infrastructure_min": "colony",
+      "location_types": [
+        "station"
+      ]
     },
     "text": "It's in the docking bay, tucked behind a maintenance panel that shouldn't be loose but is. A data chip, commercial grade, nothing remarkable. Except someone scratched a symbol into the casing \u2014 a lattice pattern, geometric, precise.\n\nYour comms officer turns it over. \"This is a dead drop. Someone left it for someone. Maybe us, maybe not.\"\n\nThe chip is unencrypted. That's either trust or a trap. The data inside is a set of coordinates, a name you don't recognize, and a single line of text: THEY KNOW ABOUT THE SIGNAL.\n\nThe scratched symbol catches the light as you turn the chip. Someone in the shadows is paying attention to the same mystery you are.",
     "choices": [
@@ -1407,7 +1450,11 @@
     "tone": "wonder",
     "context_requirements": {
       "faction_category_present": "religious",
-      "time_factor_min": 1.5
+      "time_factor_min": 1.5,
+      "location_types": [
+        "station",
+        "deep_space"
+      ]
     },
     "text": "They've built something here, in the distorted space where time moves differently. Not a station \u2014 a vigil. A ring of small ships linked by tether cables, drifting in formation around nothing in particular. Or nothing your sensors can identify.\n\nThe Order of the Quiet Star. You've heard of them. Pilgrims who believe that time distortion is a wound in the universe, and that if you listen at the edges of that wound, you can hear what tore it.\n\nA voice comes through on an open channel. Unhurried. The kind of voice that has been saying the same words for a very long time.\n\n\"Traveler. You feel it too, don't you? The way time bends here. We have been listening for eleven years, ship-time. Outside, forty-three years have passed. We have heard things.\"\n\nA pause.\n\n\"Would you like to know what we've heard?\"",
     "choices": [
@@ -1492,7 +1539,10 @@
     "context_requirements": {
       "faction_category_present": "criminal",
       "infrastructure_max": "colony",
-      "hull_below": 0.8
+      "hull_below": 0.8,
+      "location_types": [
+        "station"
+      ]
     },
     "text": "The workshop is built into the side of an asteroid, accessible through a docking tunnel that doesn't appear on any chart. Your navigator found it the old way \u2014 following transponder echoes that someone left for people who know to look.\n\nInside, it's surprisingly clean. Three bays, two occupied. Tools organized with the care of someone who respects their work. The woman running the place has hands stained with engine coolant and eyes that don't miss much.\n\n\"Ashfall Salvage,\" she says, like you should know the name. \"We fix things out here where nobody else will. Pay is flexible. Questions are not included.\"\n\nShe glances at your hull readout on her display. \"Your ship has seen better days. I can help with that. Standard rate, or if you're carrying anything interesting, we can talk trade.\"",
     "choices": [
@@ -1574,7 +1624,10 @@
     "context_requirements": {
       "faction_category_present": "military",
       "faction_min_strength": 0.5,
-      "faction_controlled": true
+      "faction_controlled": true,
+      "location_types": [
+        "station"
+      ]
     },
     "text": "A {civ.name} cruiser drops in three kilometers off your bow, close enough to read the hull markings with your eyes. Hegemony Military Command. Not patrol boats this time \u2014 a proper warship, running a sweep.\n\nYour comms light up before you can react. \"Independent vessel, you are in a security zone. Cut engines and prepare for inspection. This is not a request.\"\n\nThe officer who boards is thorough, professional, and takes her time. She scans cargo, checks crew manifests against a database you can't see, and lingers over your navigation logs.\n\n\"You've been spending time near the frontier,\" she notes. Not a question. \"Lot of traffic headed that way lately. Most of it doesn't come back the same.\"\n\nShe pauses on something in your logs. You can't see what.\n\n\"You're clear. For now. But Captain \u2014 be careful what you go looking for out there.\"",
     "choices": [
@@ -1626,7 +1679,10 @@
     "tone": "quiet",
     "context_requirements": {
       "faction_category_present": "guild",
-      "infrastructure_min": "outpost"
+      "infrastructure_min": "outpost",
+      "location_types": [
+        "station"
+      ]
     },
     "text": "The Spacers' hall is easy to find \u2014 it's wherever the dock workers eat. Here, it's a converted cargo module with benches, a food printer that's seen better decades, and a board covered in handwritten notes.\n\nCrew postings. Route warnings. Someone selling a sensor array, used, mostly functional. A drawing of something that might be a star system or might be a joke. The usual noise of people who live between the stars.\n\nAn older spacer with a Collective badge sewn onto a jacket that's older than your ship waves you over. \"You're the one with the Persistence, right? Been hearing your transponder code at some interesting ports.\"\n\nHe slides a drink across the table. \"Sit. I've got a few things you might want to hear, and a favor I might want to ask.\"",
     "choices": [
@@ -1693,7 +1749,10 @@
     "context_requirements": {
       "faction_category_present": "criminal",
       "faction_max_visibility": 0.3,
-      "infrastructure_min": "established"
+      "infrastructure_min": "established",
+      "location_types": [
+        "station"
+      ]
     },
     "text": "The message arrives through three relays, stripped of metadata, timed to land when your comms officer is on a meal break. Professional.\n\n\"Captain. We trade in information. You have been asking questions that align with questions we have been paid to answer. There may be mutual benefit.\"\n\nNo name. No affiliation. But the routing pattern has a signature you've seen before \u2014 the same lattice geometry, the same careful anonymity.\n\n\"We can provide intelligence on faction movements, restricted zones, and certain... signals of interest. Our rates are reasonable. Our discretion is absolute. Reply on this channel if interested.\"\n\nThe channel will close in sixty seconds. The timer is already running.",
     "choices": [
@@ -1820,6 +1879,9 @@
       "tags": [
         "trade",
         "economic"
+      ],
+      "location_types": [
+        "station"
       ]
     },
     "text": "The station's trade deck is a low-ceilinged hall that smells of lubricant and recycled air. Docking fees have already been deducted from your account. A broker materializes at your elbow before you've finished sealing the airlock \u2014 they can smell fresh cargo the way predators smell blood.\n\nPrices here are standard, maybe a fraction better if your reputation precedes you. The broker quotes figures with practiced indifference, but their eyes keep flicking to your cargo manifest.",
@@ -1953,6 +2015,10 @@
         "anomaly",
         "mystery",
         "exploration"
+      ],
+      "location_types": [
+        "deep_space",
+        "asteroid_belt"
       ]
     },
     "text": "Your sensors flag something that shouldn't be here \u2014 a pocket of spacetime where the readings fold back on themselves like a page corner. Not dangerous, not yet, but deeply wrong in a way that makes your navigator go quiet.\n\nCloser scans reveal structure within the anomaly. Patterns that look almost deliberate. Your science officer wants to deploy probes. Your engineer wants to leave. Both make good arguments.",
@@ -2023,6 +2089,11 @@
         "ancient",
         "exploration",
         "mystery"
+      ],
+      "location_types": [
+        "planet_surface",
+        "moon",
+        "deep_space"
       ]
     },
     "text": "The structure orbits the fourth planet like a second moon, except moons don't have right angles. It's old \u2014 your instruments can tell you that much, though they disagree on how old. Centuries? Millennia? The margin of error is embarrassing.\n\nAtmosphere scans show a breathable pocket inside, maintained by systems that still work despite everything. Someone built this to last. Whether they lasted too is the question your crew is carefully not asking.",
@@ -2088,6 +2159,9 @@
       "infrastructure_min": "outpost",
       "tags": [
         "trade"
+      ],
+      "location_types": [
+        "station"
       ]
     },
     "text": "The repair bay is cramped and smells of ozone and welding flux. A technician with oil-dark hands looks over your damage report with the expression of someone who's seen worse but isn't sure they want to say so.\n\n\"Can fix it. Most of it. Gonna cost you, though \u2014 parts aren't cheap out here, and neither am I.\" They tap your hull assessment. \"Your engineer could handle the small stuff. I'll do the structural work.\"",
@@ -2213,7 +2287,12 @@
     "id": "derelict_boarding",
     "encounter_type": "novel",
     "tone": "tense",
-    "context_requirements": {},
+    "context_requirements": {
+      "location_types": [
+        "deep_space",
+        "asteroid_belt"
+      ]
+    },
     "text": "Sensors pick up a hull drifting in the outer reaches of {system.name}. No power signature. No beacon. The design is unfamiliar \u2014 not Hegemony, not colonial. Something older.\n\n{crew.random.name} runs a structural scan. \"Intact enough to board. Atmosphere's gone, but the hull geometry suggests cargo bays amidships. Could be worth a look.\"\n\nThe {ship.name} pulls alongside. Through the viewport, the derelict's surface is pitted but unbreached. Whatever killed this ship, it wasn't weapons fire.",
     "choices": [
       {
@@ -2278,7 +2357,12 @@
     "id": "derelict_boarding_interior",
     "encounter_type": "contextual",
     "tone": "wonder",
-    "context_requirements": {},
+    "context_requirements": {
+      "location_types": [
+        "deep_space",
+        "asteroid_belt"
+      ]
+    },
     "text": "The interior is wrong in ways that take a moment to register.\n\nThe corridors are the right shape for a ship \u2014 functional, braced, designed for people to move through. But the proportions are off. Ceilings too high. Doorways too wide. The handholds along the walls are spaced for someone with longer arms.\n\nDeeper in, you find what might be a bridge. The consoles are dark but intact. There's writing on the bulkheads \u2014 dense, layered script in a language your translator doesn't recognize. Not because it's corrupted. Because it was never in the database.\n\n{crew.random.name} finds something on what might be the captain's station. A small object, dense and warm to the touch even through suit gloves. It pulses faintly when held.",
     "choices": [
       {
@@ -2355,7 +2439,12 @@
     "id": "signal_echo_arrival",
     "encounter_type": "contextual",
     "tone": "quiet",
-    "context_requirements": {},
+    "context_requirements": {
+      "location_types": [
+        "deep_space",
+        "asteroid_belt"
+      ]
+    },
     "text": "As the {ship.name} drops out of FTL at {system.name}, {crew.random.name} looks up from the comms console with an expression you can't read.\n\n\"That signal. The one we recorded. It's here too.\"\n\nNot the same signal \u2014 the same structure. The same mathematical backbone, the same nested prime sequences. But the content is different. As if the signal at the last system was a question, and this one is part of the answer.\n\nIt's been waiting here. It might have been waiting everywhere.",
     "choices": [
       {
@@ -2392,6 +2481,284 @@
           }
         ],
         "tone_note": "Disciplined. But it's getting harder to ignore."
+      }
+    ]
+  },
+  {
+    "id": "belt_salvage_find",
+    "encounter_type": "contextual",
+    "tone": "tense",
+    "context_requirements": {
+      "location_types": [
+        "asteroid_belt"
+      ]
+    },
+    "text": "Your sensors pick up a metallic signature among the asteroids \u2014 too regular to be natural. As you close in, the shape resolves: a cargo pod, still sealed, tumbling slowly between two house-sized rocks.\n\nThe markings have been scrubbed, but the pod is intact. Someone went to a lot of trouble to hide this here. Or lost it.",
+    "choices": [
+      {
+        "label": "Retrieve the pod",
+        "effects": [
+          {
+            "type": "add_cargo",
+            "item": "Salvaged cargo pod",
+            "quantity": 4
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Found a hidden cargo pod in the asteroid belt. No markings, no transponder. Someone hid this deliberately."
+          },
+          {
+            "type": "narrative",
+            "text": "Your crew hauls the pod aboard. It's heavier than it looks."
+          }
+        ],
+        "tone_note": "Curiosity and caution in equal measure."
+      },
+      {
+        "label": "Scan it from a distance and log the coordinates",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Located a hidden cargo pod in the belt. Coordinates logged but cargo left undisturbed."
+          },
+          {
+            "type": "narrative",
+            "text": "Safer this way. You note the coordinates and move on."
+          }
+        ],
+        "tone_note": "Prudent. Whatever's in there isn't worth the risk."
+      },
+      {
+        "label": "Leave it \u2014 could be bait",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "Could be salvage. Could be a trap. You don't need to find out which."
+          }
+        ],
+        "tone_note": "Hard-won wisdom."
+      }
+    ]
+  },
+  {
+    "id": "station_bar_rumor",
+    "encounter_type": "contextual",
+    "tone": "quiet",
+    "intents": [
+      "investigate"
+    ],
+    "context_requirements": {
+      "infrastructure_min": "colony",
+      "location_types": [
+        "station"
+      ]
+    },
+    "text": "The station bar is the kind of place where information has a price and silence is free. You find a corner table and order something that won't kill you.\n\nConversation washes over you in fragments. Most of it is worthless \u2014 dock schedules, complaints about fuel prices, someone's ex. But you catch a thread.",
+    "choices": [
+      {
+        "label": "Listen carefully to the traders",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Overheard traders discussing unusual shipping routes \u2014 cargo being diverted to systems with no registered population."
+          },
+          {
+            "type": "narrative",
+            "text": "You file it away. Could be smuggling. Could be something else."
+          }
+        ],
+        "tone_note": "Patient intelligence gathering."
+      },
+      {
+        "label": "Buy a round and ask around",
+        "effects": [
+          {
+            "type": "resources",
+            "delta": -20.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "A freighter pilot mentioned signals at unusual frequencies near the outer system. Said his instruments couldn't identify the source."
+          },
+          {
+            "type": "crew_stress",
+            "delta": -0.03
+          },
+          {
+            "type": "narrative",
+            "text": "Credits well spent. People talk when the drinks flow."
+          }
+        ],
+        "tone_note": "Social investment. Building the picture."
+      },
+      {
+        "label": "Finish your drink and leave",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": -0.02
+          },
+          {
+            "type": "narrative",
+            "text": "Sometimes a drink is just a drink."
+          }
+        ],
+        "tone_note": "Not every moment needs to be significant."
+      }
+    ]
+  },
+  {
+    "id": "planet_surface_ruins",
+    "encounter_type": "contextual",
+    "tone": "wonder",
+    "intents": [
+      "investigate"
+    ],
+    "context_requirements": {
+      "location_types": [
+        "planet_surface",
+        "moon"
+      ]
+    },
+    "text": "The surface survey picks up geometric patterns beneath the topsoil \u2014 too precise for geology, too old for any known civilization. Your crew member calls you over:\n\n\"Captain, you'll want to see this.\"\n\nExcavation reveals carved stone, not native to this world. The symbols don't match anything in your database. They've been here for a very long time.",
+    "choices": [
+      {
+        "label": "Document everything and take samples",
+        "effects": [
+          {
+            "type": "add_cargo",
+            "item": "Xenoarchaeological samples",
+            "quantity": 2
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Found ancient alien ruins on a planetary surface. Carved symbols in non-native stone. Predates all known civilizations."
+          },
+          {
+            "type": "narrative",
+            "text": "Hours of careful work. Your science officer is practically vibrating with excitement."
+          }
+        ],
+        "tone_note": "The wonder of discovery. Arrival-like reverence."
+      },
+      {
+        "label": "Quick scan and move on \u2014 we're not archaeologists",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Detected ancient ruins on the surface. Basic scan logged but no detailed investigation conducted."
+          },
+          {
+            "type": "narrative",
+            "text": "The sensors capture what they can. Somewhere, a researcher would weep at your haste."
+          }
+        ],
+        "tone_note": "Pragmatic. You have a mission."
+      },
+      {
+        "label": "Mark the coordinates and report to the nearest faction",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Reported alien ruins to local faction authorities. Coordinates shared. They seemed very interested."
+          },
+          {
+            "type": "trust_professional",
+            "delta": 0.05
+          },
+          {
+            "type": "narrative",
+            "text": "You file the report. The response comes back almost too quickly. They were already looking for something like this."
+          }
+        ],
+        "tone_note": "Responsible. But who benefits from this knowledge?"
+      }
+    ]
+  },
+  {
+    "id": "deep_space_anomaly_encounter",
+    "encounter_type": "novel",
+    "tone": "dread",
+    "context_requirements": {
+      "location_types": [
+        "deep_space"
+      ]
+    },
+    "text": "The anomaly doesn't look like anything. That's the problem.\n\nYour sensors insist something is here \u2014 mass, energy, a gravitational signature that bends light just enough to notice. But the viewport shows nothing. Empty space, stars behind it, everything normal.\n\nExcept the stars behind it are wrong. The constellations don't match your charts. As if whatever is here is showing you a different sky.\n\n{crew.random.name} says, very quietly: \"Captain, our chronometer just lost six minutes.\"",
+    "choices": [
+      {
+        "label": "Hold position. Record everything.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Encountered a spatial anomaly in deep space \u2014 invisible to visual sensors but present on instruments. Chronometer lost six minutes during observation. Stars visible through the anomaly don't match known charts."
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.08
+          },
+          {
+            "type": "crew_mood",
+            "mood": "anxious",
+            "all": true
+          },
+          {
+            "type": "narrative",
+            "text": "The recording equipment runs. Your crew watches the nothing that shouldn't be there. Nobody speaks for a very long time."
+          }
+        ],
+        "tone_note": "Solaris. The unknowable, observed."
+      },
+      {
+        "label": "Move closer. Carefully.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Approached the deep space anomaly. At closer range, instruments detected a pattern in the gravitational signature \u2014 mathematical, recursive, intentional."
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.12
+          },
+          {
+            "type": "damage_module",
+            "module": "sensors",
+            "amount": 0.1
+          },
+          {
+            "type": "narrative",
+            "text": "The closer you get, the more your instruments disagree with each other. But something in the data looks almost like a pattern. Almost like a message."
+          }
+        ],
+        "tone_note": "Courage or recklessness. The mystery deepens."
+      },
+      {
+        "label": "Full reverse. Now.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": 0.03
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Detected and retreated from a deep space anomaly. Brief contact. Something is out here."
+          },
+          {
+            "type": "narrative",
+            "text": "The engines fire. The anomaly recedes. The lost six minutes never come back."
+          }
+        ],
+        "tone_note": "Discretion. Some things you're not ready for."
       }
     ]
   }

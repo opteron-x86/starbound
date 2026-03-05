@@ -52,9 +52,6 @@ pub fn generate_galaxy(seed: u64) -> GeneratedGalaxy {
     // Populate faction_presence on every system.
     assign_faction_presence(&mut systems, &factions, &civilizations);
 
-    // Generate economy profiles for inhabited systems.
-    assign_system_economies(&mut systems, &factions, &mut rng);
-
     let num_civs = civilizations.len();
     let sector_desc = match num_civs {
         2 => "The first settled systems beyond the homeworld. \
@@ -1113,7 +1110,7 @@ fn generate_systems(rng: &mut StdRng, civs: &[Civilization]) -> Vec<StarSystem> 
 
         let star_type = star_types_vec[i];
         let name = &names[i];
-        let planets = generate_planets(name, star_type, rng);
+        let locations = generate_locations(name, star_type, infrastructure_level, rng);
 
         let history = if infrastructure_level != InfrastructureLevel::None {
             vec![HistoryEntry {
@@ -1129,14 +1126,13 @@ fn generate_systems(rng: &mut StdRng, civs: &[Civilization]) -> Vec<StarSystem> 
             name: name.clone(),
             position: positions[i],
             star_type,
-            planetary_bodies: planets,
+            locations,
             controlling_civ,
             infrastructure_level,
             history,
             active_threads: vec![],
             time_factor,
             faction_presence: vec![],
-            economy: None,
         });
     }
 
@@ -1398,16 +1394,76 @@ fn parse_star_type(s: &str) -> StarType {
     }
 }
 
-fn generate_planets(
+fn generate_locations(
     system_name: &str,
     star_type: StarType,
+    system_infra: InfrastructureLevel,
     rng: &mut StdRng,
-) -> Vec<PlanetaryBody> {
-    let count = match star_type {
+) -> Vec<Location> {
+    let mut locations: Vec<Location> = Vec::new();
+    let mut orbital_distance: f32 = 0.3; // Start near the star
+
+    // --- Station (for systems with Colony+ infrastructure) ---
+    if system_infra >= InfrastructureLevel::Colony {
+        let station_name = format!("{} Station", system_name);
+        let station_infra = system_infra; // Station carries the system's main infra level
+        let mut services = vec![LocationService::Docking, LocationService::Refuel];
+        if station_infra >= InfrastructureLevel::Colony {
+            services.push(LocationService::Trade);
+            services.push(LocationService::Rumors);
+        }
+        if station_infra >= InfrastructureLevel::Established {
+            services.push(LocationService::Repair);
+            services.push(LocationService::Contracts);
+        }
+        if station_infra >= InfrastructureLevel::Hub {
+            services.push(LocationService::Recruitment);
+        }
+
+        let desc = match station_infra {
+            InfrastructureLevel::Capital => "A sprawling orbital complex. The political and economic heart of the system.".into(),
+            InfrastructureLevel::Hub => "A busy transit station. Ships from across the sector dock here.".into(),
+            InfrastructureLevel::Established => "A well-maintained station with full services.".into(),
+            InfrastructureLevel::Colony => "A functional station serving the local colony.".into(),
+            _ => "A basic docking facility.".into(),
+        };
+
+        locations.push(Location {
+            id: Uuid::new_v4(),
+            name: station_name,
+            location_type: LocationType::Station,
+            orbital_distance: 0.1,
+            infrastructure: station_infra,
+            controlling_faction: None,
+            economy: Some(generate_location_economy(station_infra, rng)),
+            description: desc,
+            services,
+            discovered: true,
+        });
+    }
+    // Outpost systems get a basic landing pad instead of a full station
+    else if system_infra == InfrastructureLevel::Outpost {
+        let services = vec![LocationService::Docking, LocationService::Refuel, LocationService::Trade];
+        locations.push(Location {
+            id: Uuid::new_v4(),
+            name: format!("{} Outpost", system_name),
+            location_type: LocationType::Station,
+            orbital_distance: 0.1,
+            infrastructure: InfrastructureLevel::Outpost,
+            controlling_faction: None,
+            economy: Some(generate_location_economy(InfrastructureLevel::Outpost, rng)),
+            description: "A handful of prefabs and a landing pad. It's something.".into(),
+            services,
+            discovered: true,
+        });
+    }
+
+    // --- Planets ---
+    let planet_count = match star_type {
         StarType::Neutron | StarType::BlackHole => rng.gen_range(0..=1),
         StarType::BlueGiant => rng.gen_range(1..=3),
         StarType::Anomalous => rng.gen_range(0..=2),
-        _ => rng.gen_range(1..=5),
+        _ => rng.gen_range(2..=5),
     };
 
     let body_types = [
@@ -1418,16 +1474,319 @@ fn generate_planets(
         BodyType::Oceanic,
     ];
 
-    (0..count)
-        .map(|i| {
-            let body_type = body_types[rng.gen_range(0..body_types.len())];
-            PlanetaryBody {
-                name: format!("{} {}", system_name, roman_numeral(i + 1)),
-                body_type,
-                features: vec![],
+    for i in 0..planet_count {
+        orbital_distance += rng.gen_range(0.4..2.0);
+        let body_type = body_types[rng.gen_range(0..body_types.len())];
+        let planet_name = format!("{} {}", system_name, roman_numeral(i + 1));
+
+        // Determine if this planet is colonized.
+        // Habitable body types in developed systems get colonies.
+        let is_habitable = matches!(body_type, BodyType::Terrestrial | BodyType::Oceanic | BodyType::Gaia);
+        let planet_infra = if is_habitable && system_infra >= InfrastructureLevel::Colony && i == 0 {
+            // First habitable planet in a developed system gets a colony.
+            match system_infra {
+                InfrastructureLevel::Capital | InfrastructureLevel::Hub => InfrastructureLevel::Established,
+                InfrastructureLevel::Established => InfrastructureLevel::Colony,
+                _ => InfrastructureLevel::Outpost,
             }
-        })
-        .collect()
+        } else if is_habitable && system_infra >= InfrastructureLevel::Established && rng.gen_bool(0.3) {
+            InfrastructureLevel::Outpost
+        } else {
+            InfrastructureLevel::None
+        };
+
+        let (desc, services) = if planet_infra >= InfrastructureLevel::Outpost {
+            let mut svcs = vec![LocationService::Docking];
+            if planet_infra >= InfrastructureLevel::Colony {
+                svcs.push(LocationService::Trade);
+                svcs.push(LocationService::Rumors);
+            }
+            let d = match body_type {
+                BodyType::Terrestrial => "A rocky world with a thin atmosphere. Settlements dot the surface.",
+                BodyType::Oceanic => "An ocean world. Platform colonies rise above the waves.",
+                BodyType::Gaia => "A living world. Green, breathable, and fiercely contested.",
+                _ => "A settled world.",
+            };
+            (d.into(), svcs)
+        } else {
+            let d = match body_type {
+                BodyType::GasGiant => "A massive gas giant. Beautiful and uninhabitable.",
+                BodyType::IceWorld => "A frozen world. Sensors detect subsurface water.",
+                BodyType::Barren => "A lifeless rock. Mineral deposits visible on scan.",
+                BodyType::Terrestrial => "A rocky world with a thin atmosphere. No settlements detected.",
+                BodyType::Oceanic => "An ocean world. No infrastructure visible.",
+                _ => "An uncolonized world.",
+            };
+            (d.into(), vec![])
+        };
+
+        let economy = if planet_infra >= InfrastructureLevel::Outpost {
+            Some(generate_location_economy(planet_infra, rng))
+        } else {
+            None
+        };
+
+        locations.push(Location {
+            id: Uuid::new_v4(),
+            name: planet_name.clone(),
+            location_type: LocationType::PlanetSurface { body_type },
+            orbital_distance,
+            infrastructure: planet_infra,
+            controlling_faction: None,
+            economy,
+            description: desc,
+            services,
+            discovered: true,
+        });
+
+        // --- Moon (chance for gas giants and large terrestrials) ---
+        if matches!(body_type, BodyType::GasGiant | BodyType::Terrestrial) && rng.gen_bool(0.35) {
+            let moon_name = format!("{}-a", planet_name);
+            let moon_body = if rng.gen_bool(0.5) { BodyType::Barren } else { BodyType::IceWorld };
+            let moon_infra = if system_infra >= InfrastructureLevel::Established && rng.gen_bool(0.4) {
+                InfrastructureLevel::Outpost
+            } else {
+                InfrastructureLevel::None
+            };
+            let moon_services = if moon_infra >= InfrastructureLevel::Outpost {
+                vec![LocationService::Docking, LocationService::Refuel]
+            } else {
+                vec![]
+            };
+            let moon_desc = if moon_infra >= InfrastructureLevel::Outpost {
+                "A small moon with a mining or refueling outpost."
+            } else {
+                "A small moon. Unremarkable on sensors."
+            };
+            let moon_economy = if moon_infra >= InfrastructureLevel::Outpost {
+                Some(generate_location_economy(moon_infra, rng))
+            } else {
+                None
+            };
+            locations.push(Location {
+                id: Uuid::new_v4(),
+                name: moon_name,
+                location_type: LocationType::Moon { parent_body: planet_name.clone(), body_type: moon_body },
+                orbital_distance: orbital_distance + 0.01, // Same orbit as parent
+                infrastructure: moon_infra,
+                controlling_faction: None,
+                economy: moon_economy,
+                description: moon_desc.into(),
+                services: moon_services,
+                discovered: true,
+            });
+        }
+    }
+
+    // --- Asteroid belt (chance based on system) ---
+    if planet_count >= 2 && rng.gen_bool(0.5) {
+        orbital_distance += rng.gen_range(1.0..3.0);
+        let belt_infra = if system_infra >= InfrastructureLevel::Colony && rng.gen_bool(0.5) {
+            InfrastructureLevel::Outpost
+        } else {
+            InfrastructureLevel::None
+        };
+        let belt_services = if belt_infra >= InfrastructureLevel::Outpost {
+            vec![LocationService::Docking, LocationService::Trade]
+        } else {
+            vec![]
+        };
+        let belt_desc = if belt_infra >= InfrastructureLevel::Outpost {
+            "An asteroid belt with active mining operations. Docking available at the processing platform."
+        } else {
+            "A scattered asteroid belt. Rich in minerals, empty of people."
+        };
+        let belt_economy = if belt_infra >= InfrastructureLevel::Outpost {
+            Some(generate_location_economy(belt_infra, rng))
+        } else {
+            None
+        };
+        locations.push(Location {
+            id: Uuid::new_v4(),
+            name: format!("{} Belt", system_name),
+            location_type: LocationType::AsteroidBelt,
+            orbital_distance,
+            infrastructure: belt_infra,
+            controlling_faction: None,
+            economy: belt_economy,
+            description: belt_desc.into(),
+            services: belt_services,
+            discovered: true,
+        });
+    }
+
+    // --- Deep space anomalies (hidden, must be discovered via scan) ---
+    // More likely in frontier/distorted systems.
+    let anomaly_chance = match system_infra {
+        InfrastructureLevel::Capital | InfrastructureLevel::Hub => 0.15,
+        InfrastructureLevel::Established | InfrastructureLevel::Colony => 0.25,
+        InfrastructureLevel::Outpost => 0.4,
+        InfrastructureLevel::None => 0.6,
+    };
+
+    if rng.gen_bool(anomaly_chance) {
+        orbital_distance += rng.gen_range(2.0..6.0);
+        let anomaly_descs = [
+            "Faint energy readings at unusual frequencies. Source unknown.",
+            "A gravitational anomaly — something dense, not on any chart.",
+            "Intermittent signal. Mathematical structure. Not natural.",
+            "Debris field. Too uniform to be accidental.",
+            "Sensor ghost — something is here, but it doesn't want to be seen.",
+        ];
+        let desc = anomaly_descs[rng.gen_range(0..anomaly_descs.len())];
+
+        locations.push(Location {
+            id: Uuid::new_v4(),
+            name: format!("{} Anomaly", system_name),
+            location_type: LocationType::DeepSpace,
+            orbital_distance,
+            infrastructure: InfrastructureLevel::None,
+            controlling_faction: None,
+            economy: None,
+            description: desc.into(),
+            services: vec![],
+            discovered: false,
+        });
+    }
+
+    // Second hidden location in wilderness/frontier systems.
+    if system_infra <= InfrastructureLevel::Outpost && rng.gen_bool(0.3) {
+        orbital_distance += rng.gen_range(1.0..4.0);
+        let derelict_descs = [
+            "A ship. Dead in space. No transponder, no power signature.",
+            "Wreckage spread across a kilometer. Recent.",
+            "An old station, dark and drifting. Pre-dates local colonization.",
+        ];
+        let desc = derelict_descs[rng.gen_range(0..derelict_descs.len())];
+
+        locations.push(Location {
+            id: Uuid::new_v4(),
+            name: format!("{} Derelict", system_name),
+            location_type: LocationType::DeepSpace,
+            orbital_distance,
+            infrastructure: InfrastructureLevel::None,
+            controlling_faction: None,
+            economy: None,
+            description: desc.into(),
+            services: vec![],
+            discovered: false,
+        });
+    }
+
+    locations
+}
+
+/// Generate an economy for a single location based on its infrastructure.
+fn generate_location_economy(infra: InfrastructureLevel, rng: &mut StdRng) -> SystemEconomy {
+    // Reuse the archetype logic from the old system-level economy,
+    // but scoped to this location's infrastructure.
+    let archetype = match infra {
+        InfrastructureLevel::Outpost => {
+            if rng.gen_bool(0.6) { EconomyArchetype::Frontier }
+            else { EconomyArchetype::Extraction }
+        }
+        InfrastructureLevel::Colony => {
+            *[EconomyArchetype::Agricultural, EconomyArchetype::Extraction,
+              EconomyArchetype::Manufacturing].choose(rng).unwrap()
+        }
+        InfrastructureLevel::Established => {
+            *[EconomyArchetype::Manufacturing, EconomyArchetype::TradeHub,
+              EconomyArchetype::Agricultural].choose(rng).unwrap()
+        }
+        InfrastructureLevel::Hub => EconomyArchetype::TradeHub,
+        InfrastructureLevel::Capital => {
+            if rng.gen_bool(0.5) { EconomyArchetype::TradeHub }
+            else { EconomyArchetype::Manufacturing }
+        }
+        InfrastructureLevel::None => EconomyArchetype::Frontier,
+    };
+
+    let variance = |rng: &mut StdRng, base: f32| -> f32 {
+        (base + rng.gen_range(-0.1..0.1)).clamp(0.0, 1.0)
+    };
+
+    let mut production = HashMap::new();
+    let mut consumption = HashMap::new();
+
+    match archetype {
+        EconomyArchetype::Agricultural => {
+            production.insert(TradeGood::Food, variance(rng, 0.8));
+            production.insert(TradeGood::RawMaterials, variance(rng, 0.3));
+            production.insert(TradeGood::ManufacturedGoods, variance(rng, 0.1));
+            production.insert(TradeGood::MedicalSupplies, variance(rng, 0.3));
+            consumption.insert(TradeGood::ManufacturedGoods, variance(rng, 0.7));
+            consumption.insert(TradeGood::ConstructionMaterials, variance(rng, 0.5));
+            consumption.insert(TradeGood::RefinedFuelCells, variance(rng, 0.4));
+        }
+        EconomyArchetype::Extraction => {
+            production.insert(TradeGood::RawMaterials, variance(rng, 0.9));
+            production.insert(TradeGood::ConstructionMaterials, variance(rng, 0.5));
+            consumption.insert(TradeGood::Food, variance(rng, 0.7));
+            consumption.insert(TradeGood::MedicalSupplies, variance(rng, 0.6));
+            consumption.insert(TradeGood::ManufacturedGoods, variance(rng, 0.5));
+            consumption.insert(TradeGood::RefinedFuelCells, variance(rng, 0.3));
+        }
+        EconomyArchetype::Manufacturing => {
+            production.insert(TradeGood::ManufacturedGoods, variance(rng, 0.8));
+            production.insert(TradeGood::RefinedFuelCells, variance(rng, 0.5));
+            consumption.insert(TradeGood::RawMaterials, variance(rng, 0.8));
+            consumption.insert(TradeGood::Food, variance(rng, 0.5));
+            consumption.insert(TradeGood::ConstructionMaterials, variance(rng, 0.3));
+        }
+        EconomyArchetype::TradeHub => {
+            for good in TradeGood::all() {
+                production.insert(*good, variance(rng, 0.4));
+                consumption.insert(*good, variance(rng, 0.4));
+            }
+        }
+        EconomyArchetype::Military => {
+            production.insert(TradeGood::RefinedFuelCells, variance(rng, 0.4));
+            consumption.insert(TradeGood::Food, variance(rng, 0.6));
+            consumption.insert(TradeGood::RawMaterials, variance(rng, 0.5));
+            consumption.insert(TradeGood::ManufacturedGoods, variance(rng, 0.7));
+            consumption.insert(TradeGood::MedicalSupplies, variance(rng, 0.6));
+            consumption.insert(TradeGood::ConstructionMaterials, variance(rng, 0.6));
+            consumption.insert(TradeGood::RefinedFuelCells, variance(rng, 0.7));
+        }
+        EconomyArchetype::Frontier => {
+            for good in TradeGood::all() {
+                production.insert(*good, variance(rng, 0.1));
+                consumption.insert(*good, variance(rng, 0.5));
+            }
+            production.insert(TradeGood::RawMaterials, variance(rng, 0.4));
+        }
+    }
+
+    let price_volatility = match infra {
+        InfrastructureLevel::Capital => 0.6,
+        InfrastructureLevel::Hub => 0.8,
+        InfrastructureLevel::Established => 1.0,
+        InfrastructureLevel::Colony => 1.2,
+        InfrastructureLevel::Outpost => 1.8,
+        InfrastructureLevel::None => 2.0,
+    };
+
+    let fuel_price = match infra {
+        InfrastructureLevel::Capital | InfrastructureLevel::Hub => 2.0 + rng.gen_range(0.0..1.0),
+        InfrastructureLevel::Established | InfrastructureLevel::Colony => 3.0 + rng.gen_range(0.0..2.0),
+        InfrastructureLevel::Outpost => 5.0 + rng.gen_range(0.0..3.0),
+        InfrastructureLevel::None => 10.0,
+    };
+
+    let supply_price = match infra {
+        InfrastructureLevel::Capital | InfrastructureLevel::Hub => 1.5 + rng.gen_range(0.0..0.5),
+        InfrastructureLevel::Established | InfrastructureLevel::Colony => 2.0 + rng.gen_range(0.0..1.5),
+        InfrastructureLevel::Outpost => 3.5 + rng.gen_range(0.0..2.0),
+        InfrastructureLevel::None => 8.0,
+    };
+
+    SystemEconomy {
+        production,
+        consumption,
+        price_volatility,
+        fuel_price,
+        supply_price,
+    }
 }
 
 // ===========================================================================
@@ -1549,6 +1908,7 @@ fn roman_numeral(n: usize) -> &'static str {
 /// Economy archetypes based on infrastructure and planet composition.
 /// Each archetype defines production/consumption biases.
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 enum EconomyArchetype {
     /// Agricultural world — produces food, consumes manufactured goods.
     Agricultural,
@@ -1562,159 +1922,6 @@ enum EconomyArchetype {
     Military,
     /// Frontier — limited everything, high volatility.
     Frontier,
-}
-
-/// Assign economy profiles to inhabited systems (Outpost+).
-fn assign_system_economies(
-    systems: &mut [StarSystem],
-    factions: &[Faction],
-    rng: &mut StdRng,
-) {
-    for system in systems.iter_mut() {
-        let infra = system.infrastructure_level;
-        if infra == InfrastructureLevel::None {
-            continue;
-        }
-
-        // Pick archetype based on infrastructure + randomness.
-        let archetype = match infra {
-            InfrastructureLevel::Outpost => {
-                // Outposts are frontier or extraction.
-                if rng.gen_bool(0.6) {
-                    EconomyArchetype::Frontier
-                } else {
-                    EconomyArchetype::Extraction
-                }
-            }
-            InfrastructureLevel::Colony => {
-                // Colonies specialize.
-                *[EconomyArchetype::Agricultural, EconomyArchetype::Extraction,
-                  EconomyArchetype::Manufacturing]
-                    .choose(rng).unwrap()
-            }
-            InfrastructureLevel::Established => {
-                // Established systems lean toward manufacturing or trade.
-                *[EconomyArchetype::Manufacturing, EconomyArchetype::TradeHub,
-                  EconomyArchetype::Agricultural]
-                    .choose(rng).unwrap()
-            }
-            InfrastructureLevel::Hub => EconomyArchetype::TradeHub,
-            InfrastructureLevel::Capital => {
-                // Capitals are trade hubs or manufacturing centers.
-                if rng.gen_bool(0.5) {
-                    EconomyArchetype::TradeHub
-                } else {
-                    EconomyArchetype::Manufacturing
-                }
-            }
-            InfrastructureLevel::None => unreachable!(),
-        };
-
-        // Check if military faction dominance shifts the archetype.
-        let has_strong_military = system.faction_presence.iter().any(|fp| {
-            fp.strength >= 0.6
-                && factions.iter()
-                    .find(|f| f.id == fp.faction_id)
-                    .map(|f| f.category == FactionCategory::Military)
-                    .unwrap_or(false)
-        });
-        let archetype = if has_strong_military && rng.gen_bool(0.4) {
-            EconomyArchetype::Military
-        } else {
-            archetype
-        };
-
-        let mut production = HashMap::new();
-        let mut consumption = HashMap::new();
-
-        // Base profiles from archetype, with small random variance.
-        let variance = |rng: &mut StdRng, base: f32| -> f32 {
-            (base + rng.gen_range(-0.1..0.1)).clamp(0.0, 1.0)
-        };
-
-        match archetype {
-            EconomyArchetype::Agricultural => {
-                production.insert(TradeGood::Food, variance(rng, 0.8));
-                production.insert(TradeGood::RawMaterials, variance(rng, 0.3));
-                production.insert(TradeGood::ManufacturedGoods, variance(rng, 0.1));
-                production.insert(TradeGood::MedicalSupplies, variance(rng, 0.3));
-                consumption.insert(TradeGood::ManufacturedGoods, variance(rng, 0.7));
-                consumption.insert(TradeGood::ConstructionMaterials, variance(rng, 0.5));
-                consumption.insert(TradeGood::RefinedFuelCells, variance(rng, 0.4));
-            }
-            EconomyArchetype::Extraction => {
-                production.insert(TradeGood::RawMaterials, variance(rng, 0.9));
-                production.insert(TradeGood::ConstructionMaterials, variance(rng, 0.5));
-                consumption.insert(TradeGood::Food, variance(rng, 0.7));
-                consumption.insert(TradeGood::MedicalSupplies, variance(rng, 0.6));
-                consumption.insert(TradeGood::ManufacturedGoods, variance(rng, 0.5));
-                consumption.insert(TradeGood::RefinedFuelCells, variance(rng, 0.3));
-            }
-            EconomyArchetype::Manufacturing => {
-                production.insert(TradeGood::ManufacturedGoods, variance(rng, 0.8));
-                production.insert(TradeGood::RefinedFuelCells, variance(rng, 0.5));
-                consumption.insert(TradeGood::RawMaterials, variance(rng, 0.8));
-                consumption.insert(TradeGood::Food, variance(rng, 0.5));
-                consumption.insert(TradeGood::ConstructionMaterials, variance(rng, 0.3));
-            }
-            EconomyArchetype::TradeHub => {
-                // Trade hubs have moderate everything — they're middlemen.
-                for good in TradeGood::all() {
-                    production.insert(*good, variance(rng, 0.4));
-                    consumption.insert(*good, variance(rng, 0.4));
-                }
-            }
-            EconomyArchetype::Military => {
-                production.insert(TradeGood::RefinedFuelCells, variance(rng, 0.4));
-                consumption.insert(TradeGood::Food, variance(rng, 0.6));
-                consumption.insert(TradeGood::RawMaterials, variance(rng, 0.5));
-                consumption.insert(TradeGood::ManufacturedGoods, variance(rng, 0.7));
-                consumption.insert(TradeGood::MedicalSupplies, variance(rng, 0.6));
-                consumption.insert(TradeGood::ConstructionMaterials, variance(rng, 0.6));
-                consumption.insert(TradeGood::RefinedFuelCells, variance(rng, 0.7));
-            }
-            EconomyArchetype::Frontier => {
-                // Frontier systems have very little — high consumption, low production.
-                for good in TradeGood::all() {
-                    production.insert(*good, variance(rng, 0.1));
-                    consumption.insert(*good, variance(rng, 0.5));
-                }
-                // But they might have raw materials from local extraction.
-                production.insert(TradeGood::RawMaterials, variance(rng, 0.4));
-            }
-        }
-
-        let price_volatility = match infra {
-            InfrastructureLevel::Capital => 0.6,
-            InfrastructureLevel::Hub => 0.8,
-            InfrastructureLevel::Established => 1.0,
-            InfrastructureLevel::Colony => 1.2,
-            InfrastructureLevel::Outpost => 1.8,
-            InfrastructureLevel::None => 2.0,
-        };
-
-        let fuel_price = match infra {
-            InfrastructureLevel::Capital | InfrastructureLevel::Hub => 2.0 + rng.gen_range(0.0..1.0),
-            InfrastructureLevel::Established | InfrastructureLevel::Colony => 3.0 + rng.gen_range(0.0..2.0),
-            InfrastructureLevel::Outpost => 5.0 + rng.gen_range(0.0..3.0),
-            InfrastructureLevel::None => 0.0,
-        };
-
-        let supply_price = match infra {
-            InfrastructureLevel::Capital | InfrastructureLevel::Hub => 1.5 + rng.gen_range(0.0..0.5),
-            InfrastructureLevel::Established | InfrastructureLevel::Colony => 2.0 + rng.gen_range(0.0..1.5),
-            InfrastructureLevel::Outpost => 3.5 + rng.gen_range(0.0..2.0),
-            InfrastructureLevel::None => 0.0,
-        };
-
-        system.economy = Some(SystemEconomy {
-            production,
-            consumption,
-            price_volatility,
-            fuel_price,
-            supply_price,
-        });
-    }
 }
 
 // ===========================================================================
@@ -1795,6 +2002,17 @@ fn generate_npcs(
             InfrastructureLevel::Capital => 3,
         };
 
+        // Find dockable locations sorted by infrastructure (best first).
+        let mut dockable_locs: Vec<&Location> = system.locations.iter()
+            .filter(|l| l.services.contains(&LocationService::Docking)
+                && l.infrastructure >= InfrastructureLevel::Colony)
+            .collect();
+        dockable_locs.sort_by(|a, b| b.infrastructure.cmp(&a.infrastructure));
+
+        if dockable_locs.is_empty() {
+            continue;
+        }
+
         // Pick the top faction presences by strength, up to infra_rank.
         let mut presences: Vec<&FactionPresence> = system.faction_presence.iter()
             .filter(|fp| fp.strength >= 0.3)
@@ -1802,7 +2020,7 @@ fn generate_npcs(
         presences.sort_by(|a, b| b.strength.partial_cmp(&a.strength).unwrap());
         presences.truncate(infra_rank);
 
-        for presence in presences {
+        for (fi, presence) in presences.iter().enumerate() {
             let faction = match factions.iter().find(|f| f.id == presence.faction_id) {
                 Some(f) => f,
                 None => continue,
@@ -1816,6 +2034,9 @@ fn generate_npcs(
             let last = NPC_LAST_NAMES[(name_idx + last_offset) % NPC_LAST_NAMES.len()];
             name_idx += 1;
 
+            // Assign to a dockable location. Spread NPCs across locations.
+            let loc = dockable_locs[fi % dockable_locs.len()];
+
             let mut npc = Npc::new(
                 format!("{} {}", first, last),
                 title,
@@ -1823,6 +2044,7 @@ fn generate_npcs(
                 system.id,
                 bio,
             );
+            npc.home_location_id = Some(loc.id);
 
             // Add a motivation based on faction category.
             npc.motivations.push(match faction.category {
@@ -2503,17 +2725,21 @@ mod tests {
     // --- Economy generation ---
 
     #[test]
-    fn inhabited_systems_have_economies() {
+    fn inhabited_systems_have_location_economies() {
         let galaxy = generate_galaxy(42);
         for system in &galaxy.systems {
             match system.infrastructure_level {
                 InfrastructureLevel::None => {
-                    assert!(system.economy.is_none(),
-                        "{} (None) should not have economy", system.name);
+                    // Wilderness systems should have no locations with economies.
+                    let has_econ = system.locations.iter().any(|l| l.economy.is_some());
+                    assert!(!has_econ,
+                        "{} (None) should not have any location economies", system.name);
                 }
                 _ => {
-                    assert!(system.economy.is_some(),
-                        "{} ({:?}) should have economy",
+                    // Inhabited systems should have at least one location with an economy.
+                    let has_econ = system.locations.iter().any(|l| l.economy.is_some());
+                    assert!(has_econ,
+                        "{} ({:?}) should have at least one location with economy",
                         system.name, system.infrastructure_level);
                 }
             }
@@ -2524,16 +2750,18 @@ mod tests {
     fn economy_prices_are_reasonable() {
         let galaxy = generate_galaxy(42);
         for system in &galaxy.systems {
-            if let Some(ref econ) = system.economy {
-                assert!(econ.fuel_price > 0.0 && econ.fuel_price < 20.0,
-                    "{} fuel price {:.1} out of range", system.name, econ.fuel_price);
-                assert!(econ.supply_price > 0.0 && econ.supply_price < 15.0,
-                    "{} supply price {:.1} out of range", system.name, econ.supply_price);
-                for good in TradeGood::all() {
-                    let buy = econ.buy_price(*good);
-                    let sell = econ.sell_price(*good);
-                    assert!(buy > 0.0, "{} buy price for {:?} should be positive", system.name, good);
-                    assert!(sell < buy, "{} sell price should be less than buy for {:?}", system.name, good);
+            for loc in &system.locations {
+                if let Some(ref econ) = loc.economy {
+                    assert!(econ.fuel_price > 0.0 && econ.fuel_price < 20.0,
+                        "{}/{} fuel price {:.1} out of range", system.name, loc.name, econ.fuel_price);
+                    assert!(econ.supply_price > 0.0 && econ.supply_price < 15.0,
+                        "{}/{} supply price {:.1} out of range", system.name, loc.name, econ.supply_price);
+                    for good in TradeGood::all() {
+                        let buy = econ.buy_price(*good);
+                        let sell = econ.sell_price(*good);
+                        assert!(buy > 0.0, "{}/{} buy price for {:?} should be positive", system.name, loc.name, good);
+                        assert!(sell < buy, "{}/{} sell price should be less than buy for {:?}", system.name, loc.name, good);
+                    }
                 }
             }
         }
@@ -2541,18 +2769,18 @@ mod tests {
 
     #[test]
     fn trade_routes_exist() {
-        // At least one pair of systems should have a meaningful price difference
-        // on some good, making trade profitable.
+        // At least one pair of locations should have a meaningful price difference.
         let galaxy = generate_galaxy(42);
-        let economies: Vec<(&str, &SystemEconomy)> = galaxy.systems.iter()
-            .filter_map(|s| s.economy.as_ref().map(|e| (s.name.as_str(), e)))
+        let economies: Vec<(String, &SystemEconomy)> = galaxy.systems.iter()
+            .flat_map(|s| s.locations.iter().filter_map(move |l| {
+                l.economy.as_ref().map(|e| (format!("{}/{}", s.name, l.name), e))
+            }))
             .collect();
 
         let mut found_route = false;
         for good in TradeGood::all() {
-            for (name_a, econ_a) in &economies {
-                for (name_b, econ_b) in &economies {
-                    if name_a == name_b { continue; }
+            for (_, econ_a) in &economies {
+                for (_, econ_b) in &economies {
                     let buy_at_a = econ_a.buy_price(*good);
                     let sell_at_b = econ_b.sell_price(*good);
                     if sell_at_b > buy_at_a {
