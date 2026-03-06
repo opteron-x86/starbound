@@ -6,6 +6,8 @@ description = "LLM integration — prompt assembly, API calls, validation"
 
 [dependencies]
 starbound-core = { path = "../core" }
+starbound-encounters = { path = "../encounters" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
+reqwest = { workspace = true }

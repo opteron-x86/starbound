@@ -11,3 +11,4 @@ pub mod supplies;
 pub mod checks;
 pub mod reputation;
 pub mod crew_conversation;
+pub mod npc_interaction;

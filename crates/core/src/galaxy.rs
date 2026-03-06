@@ -44,18 +44,219 @@ pub struct StarSystem {
     pub faction_presence: Vec<FactionPresence>,
 }
 
+/// Stellar classification. Drives planet generation, habitability,
+/// orbital distances, and location descriptions.
+///
+/// Based on real stellar classification (O through M main sequence,
+/// plus evolved/exotic types). Each type carries physical properties
+/// that constrain what kind of systems form around it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Display, EnumString)]
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum StarType {
-    RedDwarf,
-    YellowDwarf,
+    /// Class O — blue supergiant. Hottest, most massive main-sequence.
+    /// 1–10 Myr lifespan. Intense radiation sterilizes surrounding space.
+    BlueSuperGiant,
+    /// Class B — large blue main-sequence. Rare, luminous, short-lived.
+    /// 10–100 Myr lifespan. Heavy UV, minimal habitability.
     BlueGiant,
+    /// Class A — white/blue-white main-sequence. Fast-rotating.
+    /// ~1–2 Gyr lifespan. Wide habitable zone but high UV.
+    WhiteStar,
+    /// Class F — yellow-white dwarf. Good habitability candidate.
+    /// Wide habitable zone, moderate UV.
+    YellowWhiteDwarf,
+    /// Class G — yellow dwarf (Sol-type). Optimal for life.
+    /// ~10 Gyr lifespan. The gold standard for habitable systems.
+    YellowDwarf,
+    /// Class K — orange dwarf. Very stable, long-lived (~30 Gyr).
+    /// Narrower habitable zone but excellent long-term habitability.
+    OrangeDwarf,
+    /// Class M — red dwarf. Most common star type in the universe.
+    /// Extremely long lifespan but planets face tidal locking and flares.
+    RedDwarf,
+    /// Evolved M-class red giant. Former sun-like star in late evolution.
+    /// High luminosity pushes habitable zone very far out.
+    RedGiant,
+    /// Class T — brown dwarf (substellar). Too small for hydrogen fusion.
+    /// Extremely dim and cool. Negligible habitable zone.
+    BrownDwarf,
+    /// White dwarf — burnt-out core of a low/medium-mass star.
+    /// Earth-sized, extremely dense. Narrow unstable habitable zone.
     WhiteDwarf,
+    /// Wolf-Rayet — massive evolved star shedding outer layers.
+    /// Extremely hot and luminous. Rich in heavy elements. Uninhabitable.
+    WolfRayet,
+    /// Pulsar — magnetized neutron star emitting radiation pulses.
+    /// Precise timekeeping, lethal radiation. No habitable zone.
+    Pulsar,
+    /// Neutron star — ultra-dense supernova remnant.
+    /// ~10km across, more massive than a G-star. Exotic physics.
     Neutron,
-    Binary,
+    /// Black hole — collapsed massive star. Extreme gravity.
+    /// No habitable zone. Exotic gravitational effects.
     BlackHole,
+    /// Binary system — two stars orbiting each other.
+    /// Complex orbital dynamics. Habitability varies widely.
+    Binary,
+    /// Anomalous — something that doesn't fit standard classification.
+    /// Distorted spacetime, unknown physics. The weird ones.
     Anomalous,
+}
+
+impl StarType {
+    /// Habitability percentage — chance that a given planet in this system
+    /// rolls from the habitable body type pool vs. the inhospitable pool.
+    pub fn habitability(&self) -> f64 {
+        match self {
+            StarType::BlueSuperGiant => 0.05,
+            StarType::BlueGiant => 0.15,
+            StarType::WhiteStar => 0.30,
+            StarType::YellowWhiteDwarf => 1.0,
+            StarType::YellowDwarf => 1.0,
+            StarType::OrangeDwarf => 1.0,
+            StarType::RedDwarf => 0.40,
+            StarType::RedGiant => 0.10,
+            StarType::BrownDwarf => 0.10,
+            StarType::WhiteDwarf => 0.05,
+            StarType::WolfRayet => 0.0,
+            StarType::Pulsar => 0.0,
+            StarType::Neutron => 0.0,
+            StarType::BlackHole => 0.0,
+            StarType::Binary => 0.60,
+            StarType::Anomalous => 0.20,
+        }
+    }
+
+    /// Typical planet count range for this star type.
+    pub fn planet_count_range(&self) -> (usize, usize) {
+        match self {
+            StarType::BlueSuperGiant => (0, 2),
+            StarType::BlueGiant => (1, 3),
+            StarType::WhiteStar => (2, 4),
+            StarType::YellowWhiteDwarf => (3, 6),
+            StarType::YellowDwarf => (3, 6),
+            StarType::OrangeDwarf => (2, 5),
+            StarType::RedDwarf => (2, 4),
+            StarType::RedGiant => (1, 3),
+            StarType::BrownDwarf => (0, 2),
+            StarType::WhiteDwarf => (0, 2),
+            StarType::WolfRayet => (0, 1),
+            StarType::Pulsar => (0, 1),
+            StarType::Neutron => (0, 1),
+            StarType::BlackHole => (0, 2),
+            StarType::Binary => (2, 5),
+            StarType::Anomalous => (0, 3),
+        }
+    }
+
+    /// Inner orbital distance (AU) — where the first planet can form.
+    /// Driven by radiation pressure and tidal forces.
+    pub fn inner_orbit_au(&self) -> f32 {
+        match self {
+            StarType::BlueSuperGiant => 5.0,
+            StarType::BlueGiant => 3.0,
+            StarType::WhiteStar => 1.5,
+            StarType::YellowWhiteDwarf => 0.5,
+            StarType::YellowDwarf => 0.3,
+            StarType::OrangeDwarf => 0.15,
+            StarType::RedDwarf => 0.05,
+            StarType::RedGiant => 3.0,
+            StarType::BrownDwarf => 0.01,
+            StarType::WhiteDwarf => 0.005,
+            StarType::WolfRayet => 10.0,
+            StarType::Pulsar => 0.5,
+            StarType::Neutron => 0.3,
+            StarType::BlackHole => 1.0,
+            StarType::Binary => 1.0,
+            StarType::Anomalous => 0.1,
+        }
+    }
+
+    /// Orbital spacing multiplier — how far apart planets tend to be.
+    /// Luminous stars spread planets further; dim stars pack them in.
+    pub fn orbital_spacing(&self) -> f32 {
+        match self {
+            StarType::BlueSuperGiant => 4.0,
+            StarType::BlueGiant => 3.0,
+            StarType::WhiteStar => 2.0,
+            StarType::YellowWhiteDwarf => 1.5,
+            StarType::YellowDwarf => 1.0,
+            StarType::OrangeDwarf => 0.7,
+            StarType::RedDwarf => 0.4,
+            StarType::RedGiant => 3.0,
+            StarType::BrownDwarf => 0.15,
+            StarType::WhiteDwarf => 0.3,
+            StarType::WolfRayet => 5.0,
+            StarType::Pulsar => 1.0,
+            StarType::Neutron => 0.5,
+            StarType::BlackHole => 2.0,
+            StarType::Binary => 1.5,
+            StarType::Anomalous => 1.0,
+        }
+    }
+
+    /// Light color/quality — used in location descriptions.
+    pub fn light_description(&self) -> &'static str {
+        match self {
+            StarType::BlueSuperGiant => "searing blue-white light that bleaches everything it touches",
+            StarType::BlueGiant => "harsh blue-white glare that casts sharp, cold shadows",
+            StarType::WhiteStar => "clean white light with a faint blue edge",
+            StarType::YellowWhiteDwarf => "warm yellow-white light, brighter than Sol",
+            StarType::YellowDwarf => "familiar yellow sunlight",
+            StarType::OrangeDwarf => "deep amber light that tints everything in warm tones",
+            StarType::RedDwarf => "dim red light that never quite reaches full day",
+            StarType::RedGiant => "bloated orange glow that fills half the sky",
+            StarType::BrownDwarf => "faint infrared warmth — barely visible, more felt than seen",
+            StarType::WhiteDwarf => "intense pinpoint glare from a star the size of a planet",
+            StarType::WolfRayet => "violent blue-violet radiance flickering through stellar winds",
+            StarType::Pulsar => "rhythmic flash of radiation sweeping like a lighthouse",
+            StarType::Neutron => "faint, hard light from an object smaller than a city",
+            StarType::BlackHole => "no light — just the warped glow of the accretion disk",
+            StarType::Binary => "shifting double shadows from twin stars",
+            StarType::Anomalous => "light that doesn't behave the way light should",
+        }
+    }
+
+    /// Radiation environment — affects station shielding descriptions
+    /// and surface habitability flavor.
+    pub fn radiation_level(&self) -> &'static str {
+        match self {
+            StarType::BlueSuperGiant | StarType::WolfRayet => "extreme",
+            StarType::BlueGiant | StarType::Pulsar => "severe",
+            StarType::WhiteStar => "high",
+            StarType::YellowWhiteDwarf => "moderate",
+            StarType::YellowDwarf | StarType::OrangeDwarf | StarType::Binary => "normal",
+            StarType::RedDwarf => "low (with flare risk)",
+            StarType::RedGiant => "moderate (UV low, infrared high)",
+            StarType::BrownDwarf => "negligible",
+            StarType::WhiteDwarf => "high (UV intense at close range)",
+            StarType::Neutron | StarType::BlackHole => "extreme (gravitational/magnetic)",
+            StarType::Anomalous => "unpredictable",
+        }
+    }
+
+    /// Short descriptor for the star itself — used in system descriptions.
+    pub fn star_descriptor(&self) -> &'static str {
+        match self {
+            StarType::BlueSuperGiant => "a massive blue supergiant burning through its brief, violent life",
+            StarType::BlueGiant => "a luminous blue giant, bright enough to see across the sector",
+            StarType::WhiteStar => "a white main-sequence star with a wide habitable zone",
+            StarType::YellowWhiteDwarf => "a steady yellow-white star, slightly brighter than Sol",
+            StarType::YellowDwarf => "a yellow dwarf — the kind of star civilizations grow around",
+            StarType::OrangeDwarf => "a stable orange dwarf that will burn for tens of billions of years",
+            StarType::RedDwarf => "a dim red dwarf, the most common star in the galaxy",
+            StarType::RedGiant => "a swollen red giant, a sun-like star in its dying expansion",
+            StarType::BrownDwarf => "a brown dwarf — a failed star, barely glowing",
+            StarType::WhiteDwarf => "a dense white dwarf, the burnt-out core of a dead star",
+            StarType::WolfRayet => "a Wolf-Rayet star tearing itself apart in stellar winds",
+            StarType::Pulsar => "a spinning pulsar sweeping radiation beams across the void",
+            StarType::Neutron => "a neutron star — a city-sized remnant denser than atomic nuclei",
+            StarType::BlackHole => "a black hole, visible only by the light it bends and devours",
+            StarType::Binary => "a binary pair, two stars locked in gravitational embrace",
+            StarType::Anomalous => "something that resists classification",
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

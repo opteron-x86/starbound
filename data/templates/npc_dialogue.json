@@ -1,0 +1,167 @@
+{
+    "_schema": "starbound.template.npc_dialogue.v1",
+    "_note": "Dialogue templates shaped by disposition tier and personality axes. {name}, {title}, {pronoun.subject}, {pronoun.object}, {pronoun.possessive}, {pronoun.subject_cap}, {ship_name}, {system}, {faction} are valid placeholders.",
+  
+    "greetings": {
+      "hostile": [
+        "{name} sees you and {pronoun.possessive} expression hardens. \"You have nothing I want. Leave.\"",
+        "{name} turns away before you can speak. The message is clear.",
+        "\"I know who you are,\" {name} says flatly. \"We're done.\""
+      ],
+      "cold": [
+        "{name} barely glances up. \"Make it quick.\"",
+        "A curt nod from {name}. Nothing more.",
+        "{name} acknowledges you with the minimum courtesy {pronoun.possessive} position requires."
+      ],
+      "neutral": [
+        "{name} looks you over. \"Captain. What can I do for you?\"",
+        "\"You're the one with the {ship_name},\" {name} says. \"What do you need?\"",
+        "{name} sets down what {pronoun.subject}'s working on. \"Go ahead.\""
+      ],
+      "warm": [
+        "{name} waves you over. \"Good timing. Sit down.\"",
+        "\"Captain! I was hoping you'd come by,\" {name} says, making room at the table.",
+        "{name} greets you by name. There's genuine warmth in it."
+      ],
+      "friendly": [
+        "{name} breaks into a real smile when {pronoun.subject} sees you. \"It's good to see you again.\"",
+        "\"There {pronoun.subject} is,\" {name} says, pushing a drink across the counter. \"I've been saving this.\"",
+        "{name} clasps your hand. The kind of greeting you earn, not receive."
+      ],
+      "trusted": [
+        "{name} pulls you aside, away from listening ears. \"I'm glad you're here. We need to talk.\"",
+        "\"I trust you,\" {name} says simply. \"Not many people I say that to.\"",
+        "{name} looks relieved. \"Thank the stars. I need someone I can be honest with.\""
+      ]
+    },
+  
+    "returning_player": {
+      "positive": [
+        "\"Last time you were here, {summary}. I haven't forgotten.\"",
+        "\"I remember — {summary}. People like you are rare out here.\"",
+        "{name} nods with recognition. \"{summary}. I remember.\""
+      ],
+      "negative": [
+        "\"Last time... {summary}.\" {pronoun.subject_cap} doesn't look pleased.",
+        "\"You're the one who — {summary}.\" A pause. \"I remember.\"",
+        "{name}'s jaw tightens. \"After {summary}, you've got nerve coming back.\""
+      ],
+      "neutral_memory": [
+        "\"You've been through here before. {summary}, wasn't it?\"",
+        "\"I recall — {summary}.\" A professional nod."
+      ]
+    },
+  
+    "ask_area_framing": {
+      "warmth_high": [
+        "{name} leans in, happy to share. ",
+        "{name} takes a breath — {pronoun.subject}'s been waiting to talk to someone who'd listen. ",
+        "\"Since you're asking —\" {name} settles in, clearly prepared to talk. "
+      ],
+      "warmth_low": [
+        "{name} considers what to tell you. ",
+        "A pause. {name} decides you're worth a few words. ",
+        "{name} gives you the short version. "
+      ],
+      "boldness_high": [
+        "\"Here's what I know, and I'm not sugarcoating it. ",
+        "\"I'll tell you straight — ",
+        "{name} doesn't hedge. "
+      ],
+      "boldness_low": [
+        "\"I've heard some things, but don't quote me on this. ",
+        "\"This is just what I've picked up — I can't confirm all of it. ",
+        "{name} lowers {pronoun.possessive} voice. "
+      ]
+    },
+  
+    "knowledge_delivery": {
+      "general": [
+        "\"{system}? {knowledge_item}.\"",
+        "\"Around here — {knowledge_item}.\"",
+        "\"{knowledge_item}. That's {system} for you.\""
+      ],
+      "faction_intel": [
+        "\"Between you and me — {knowledge_item}.\"",
+        "\"You didn't hear this from me, but {knowledge_item}.\"",
+        "{name} drops {pronoun.possessive} voice. \"{knowledge_item}.\""
+      ],
+      "thread_rumor": [
+        "\"There's been talk of something. {knowledge_item}. I'd look into it.\"",
+        "\"Word is — {knowledge_item}. Make of that what you will.\"",
+        "\"I keep hearing about — {knowledge_item}. Might be worth your time.\""
+      ],
+      "connection_mention": [
+        "\"You should talk to {connection_name} at {connection_location}. {pronoun.subject_cap} knows more than I do.\"",
+        "\"If you want the real story, find {connection_name}. Tell {connection_object} I sent you.\"",
+        "\"{connection_name} — {connection_title}. {pronoun.subject_cap} might have something for you.\""
+      ]
+    },
+  
+    "ask_about_connection": {
+      "colleague": [
+        "\"{connection_name}? We work together. {context}. Solid enough, as far as that goes.\"",
+        "\"Professional relationship. {context}. {pronoun.subject_cap}'s reliable.\""
+      ],
+      "acquaintance": [
+        "\"{connection_name}? I know {connection_object}. {context}. We get along.\"",
+        "\"Different circles, but we cross paths. {context}.\""
+      ],
+      "rival": [
+        "A tight smile. \"{connection_name}. {context}. We don't see eye to eye.\"",
+        "\"{connection_name}.\" {name}'s expression says plenty. \"{context}.\""
+      ],
+      "dependent": [
+        "\"{connection_name} — {context}. It's a practical arrangement.\"",
+        "\"We need each other. {context}. That's just how it works out here.\""
+      ],
+      "old_friend": [
+        "{name}'s expression softens. \"{connection_name}. {context}. Good person.\"",
+        "\"We go back. {context}. One of the few I'd trust with my life.\""
+      ],
+      "knows_of": [
+        "\"I know the name. {context}. Never dealt with {connection_object} directly.\"",
+        "\"{connection_name}? By reputation. {context}.\""
+      ]
+    },
+  
+    "contract_refusal": {
+      "cold": [
+        "\"I don't do business with people I don't know. Or trust.\"",
+        "\"Nothing for you. Try someone else.\"",
+        "{name} shakes {pronoun.possessive} head. \"Not today.\""
+      ],
+      "hostile": [
+        "\"You think I'd give you work? After what you've done?\"",
+        "{name} doesn't even dignify it with a response.",
+        "\"Get out of my office before I call security.\""
+      ]
+    },
+  
+    "farewell": {
+      "hostile": [
+        "{name} has already turned away.",
+        "The conversation is over before it started."
+      ],
+      "cold": [
+        "A curt nod. Nothing more.",
+        "{name} goes back to work without looking up."
+      ],
+      "neutral": [
+        "\"Safe travels, Captain.\"",
+        "{name} nods. \"You know where to find me.\""
+      ],
+      "warm": [
+        "\"Come back anytime. And be careful out there.\"",
+        "\"Good talking to you. Watch yourself.\""
+      ],
+      "friendly": [
+        "\"Take care of yourself. I mean it.\"",
+        "\"Next time you're through, first drink is on me.\""
+      ],
+      "trusted": [
+        "\"Stay alive. The galaxy needs more people like you.\"",
+        "\"If you need anything — anything — you know how to reach me.\""
+      ]
+    }
+  }

@@ -79,6 +79,65 @@ pub struct Npc {
     pub interaction_history: Vec<InteractionRecord>,
 }
 
+// ---------------------------------------------------------------------------
+// Disposition tiers — gates NPC behavior
+// ---------------------------------------------------------------------------
+
+/// How the NPC treats the player, derived from raw disposition score.
+/// Gates available actions, information quality, and dialogue tone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DispositionTier {
+    /// -1.0 to -0.5: Won't talk. May alert faction security.
+    Hostile,
+    /// -0.5 to -0.2: Minimal interaction. No contracts, no intel.
+    Cold,
+    /// -0.2 to 0.2: Transactional. Standard contracts. Basic info.
+    Neutral,
+    /// 0.2 to 0.5: Better contracts. Shares rumors. Mentions connections.
+    Warm,
+    /// 0.5 to 0.8: Faction-sensitive intel. Introduces you to connections.
+    Friendly,
+    /// 0.8 to 1.0: Shares secrets. Warns you about threats.
+    Trusted,
+}
+
+impl DispositionTier {
+    /// Derive from a raw disposition value.
+    pub fn from_score(score: f32) -> Self {
+        if score < -0.5 {
+            DispositionTier::Hostile
+        } else if score < -0.2 {
+            DispositionTier::Cold
+        } else if score < 0.2 {
+            DispositionTier::Neutral
+        } else if score < 0.5 {
+            DispositionTier::Warm
+        } else if score < 0.8 {
+            DispositionTier::Friendly
+        } else {
+            DispositionTier::Trusted
+        }
+    }
+
+    /// Short label for display (used in debug/dev views).
+    pub fn label(&self) -> &'static str {
+        match self {
+            DispositionTier::Hostile => "hostile",
+            DispositionTier::Cold => "cold",
+            DispositionTier::Neutral => "neutral",
+            DispositionTier::Warm => "warm",
+            DispositionTier::Friendly => "friendly",
+            DispositionTier::Trusted => "trusted",
+        }
+    }
+}
+
+impl std::fmt::Display for DispositionTier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.label())
+    }
+}
+
 impl Npc {
     /// Create a new NPC with neutral disposition and default social state.
     pub fn new(
@@ -128,6 +187,66 @@ impl Npc {
     /// The most recent interaction with the player, if any.
     pub fn last_interaction(&self) -> Option<&InteractionRecord> {
         self.interaction_history.last()
+    }
+
+    /// Current disposition tier — gates available actions and dialogue.
+    pub fn disposition_tier(&self) -> DispositionTier {
+        DispositionTier::from_score(self.disposition)
+    }
+
+    /// Whether the NPC will talk to the player at all.
+    pub fn will_talk(&self) -> bool {
+        self.disposition_tier() != DispositionTier::Hostile
+    }
+
+    /// Whether the NPC will share connections with the player.
+    pub fn will_share_connections(&self) -> bool {
+        self.disposition_tier() >= DispositionTier::Warm
+    }
+
+    /// Whether the NPC will offer contracts.
+    pub fn will_offer_contracts(&self) -> bool {
+        self.disposition_tier() >= DispositionTier::Neutral
+    }
+
+    /// How many knowledge items this NPC will share, based on
+    /// disposition and personality warmth.
+    pub fn knowledge_share_count(&self) -> usize {
+        let tier = self.disposition_tier();
+        let base = match tier {
+            DispositionTier::Hostile => 0,
+            DispositionTier::Cold => 0,
+            DispositionTier::Neutral => 1,
+            DispositionTier::Warm => 2,
+            DispositionTier::Friendly => 3,
+            DispositionTier::Trusted => 4,
+        };
+        // High-warmth NPCs are more generous.
+        if self.personality.warmth > 0.6 && base > 0 {
+            (base + 1).min(self.knowledge.len())
+        } else {
+            base.min(self.knowledge.len())
+        }
+    }
+
+    /// Knowledge items this NPC is willing to share at current disposition.
+    /// Filters out items flagged as already shared (tracked externally).
+    pub fn shareable_knowledge(&self, already_shared: &[String]) -> Vec<&str> {
+        let count = self.knowledge_share_count();
+        self.knowledge.iter()
+            .filter(|k| !already_shared.contains(k))
+            .take(count)
+            .map(|k| k.as_str())
+            .collect()
+    }
+
+    /// Connections this NPC is willing to mention at current disposition.
+    pub fn shareable_connections(&self) -> &[NpcConnection] {
+        if self.will_share_connections() {
+            &self.connections
+        } else {
+            &[]
+        }
     }
 }
 
@@ -303,13 +422,6 @@ impl NpcPersonality {
     /// Describe the dominant trait for bio generation.
     /// Returns a short phrase like "guarded and pragmatic".
     pub fn dominant_description(&self) -> &'static str {
-        // Find the axis furthest from 0.5 in either direction.
-        let axes = [
-            ("warmth", self.warmth),
-            ("boldness", self.boldness),
-            ("idealism", self.idealism),
-        ];
-
         let warmth_high = self.warmth > 0.6;
         let boldness_high = self.boldness > 0.6;
         let idealism_high = self.idealism > 0.6;
@@ -323,6 +435,58 @@ impl NpcPersonality {
             (false, true, false) => "direct and calculating",
             (false, false, true) => "reserved but principled",
             (false, false, false) => "guarded and pragmatic",
+        }
+    }
+
+    /// The dominant axis — the one furthest from 0.5 in either direction.
+    /// Returns (axis_name, value, is_high).
+    pub fn dominant_axis(&self) -> (&'static str, f32, bool) {
+        let axes = [
+            ("warmth", self.warmth),
+            ("boldness", self.boldness),
+            ("idealism", self.idealism),
+        ];
+        let (name, val) = axes.iter()
+            .max_by(|(_, a), (_, b)| {
+                let da = (a - 0.5).abs();
+                let db = (b - 0.5).abs();
+                da.partial_cmp(&db).unwrap()
+            })
+            .unwrap();
+        (*name, *val, *val > 0.5)
+    }
+
+    /// The secondary axis — second furthest from 0.5.
+    pub fn secondary_axis(&self) -> (&'static str, f32, bool) {
+        let mut axes = [
+            ("warmth", self.warmth),
+            ("boldness", self.boldness),
+            ("idealism", self.idealism),
+        ];
+        axes.sort_by(|(_, a), (_, b)| {
+            let da = (a - 0.5).abs();
+            let db = (b - 0.5).abs();
+            db.partial_cmp(&da).unwrap()
+        });
+        let (name, val) = axes[1];
+        (name, val, val > 0.5)
+    }
+
+    /// Human-readable archetype label. Not stored — emergent from axes.
+    pub fn archetype_label(&self) -> &'static str {
+        let warmth_high = self.warmth > 0.5;
+        let boldness_high = self.boldness > 0.5;
+        let idealism_high = self.idealism > 0.5;
+
+        match (warmth_high, boldness_high, idealism_high) {
+            (true, true, true) => "The True Believer",
+            (true, true, false) => "The Operator",
+            (true, false, true) => "The Counselor",
+            (true, false, false) => "The Survivor",
+            (false, true, true) => "The Zealot",
+            (false, true, false) => "The Shark",
+            (false, false, true) => "The Bureaucrat",
+            (false, false, false) => "The Ghost",
         }
     }
 }

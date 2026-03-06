@@ -1,509 +1,48 @@
 [
   {
-    "id": "arrival_quiet_station",
-    "encounter_type": "contextual",
-    "tone": "melancholy",
-    "context_requirements": {
-      "infrastructure_min": "outpost",
-      "time_since_last_visit_galactic_years_min": 20.0,
-      "location_types": [
-        "station"
-      ]
-    },
-    "text": "The docking clamps engage with a sound you almost remember. The station looks the same from outside — same silhouette against the starfield, same running lights cycling through their pattern. But the frequency is different. Someone changed the timing.\n\nInside, the corridors have been repainted. The old murals are gone, covered by something cleaner and less interesting. A directory board lists businesses you don't recognize. The air recyclers have a different smell — not unpleasant, just not the one you knew.\n\nA maintenance worker glances at your ship registry, then at you, then back at the registry. She doesn't say anything. She just nods, slowly, and goes back to her work.\n\nYou're listed in the station's historical records, probably. A name from before she was born.",
-    "choices": [
-      {
-        "label": "Ask about the old businesses",
-        "tone_note": "Nostalgia. The player is reaching for something that isn't there.",
-        "effects": [
-          {
-            "type": "spawn_thread",
-            "thread_type": "mystery",
-            "description": "Spoke to locals about the station's history. Names and dates that connect to a time before you arrived here last."
-          },
-          {
-            "type": "narrative",
-            "text": "Learned what changed. It was everything."
-          }
-        ]
-      },
-      {
-        "label": "Head to the trade board",
-        "tone_note": "Pragmatic. Moving forward.",
-        "effects": [
-          {
-            "type": "fuel",
-            "delta": 15.0
-          },
-          {
-            "type": "resources",
-            "delta": -40.0
-          },
-          {
-            "type": "hull",
-            "delta": 0.05
-          },
-          {
-            "type": "narrative",
-            "text": "Resupplied. The ship feels a little more whole."
-          }
-        ]
-      },
-      {
-        "label": "Find the historical records",
-        "tone_note": "Looking for evidence you were here. That it mattered.",
-        "effects": [
-          {
-            "type": "spawn_thread",
-            "thread_type": "mystery",
-            "description": "Found your name in the station's historical records. You were here. That much is documented."
-          },
-          {
-            "type": "narrative",
-            "text": "The records confirmed what you already knew. You passed through here once, when it meant something different."
-          }
-        ]
-      },
-      {
-        "label": "Return to the ship",
-        "tone_note": "Some places you can't go back to.",
-        "effects": [
-          {
-            "type": "pass"
-          }
-        ]
-      }
-    ],
-    "category": "ambient",
-    "priority": 0
-  },
-  {
-    "id": "trader_at_dock",
-    "encounter_type": "mundane",
-    "tone": "mundane",
-    "context_requirements": {
-      "infrastructure_min": "colony",
-      "location_types": [
-        "station"
-      ]
-    },
-    "text": "A freighter captain catches you at the docking bay airlock. She's got the look of someone who's been waiting for any ship to pull in — tired, caffeinated, leaning against a cargo loader like it's the only thing keeping her upright.\n\n\"You heading rimward? I've got medical supplies that were supposed to go to Thornfield three months ago. Contractor fell through. I can't make the run myself — engine coil's shot. Pay's decent. Nothing fancy, just getting boxes from here to there.\"\n\nShe slides a manifest across. Standard pharmaceuticals, sealed crates. The kind of cargo that's straightforward until it isn't.",
-    "choices": [
-      {
-        "label": "Accept the job",
-        "tone_note": "Honest work. Straightforward. Probably.",
-        "effects": [
-          {
-            "type": "resources",
-            "delta": 50.0
-          },
-          {
-            "type": "add_cargo",
-            "item": "Medical supplies (Thornfield delivery)",
-            "quantity": 3
-          },
-          {
-            "type": "spawn_thread",
-            "thread_type": "debt",
-            "description": "Accepted a cargo run to Thornfield — medical supplies, straightforward delivery. Someone is waiting."
-          },
-          {
-            "type": "narrative",
-            "text": "Loaded the cargo. Another obligation, another reason to keep moving."
-          }
-        ]
-      },
-      {
-        "label": "Ask why the contractor fell through",
-        "tone_note": "Trust but verify.",
-        "effects": [
-          {
-            "type": "spawn_thread",
-            "thread_type": "secret",
-            "description": "Asked questions about the cargo job. The contractor fell through because the route passes near restricted space. The captain didn't mention that part."
-          },
-          {
-            "type": "narrative",
-            "text": "Dug a little deeper. Found a reason to be cautious."
-          }
-        ]
-      },
-      {
-        "label": "Decline politely",
-        "tone_note": "Not your problem.",
-        "effects": [
-          {
-            "type": "narrative",
-            "text": "You declined. Life goes on."
-          }
-        ]
-      }
-    ],
-    "category": "ambient",
-    "priority": 0
-  },
-  {
-    "id": "empty_system_arrival",
+    "id": "transit_drive_harmonics",
     "encounter_type": "contextual",
     "tone": "quiet",
-    "context_requirements": {
-      "infrastructure_max": "none",
-      "location_types": [
-        "deep_space"
-      ]
-    },
-    "text": "Nothing.\n\nA red dwarf at {system.name} and its handful of frozen worlds. No signals. No stations. No evidence that anything with a pulse has ever been here. Your sensors sweep the system and come back with data that amounts to a shrug.\n\nYour navigator marks the system as surveyed and adds it to the charts. Another dot on a map that's mostly empty space. The star looks old and tired and very far from anything that matters.\n\nThe ship hums around you. The crew goes about their routines. Outside the viewport, the galaxy continues not to notice you.",
-    "choices": [
-      {
-        "label": "Run a detailed survey anyway",
-        "tone_note": "Thoroughness for its own sake. Or maybe hoping to find something.",
-        "effects": [
-          {
-            "type": "spawn_thread",
-            "thread_type": "mystery",
-            "description": "The survey picked up something faint — a signal signature that doesn't match any known source."
-          },
-          {
-            "type": "narrative",
-            "text": "Thorough scan completed. Found more than expected."
-          }
-        ]
-      },
-      {
-        "label": "Sit with the quiet for a while",
-        "tone_note": "Sometimes the emptiness is the point.",
-        "effects": [
-          {
-            "type": "crew_stress",
-            "delta": -0.05
-          },
-          {
-            "type": "narrative",
-            "text": "Took a moment. The universe waited."
-          }
-        ]
-      },
-      {
-        "label": "Plot the next jump",
-        "tone_note": "Keep moving. Standing still in the void gets uncomfortable.",
-        "effects": [
-          {
-            "type": "pass"
-          }
-        ]
-      }
-    ],
     "category": "ambient",
-    "priority": 0
-  },
-  {
-    "id": "fuel_merchant_desperate",
-    "encounter_type": "contextual",
-    "tone": "tense",
+    "priority": 0,
+    "trigger": "transit",
+    "event_kind": "ambient",
     "context_requirements": {
-      "infrastructure_min": "outpost",
-      "fuel_below_fraction": 0.3,
-      "location_types": [
-        "station"
-      ]
+      "crew_min": 2
     },
-    "text": "The fuel depot is operational but the prices on the board make your quartermaster wince audibly.\n\n\"Supply chain issues,\" the depot manager says, not looking up from his console. \"The Hegemony rerouted the tanker convoys six months ago. Something about security concerns. So now we get fuel when we get fuel, and we charge what the market will bear.\"\n\nHe looks at your ship's registration. Looks at your fuel gauge readout on his screen.\n\n\"Looks like the market will bear quite a lot, in your case.\"",
+    "text": "The drive note shifts during the burn — a subtle change in pitch that most people wouldn't notice. Your engineer does. She tilts her head, listening to something in the harmonics that you can't hear.\n\n\"It's fine,\" she says, before you ask. \"Just... different. Every repair changes the voice a little. Like an instrument that's been restrung.\"\n\nShe goes back to her readouts. The drive hums on, slightly changed, carrying you forward.",
     "choices": [
       {
-        "label": "Pay the inflated price",
-        "tone_note": "You don't have a choice and you both know it.",
+        "label": "Ask her what she hears",
+        "tone_note": "Curiosity about the ship. Connection with crew.",
         "effects": [
           {
-            "type": "fuel",
-            "delta": 35.0
-          },
-          {
-            "type": "resources",
-            "delta": -90.0
-          },
-          {
-            "type": "crew_stress",
-            "delta": 0.05
+            "type": "trust_personal",
+            "delta": 0.03
           },
           {
             "type": "narrative",
-            "text": "Paid through the nose, but the tanks are fuller."
+            "text": "Listened to the engineer talk about the ship. She knows it better than anyone."
           }
         ]
       },
       {
-        "label": "Negotiate",
-        "tone_note": "Worth trying. Dignity costs nothing.",
+        "label": "Note it in the maintenance log",
+        "tone_note": "Professional. The captain who keeps records.",
         "effects": [
-          {
-            "type": "fuel",
-            "delta": 25.0
-          },
-          {
-            "type": "resources",
-            "delta": -40.0
-          },
-          {
-            "type": "narrative",
-            "text": "Talked the price down. Not cheap, but fair enough."
-          }
-        ]
-      },
-      {
-        "label": "Ask about alternative fuel sources",
-        "tone_note": "There's always another way. Usually a worse one.",
-        "effects": [
-          {
-            "type": "spawn_thread",
-            "thread_type": "mystery",
-            "description": "Heard about an alternative fuel source — unorthodox, possibly dangerous, worth investigating."
-          },
-          {
-            "type": "narrative",
-            "text": "No fuel today, but a lead on something interesting."
-          }
-        ]
-      },
-      {
-        "label": "Buy only what you need to reach the next system",
-        "tone_note": "Calculated risk. Hope the next port is cheaper.",
-        "effects": [
-          {
-            "type": "fuel",
-            "delta": 10.0
-          },
-          {
-            "type": "resources",
-            "delta": -25.0
-          },
-          {
-            "type": "narrative",
-            "text": "Just enough to reach the next port. Hopefully."
-          }
-        ]
-      }
-    ],
-    "category": "ambient",
-    "priority": 1
-  },
-  {
-    "id": "trade_hub_bustle",
-    "encounter_type": "mundane",
-    "tone": "mundane",
-    "context_requirements": {
-      "infrastructure_min": "hub",
-      "location_types": [
-        "station"
-      ]
-    },
-    "text": "The station is alive with traffic. Cargo haulers queue for docking clearance. Merchants argue prices in three languages over open channels. A food vendor has set up a stall in the docking bay concourse, and the smell of something fried and heavily spiced cuts through the recycled air.\n\nYour quartermaster is already compiling a shopping list. Your engineer is scanning the parts vendors. Someone on the crew — you're not sure who — has already left the ship.\n\nFor a few hours, the universe feels small and human and manageable. There are prices and schedules and people complaining about the docking fees. It's almost like being somewhere normal.",
-    "choices": [
-      {
-        "label": "Resupply and trade",
-        "tone_note": "The mundane business of staying alive.",
-        "effects": [
-          {
-            "type": "fuel",
-            "delta": 15.0
-          },
-          {
-            "type": "resources",
-            "delta": -40.0
-          },
-          {
-            "type": "hull",
-            "delta": 0.05
-          },
-          {
-            "type": "narrative",
-            "text": "Resupplied. The ship feels a little more whole."
-          }
-        ]
-      },
-      {
-        "label": "Look for work on the job boards",
-        "tone_note": "Credits make the galaxy go around.",
-        "effects": [
-          {
-            "type": "spawn_thread",
-            "thread_type": "debt",
-            "description": "Took a contract — delivery, investigation, or escort. Someone is counting on you now."
-          },
-          {
-            "type": "narrative",
-            "text": "Found work. The kind that keeps the tanks full."
-          }
-        ]
-      },
-      {
-        "label": "Let the crew have shore leave",
-        "tone_note": "They need it. You might too.",
-        "effects": [
-          {
-            "type": "crew_stress",
-            "delta": -0.2
-          },
-          {
-            "type": "resources",
-            "delta": -30.0
-          },
-          {
-            "type": "crew_mood",
-            "mood": "hopeful",
-            "all": true
-          },
-          {
-            "type": "narrative",
-            "text": "The crew dispersed into the station. Came back lighter."
-          }
-        ]
-      },
-      {
-        "label": "Ask around for news and rumors",
-        "tone_note": "What's changed while you were in transit?",
-        "effects": [
-          {
-            "type": "spawn_thread",
-            "thread_type": "secret",
-            "description": "Picked up rumors — faction movements, missing ships, a place that used to be safe and isn't anymore."
-          },
-          {
-            "type": "narrative",
-            "text": "Listened to the local talk. Filed it away."
-          }
-        ]
-      }
-    ],
-    "category": "ambient",
-    "priority": 0
-  },
-  {
-    "id": "damaged_and_limping",
-    "encounter_type": "contextual",
-    "tone": "urgent",
-    "context_requirements": {
-      "hull_below": 0.5,
-      "location_types": [
-        "deep_space",
-        "planet_surface",
-        "moon",
-        "asteroid_belt"
-      ]
-    },
-    "text": "The damage report is getting longer.\n\nYour engineer reads it out in a flat voice that means things are bad enough to skip the sugar-coating. Hull breach in section four, sealed but not repaired. Port sensor array offline. Water recycler running at sixty percent. Life support is fine for now, which is the kind of reassurance that only matters because someone felt the need to say it.\n\n\"We can keep flying,\" she says. \"I wouldn't recommend keeping flying.\"\n\nThe nearest station is on the charts. Whether it still exists is a different question. Whether it has the parts you need is another one after that.",
-    "choices": [
-      {
-        "label": "Head for the nearest station",
-        "tone_note": "Survival instinct. Get somewhere with walls that hold.",
-        "effects": [
-          {
-            "type": "narrative",
-            "text": "Set course for the nearest repair facility."
-          },
-          {
-            "type": "add_concern",
-            "text": "Heading for repairs — hull integrity critical."
-          }
-        ]
-      },
-      {
-        "label": "Attempt field repairs with what we have",
-        "tone_note": "Making do. It's what you're good at.",
-        "effects": [
-          {
-            "type": "hull",
-            "delta": 0.15
-          },
-          {
-            "type": "repair_module",
-            "module": "sensors",
-            "amount": 0.15
-          },
-          {
-            "type": "resources",
-            "delta": -20.0
-          },
-          {
-            "type": "crew_stress",
-            "delta": 0.05
-          },
           {
             "type": "trust_professional",
-            "delta": 0.05
+            "delta": 0.02
           },
           {
             "type": "narrative",
-            "text": "Jury-rigged repairs. Holding together, for now."
+            "text": "Logged the drive harmonic shift. Small details matter."
           }
         ]
       },
       {
-        "label": "Press on — we'll deal with it later",
-        "tone_note": "Stubbornness. Or maybe the destination matters more than the ship.",
-        "effects": [
-          {
-            "type": "crew_stress",
-            "delta": 0.1
-          },
-          {
-            "type": "trust_professional",
-            "delta": -0.05
-          },
-          {
-            "type": "crew_mood",
-            "mood": "anxious"
-          },
-          {
-            "type": "narrative",
-            "text": "Pressed on despite the damage. The crew noticed."
-          }
-        ]
-      }
-    ],
-    "category": "ambient",
-    "priority": 1
-  },
-  {
-    "id": "star_observation",
-    "encounter_type": "contextual",
-    "tone": "quiet",
-    "context_requirements": {
-      "location_types": [
-        "deep_space",
-        "planet_surface",
-        "moon",
-        "asteroid_belt"
-      ]
-    },
-    "text": "In orbit around {system.name}, with nothing demanding your attention, you find yourself on the observation deck.\n\nThe star you're orbiting is unremarkable. A main sequence yellow, not unlike the one that warmed whatever world you came from. The light takes eight minutes to reach the inner planets and then keeps going forever, carrying information about this moment to places that won't receive it for millennia.\n\nYou're in that light now. A tiny perturbation in the data. If someone with a powerful enough telescope pointed it here in a thousand years, they might detect the faintest wobble — evidence that something was here. That something passed through.\n\nYour navigator pings you about the next heading. The moment dissolves.",
-    "choices": [
-      {
-        "label": "Take a moment longer",
-        "tone_note": "The rare luxury of having nowhere urgent to be.",
-        "effects": [
-          {
-            "type": "crew_stress",
-            "delta": -0.05
-          },
-          {
-            "type": "narrative",
-            "text": "Took a moment. The universe waited."
-          }
-        ]
-      },
-      {
-        "label": "Make a log entry about the view",
-        "tone_note": "Preserving something that doesn't need preserving.",
-        "effects": [
-          {
-            "type": "narrative",
-            "text": "Added an entry to the log. Preserving what matters."
-          }
-        ]
-      },
-      {
-        "label": "Head to the bridge",
-        "tone_note": "Back to work. Stars don't pay the fuel bills.",
+        "label": "Let the moment pass",
+        "tone_note": "Silence between people who work together.",
         "effects": [
           {
             "type": "pass"
@@ -511,526 +50,63 @@
         ]
       }
     ],
-    "category": "ambient",
-    "priority": 0
+    "intents": []
   },
   {
-    "id": "smuggler_proposition",
-    "encounter_type": "novel",
-    "tone": "tense",
-    "context_requirements": {
-      "infrastructure_min": "outpost",
-      "location_types": [
-        "station"
-      ]
-    },
-    "text": "He finds you in the kind of bar that exists in every station — bad lighting, cheap drinks, nobody asking questions. He sits down without being invited and doesn't order anything.\n\n\"Your ship. It's fast enough and it's not flagged. I have cargo that needs to cross the border. Not weapons, not narcotics — I'm not stupid. Data cores. Research data. Proprietary stuff that belongs to people who'd rather it didn't leave their jurisdiction.\"\n\nHe slides a number across the table. It's a lot of money. Enough to keep you fueled for months.\n\n\"The people I'm taking this from won't miss it for weeks. The people I'm delivering it to will make sure it never gets traced back. Clean transaction. Everybody wins.\"\n\nNobody ever says 'everybody wins' when everybody actually wins.",
-    "choices": [
-      {
-        "label": "Hear him out fully before deciding",
-        "tone_note": "Information costs nothing. Commitment costs everything.",
-        "effects": [
-          {
-            "type": "spawn_thread",
-            "thread_type": "secret",
-            "description": "The smuggler's operation is small but professional. The data cores contain proprietary research — genomic data, possibly valuable, definitely stolen."
-          },
-          {
-            "type": "narrative",
-            "text": "Heard him out. The details make it harder to say no, not easier."
-          }
-        ]
-      },
-      {
-        "label": "Accept the job",
-        "tone_note": "The money is real. The risk is abstract. For now.",
-        "effects": [
-          {
-            "type": "resources",
-            "delta": 200.0
-          },
-          {
-            "type": "add_cargo",
-            "item": "Sealed containers (unknown contents)",
-            "quantity": 5
-          },
-          {
-            "type": "crew_stress",
-            "delta": 0.1
-          },
-          {
-            "type": "trust_ideological",
-            "delta": -0.05
-          },
-          {
-            "type": "spawn_thread",
-            "thread_type": "debt",
-            "description": "Carrying unknown cargo across a faction border. Someone is expecting delivery."
-          },
-          {
-            "type": "narrative",
-            "text": "Took the job. Didn't ask what's in the containers."
-          }
-        ]
-      },
-      {
-        "label": "Decline",
-        "tone_note": "Principles. Or maybe just caution.",
-        "effects": [
-          {
-            "type": "narrative",
-            "text": "You declined. Life goes on."
-          }
-        ]
-      },
-      {
-        "label": "Walk away without a word",
-        "tone_note": "Not even worth a conversation.",
-        "effects": [
-          {
-            "type": "pass"
-          }
-        ]
-      }
-    ],
-    "category": "ambient",
-    "priority": 1
-  },
-  {
-    "id": "refueling_stop",
-    "encounter_type": "mundane",
-    "tone": "mundane",
-    "context_requirements": {
-      "infrastructure_min": "outpost",
-      "location_types": [
-        "station"
-      ]
-    },
-    "text": "The refueling station is exactly what it looks like: a few tanks, a docking arm, and someone who sells fuel. No bar, no trade board, no reason to stay longer than it takes to fill the tanks.\n\nThe attendant has the manner of a person who's been alone with machines for too long. She talks to the fuel pumps while she works. She tells your ship it's a good ship. She asks the docking clamps how they're feeling today.\n\nWhen she notices you listening, she shrugs. \"Company's company.\"\n\nThe fuel is reasonably priced. The solitude is free.",
-    "choices": [
-      {
-        "label": "Fuel up and chat for a bit",
-        "tone_note": "A small kindness in a large void.",
-        "effects": [
-          {
-            "type": "fuel",
-            "delta": 20.0
-          },
-          {
-            "type": "resources",
-            "delta": -30.0
-          },
-          {
-            "type": "crew_stress",
-            "delta": -0.05
-          },
-          {
-            "type": "narrative",
-            "text": "A small kindness at a quiet refueling stop."
-          }
-        ]
-      },
-      {
-        "label": "Just fuel, thanks",
-        "tone_note": "Transaction complete. Moving on.",
-        "effects": [
-          {
-            "type": "fuel",
-            "delta": 20.0
-          },
-          {
-            "type": "resources",
-            "delta": -30.0
-          }
-        ]
-      },
-      {
-        "label": "Ask if she's heard any news from the sector",
-        "tone_note": "People in quiet places hear things that busy people miss.",
-        "effects": [
-          {
-            "type": "spawn_thread",
-            "thread_type": "secret",
-            "description": "Picked up rumors — faction movements, missing ships, a place that used to be safe and isn't anymore."
-          },
-          {
-            "type": "narrative",
-            "text": "Listened to the local talk. Filed it away."
-          }
-        ]
-      }
-    ],
-    "category": "ambient",
-    "priority": 0
-  },
-  {
-    "id": "pirate_warning",
+    "id": "transit_scanner_chatter",
     "encounter_type": "contextual",
-    "tone": "tense",
-    "context_requirements": {
-      "unclaimed": true,
-      "location_types": [
-        "deep_space",
-        "asteroid_belt"
-      ]
-    },
-    "text": "A ship drops out of the sensor noise about thirty thousand kilometers off your port side. Small, fast, no transponder. It's not approaching. It's matching your heading at a careful distance.\n\nYour comms officer shakes her head — no hails, no identification, no response to your queries. Just a ship, sitting in your wake, watching.\n\nAnother contact appears on sensors. Same profile. Starboard side.\n\n\"They're not hiding,\" your security officer says. \"They want us to know they're there.\"\n\nA message arrives. Text only, no voice. Three words: DUMP YOUR CARGO.",
-    "choices": [
-      {
-        "label": "Comply — jettison cargo",
-        "tone_note": "Survival over pride. Cargo can be replaced.",
-        "effects": [
-          {
-            "type": "jettison_cargo"
-          },
-          {
-            "type": "crew_mood",
-            "mood": "anxious"
-          },
-          {
-            "type": "narrative",
-            "text": "Cargo jettisoned. The pirates took it and vanished."
-          },
-          {
-            "type": "spawn_thread",
-            "thread_type": "grudge",
-            "description": "Lost cargo to pirates in unclaimed space. The crew remembers."
-          }
-        ]
-      },
-      {
-        "label": "Ignore the message and hold course",
-        "tone_note": "Calling the bluff. Or forcing the hand.",
-        "effects": [
-          {
-            "type": "hull",
-            "delta": -0.1
-          },
-          {
-            "type": "damage_module",
-            "module": "engine",
-            "amount": 0.1
-          },
-          {
-            "type": "crew_stress",
-            "delta": 0.15
-          },
-          {
-            "type": "narrative",
-            "text": "They fired a warning shot that wasn't entirely a warning. Hull took a hit, but they broke off."
-          },
-          {
-            "type": "spawn_thread",
-            "thread_type": "grudge",
-            "description": "Faced down pirates and survived. They know your ship now."
-          }
-        ]
-      },
-      {
-        "label": "Open a channel — try to negotiate",
-        "tone_note": "Words before weapons.",
-        "effects": [
-          {
-            "type": "resources",
-            "delta": -100.0
-          },
-          {
-            "type": "narrative",
-            "text": "Negotiated a 'transit fee.' Everyone pretended it wasn't extortion."
-          }
-        ]
-      },
-      {
-        "label": "Run — full burn for the nearest system",
-        "tone_note": "Discretion. The better part of not dying.",
-        "effects": [
-          {
-            "type": "fuel",
-            "delta": -10.0
-          },
-          {
-            "type": "crew_stress",
-            "delta": 0.1
-          },
-          {
-            "type": "narrative",
-            "text": "Burned hard and got clear. Cost fuel, saved everything else."
-          }
-        ]
-      }
-    ],
-    "category": "ambient",
-    "priority": 1
-  },
-  {
-    "id": "intent_trade_station",
-    "encounter_type": "trade",
     "tone": "mundane",
-    "intents": [
-      "trade"
-    ],
+    "category": "ambient",
+    "priority": 0,
+    "trigger": "transit",
+    "event_kind": "ambient",
     "context_requirements": {
       "infrastructure_min": "colony",
-      "faction_controlled": true,
-      "tags": [
-        "trade",
-        "economic"
-      ],
-      "location_types": [
-        "station"
-      ]
+      "faction_controlled": true
     },
-    "text": "The station's trade deck is a low-ceilinged hall that smells of lubricant and recycled air. Docking fees have already been deducted from your account. A broker materializes at your elbow before you've finished sealing the airlock — they can smell fresh cargo the way predators smell blood.\n\nPrices here are standard, maybe a fraction better if your reputation precedes you. The broker quotes figures with practiced indifference, but their eyes keep flicking to your cargo manifest.",
+    "text": "The comms pick up system traffic as you transit — other ships going about their business. Two freighters arguing about lane priority. A patrol vessel running transponder checks and not finding what it wants. A mining shuttle requesting docking clearance with the bored efficiency of someone who does this every day.\n\nThe galaxy at work. You're passing through it.",
     "choices": [
       {
-        "label": "Trade at standard rates",
-        "tone_note": "Routine, efficient. The mundane machinery of survival.",
+        "label": "Listen for anything interesting",
+        "tone_note": "Paying attention to the background. Curiosity.",
         "effects": [
-          {
-            "type": "resources",
-            "delta": 200.0
-          },
-          {
-            "type": "supplies",
-            "delta": 30.0
-          },
-          {
-            "type": "resources",
-            "delta": -25.0
-          }
-        ]
-      },
-      {
-        "label": "Push for better terms",
-        "tone_note": "A negotiation that leaves both sides slightly unsatisfied — the best kind.",
-        "effects": [
-          {
-            "type": "resources",
-            "delta": 350.0
-          },
-          {
-            "type": "crew_stress",
-            "delta": 0.05
-          }
-        ]
-      },
-      {
-        "label": "Browse and leave without buying",
-        "tone_note": "Sometimes you just need to see what's available.",
-        "effects": [
-          {
-            "type": "pass"
-          }
-        ]
-      }
-    ],
-    "category": "ambient",
-    "priority": 1
-  },
-  {
-    "id": "intent_trade_wanderer",
-    "encounter_type": "trade",
-    "tone": "quiet",
-    "intents": [
-      "trade"
-    ],
-    "context_requirements": {
-      "tags": [
-        "trade"
-      ]
-    },
-    "text": "Your comms light up with a hail on a frequency that isn't in any official registry. A small vessel, barely more than an engine strapped to a cargo pod, drifts at the edge of your sensor range. The pilot's voice is scratchy, unhurried.\n\n\"Got some things. Might have what you need. Might not. No records, no receipts, no questions.\" A pause. \"Also no refunds.\"",
-    "choices": [
-      {
-        "label": "Trade carefully — inspect everything",
-        "tone_note": "Cautious but fair. Two ships passing in the dark.",
-        "effects": [
-          {
-            "type": "resources",
-            "delta": 100.0
-          },
-          {
-            "type": "supplies",
-            "delta": 30.0
-          },
-          {
-            "type": "resources",
-            "delta": -25.0
-          }
-        ]
-      },
-      {
-        "label": "Buy everything they have at a premium",
-        "tone_note": "Desperation or opportunity — hard to tell the difference out here.",
-        "effects": [
-          {
-            "type": "resources",
-            "delta": -200.0
-          },
-          {
-            "type": "supplies",
-            "delta": 30.0
-          },
-          {
-            "type": "resources",
-            "delta": -25.0
-          },
-          {
-            "type": "supplies",
-            "delta": 30.0
-          },
-          {
-            "type": "resources",
-            "delta": -25.0
-          },
-          {
-            "type": "fuel",
-            "delta": 15.0
-          }
-        ]
-      },
-      {
-        "label": "Decline and move on",
-        "tone_note": "Trust is expensive. You can't afford it today.",
-        "effects": [
-          {
-            "type": "pass"
-          }
-        ]
-      }
-    ],
-    "category": "ambient",
-    "priority": 1
-  },
-  {
-    "id": "intent_repair_facility",
-    "encounter_type": "repair",
-    "tone": "mundane",
-    "intents": [
-      "repair"
-    ],
-    "context_requirements": {
-      "infrastructure_min": "outpost",
-      "tags": [
-        "trade"
-      ],
-      "location_types": [
-        "station"
-      ]
-    },
-    "text": "The repair bay is cramped and smells of ozone and welding flux. A technician with oil-dark hands looks over your damage report with the expression of someone who's seen worse but isn't sure they want to say so.\n\n\"Can fix it. Most of it. Gonna cost you, though — parts aren't cheap out here, and neither am I.\" They tap your hull assessment. \"Your engineer could handle the small stuff. I'll do the structural work.\"",
-    "choices": [
-      {
-        "label": "Full repair — fix everything",
-        "tone_note": "Expensive but thorough. The ship deserves it.",
-        "effects": [
-          {
-            "type": "resources",
-            "delta": -300.0
-          },
-          {
-            "type": "hull",
-            "delta": 0.3
-          },
-          {
-            "type": "repair_module",
-            "module": "engine",
-            "amount": 0.3
-          },
-          {
-            "type": "repair_module",
-            "module": "sensors",
-            "amount": 0.2
-          }
-        ]
-      },
-      {
-        "label": "Hull only — patch what's critical",
-        "tone_note": "Triage. Spend where it matters most.",
-        "effects": [
-          {
-            "type": "resources",
-            "delta": -100.0
-          },
-          {
-            "type": "hull",
-            "delta": 0.2
-          }
-        ]
-      },
-      {
-        "label": "Just the diagnostics — your engineer will handle the rest",
-        "tone_note": "Frugal. Your crew can do the work; you just needed the blueprint.",
-        "effects": [
-          {
-            "type": "resources",
-            "delta": -25.0
-          },
           {
             "type": "narrative",
-            "text": "The technician's diagnostic reveals problems your own scans missed. Knowledge is worth something."
+            "text": "Monitored system traffic. Nothing stood out — but knowing the rhythm matters."
+          }
+        ]
+      },
+      {
+        "label": "Filter it to background noise",
+        "tone_note": "Professional. Focus on your own heading.",
+        "effects": [
+          {
+            "type": "pass"
           }
         ]
       }
     ],
-    "category": "ambient",
-    "priority": 1
+    "intents": []
   },
   {
-    "id": "station_bar_rumor",
+    "id": "docked_station_sounds",
     "encounter_type": "contextual",
     "tone": "quiet",
-    "intents": [
-      "investigate"
-    ],
+    "category": "ambient",
+    "priority": 0,
+    "trigger": "docked",
+    "event_kind": "ambient",
     "context_requirements": {
       "infrastructure_min": "colony",
       "location_types": [
         "station"
       ]
     },
-    "text": "The station bar is the kind of place where information has a price and silence is free. You find a corner table and order something that won't kill you.\n\nConversation washes over you in fragments. Most of it is worthless — dock schedules, complaints about fuel prices, someone's ex. But you catch a thread.",
+    "text": "After the silence of transit, the station is overwhelming. Not loud — just full. Ventilation hum, distant conversation, the clank of cargo loaders, a child laughing somewhere several decks above. The air smells of recycled atmosphere with traces of cooking oil and machine lubricant.\n\nYour ship's air was cleaner. This is dirtier, warmer, and unmistakably alive.",
     "choices": [
       {
-        "label": "Listen carefully to the traders",
-        "effects": [
-          {
-            "type": "spawn_thread",
-            "thread_type": "secret",
-            "description": "Overheard traders discussing unusual shipping routes — cargo being diverted to systems with no registered population."
-          },
-          {
-            "type": "narrative",
-            "text": "You file it away. Could be smuggling. Could be something else."
-          }
-        ],
-        "tone_note": "Patient intelligence gathering."
-      },
-      {
-        "label": "Buy a round and ask around",
-        "effects": [
-          {
-            "type": "resources",
-            "delta": -20.0
-          },
-          {
-            "type": "spawn_thread",
-            "thread_type": "mystery",
-            "description": "A freighter pilot mentioned signals at unusual frequencies near the outer system. Said his instruments couldn't identify the source."
-          },
-          {
-            "type": "crew_stress",
-            "delta": -0.03
-          },
-          {
-            "type": "narrative",
-            "text": "Credits well spent. People talk when the drinks flow."
-          }
-        ],
-        "tone_note": "Social investment. Building the picture."
-      },
-      {
-        "label": "Finish your drink and leave",
+        "label": "Take a moment to adjust",
+        "tone_note": "Transition between spaces. Being present.",
         "effects": [
           {
             "type": "crew_stress",
@@ -1038,13 +114,68 @@
           },
           {
             "type": "narrative",
-            "text": "Sometimes a drink is just a drink."
+            "text": "Took a breath of station air. It tasted like civilization."
           }
-        ],
-        "tone_note": "Not every moment needs to be significant."
+        ]
+      },
+      {
+        "label": "Get moving — time is limited",
+        "tone_note": "Practical. Every hour costs.",
+        "effects": [
+          {
+            "type": "pass"
+          }
+        ]
       }
     ],
+    "intents": []
+  },
+  {
+    "id": "docked_colony_children",
+    "encounter_type": "contextual",
+    "tone": "quiet",
     "category": "ambient",
-    "priority": 1
+    "priority": 0,
+    "trigger": "docked",
+    "event_kind": "ambient",
+    "context_requirements": {
+      "infrastructure_min": "colony",
+      "infrastructure_max": "established",
+      "location_types": [
+        "planet_surface"
+      ]
+    },
+    "text": "Children watch your ship from behind a prefab barrier at the landing pad perimeter. Four of them, ranging from maybe six to twelve. The oldest has a datapad and is sketching your ship with the intense concentration of someone cataloguing something rare.\n\nA younger one waves. It's the unselfconscious wave of someone who hasn't learned yet that not everyone waves back.",
+    "choices": [
+      {
+        "label": "Wave back",
+        "tone_note": "Small kindness. The galaxy doesn't always have to be hard.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": -0.01
+          },
+          {
+            "type": "narrative",
+            "text": "Waved at colony children watching the ship. Sometimes the small things."
+          }
+        ]
+      },
+      {
+        "label": "Tell the crew to secure the landing area",
+        "tone_note": "Safety first. Kids near a ship is a liability.",
+        "effects": [
+          {
+            "type": "trust_professional",
+            "delta": 0.01
+          },
+          {
+            "type": "narrative",
+            "text": "Secured the landing perimeter. The children scattered."
+          }
+        ]
+      }
+    ],
+    "intents": []
   }
 ]

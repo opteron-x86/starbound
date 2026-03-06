@@ -15,38 +15,22 @@
     "unclaimed_fraction": 0.3
   },
   "star_types": [
-    {
-      "type": "yellow_dwarf",
-      "weight": 3.0
-    },
-    {
-      "type": "red_dwarf",
-      "weight": 3.0
-    },
-    {
-      "type": "binary",
-      "weight": 1.5
-    },
-    {
-      "type": "blue_giant",
-      "weight": 0.8
-    },
-    {
-      "type": "white_dwarf",
-      "weight": 1.0
-    },
-    {
-      "type": "neutron",
-      "weight": 0.5
-    },
-    {
-      "type": "black_hole",
-      "weight": 0.2
-    },
-    {
-      "type": "anomalous",
-      "weight": 0.3
-    }
+    { "type": "yellow_dwarf", "weight": 2.0 },
+    { "type": "orange_dwarf", "weight": 2.5 },
+    { "type": "red_dwarf", "weight": 3.0 },
+    { "type": "yellow_white_dwarf", "weight": 1.5 },
+    { "type": "white_star", "weight": 1.0 },
+    { "type": "blue_giant", "weight": 0.5 },
+    { "type": "blue_super_giant", "weight": 0.2 },
+    { "type": "red_giant", "weight": 0.7 },
+    { "type": "brown_dwarf", "weight": 0.8 },
+    { "type": "white_dwarf", "weight": 0.8 },
+    { "type": "wolf_rayet", "weight": 0.1 },
+    { "type": "pulsar", "weight": 0.2 },
+    { "type": "neutron", "weight": 0.3 },
+    { "type": "black_hole", "weight": 0.15 },
+    { "type": "binary", "weight": 1.0 },
+    { "type": "anomalous", "weight": 0.2 }
   ],
   "infrastructure_by_role": {
     "capital": "capital",

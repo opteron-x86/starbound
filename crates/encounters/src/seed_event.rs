@@ -31,7 +31,8 @@ use serde::{Deserialize, Serialize};
 pub struct SeedEvent {
     /// Unique string identifier.
     pub id: String,
-    /// What kind of encounter this is.
+    /// What kind of encounter this is (legacy field — use `event_kind` for
+    /// the ambient/discovery split). Retained for tone/pacing scoring.
     pub encounter_type: String,
     /// The emotional register.
     pub tone: String,
@@ -61,15 +62,222 @@ pub struct SeedEvent {
     pub text: String,
     /// The choices available to the player.
     pub choices: Vec<SeedChoice>,
-    /// Which player intents this event can resolve.
-    /// Empty = arrival-only (traditional pipeline behavior).
-    /// Non-empty = this event fires when the player initiates a matching action.
+    /// Which player intents this event can resolve (legacy field).
+    /// Replaced by `trigger` for new events. Retained for backward
+    /// compatibility — events with intents derive their trigger as
+    /// `Action(intents[0])` when `trigger` is absent.
     #[serde(default)]
     pub intents: Vec<String>,
+
+    // --- Encounter system redesign fields ---
+
+    /// When this event can fire. Replaces the implicit arrival-vs-intent
+    /// distinction with an explicit trigger type.
+    ///
+    /// Defaults: if absent in JSON, derived from `intents`:
+    /// - intents non-empty → `action:{intents[0]}`
+    /// - intents empty → `arrival`
+    #[serde(default)]
+    pub trigger: EventTrigger,
+    /// Whether this is ambient (texture, small moments) or discovery
+    /// (player-initiated investigation with meaningful stakes).
+    ///
+    /// Defaults: if absent, derived from `intents`:
+    /// - intents non-empty → `discovery`
+    /// - intents empty → `ambient`
+    #[serde(default)]
+    pub event_kind: EventKind,
 }
 
 fn default_category() -> String {
     "ambient".into()
+}
+
+// ---------------------------------------------------------------------------
+// Event trigger — when an event can fire
+// ---------------------------------------------------------------------------
+
+/// When an event fires. Each event declares its trigger type.
+/// The pipeline receives a trigger and only considers matching events.
+///
+/// Serialized as a string tag: "arrival", "transit", "docked", "linger",
+/// or "action:tag" for player-initiated actions.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum EventTrigger {
+    /// Fires on FTL arrival at a system or sublight arrival at a location.
+    /// The classic trigger — most legacy events use this.
+    Arrival,
+    /// Fires during sublight transit between locations within a system.
+    /// Ambient events only — small crew/environment moments.
+    Transit,
+    /// Fires when the player docks at a station or lands at a location.
+    /// Ambient events — station life, colony atmosphere.
+    Docked,
+    /// Fires when the player spends time at a location.
+    /// Slightly higher chance than transit/docked.
+    Linger,
+    /// Fires in response to a specific player action.
+    /// The string tag matches against the action type:
+    /// "scan", "investigate", "board", "explore", "recover", "follow_lead",
+    /// "trade", "repair", "resupply", etc.
+    Action(String),
+}
+
+impl EventTrigger {
+    /// Base silence rate for this trigger type. Higher = more likely to
+    /// produce silence (no event). Action triggers never silence.
+    pub fn base_silence_rate(&self) -> f64 {
+        match self {
+            EventTrigger::Arrival => 0.15,  // Most arrivals should have something.
+            EventTrigger::Transit => 0.78,  // ~22% fire rate. Most transits are quiet.
+            EventTrigger::Docked => 0.73,   // ~27% fire rate. Most docks are routine.
+            EventTrigger::Linger => 0.60,   // ~40% fire rate. Player chose to linger.
+            EventTrigger::Action(_) => 0.0, // Player chose to act. Always respond.
+        }
+    }
+
+    /// Whether the player chose this trigger (i.e. silence is not allowed).
+    pub fn is_player_action(&self) -> bool {
+        matches!(self, EventTrigger::Action(_))
+    }
+
+    /// The action tag, if this is an Action trigger.
+    pub fn action_tag(&self) -> Option<&str> {
+        match self {
+            EventTrigger::Action(tag) => Some(tag.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Short display label for logging.
+    pub fn label(&self) -> String {
+        match self {
+            EventTrigger::Arrival => "arrival".into(),
+            EventTrigger::Transit => "transit".into(),
+            EventTrigger::Docked => "docked".into(),
+            EventTrigger::Linger => "linger".into(),
+            EventTrigger::Action(tag) => format!("action:{}", tag),
+        }
+    }
+}
+
+impl Default for EventTrigger {
+    fn default() -> Self {
+        EventTrigger::Arrival
+    }
+}
+
+/// Custom serialization: "arrival", "transit", "docked", "linger", "action:scan"
+impl Serialize for EventTrigger {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.label())
+    }
+}
+
+impl<'de> Deserialize<'de> for EventTrigger {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        Ok(match s.as_str() {
+            "arrival" => EventTrigger::Arrival,
+            "transit" => EventTrigger::Transit,
+            "docked" => EventTrigger::Docked,
+            "linger" => EventTrigger::Linger,
+            other if other.starts_with("action:") => {
+                EventTrigger::Action(other.strip_prefix("action:").unwrap().to_string())
+            }
+            // Legacy: bare action tags without prefix.
+            other => EventTrigger::Action(other.to_string()),
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Event kind — ambient vs discovery
+// ---------------------------------------------------------------------------
+
+/// Whether an event is ambient (texture) or discovery (player-initiated,
+/// meaningful stakes). Affects silence behavior and pipeline treatment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EventKind {
+    /// Texture events — small moments during transit, docking, lingering.
+    /// Can be silenced. Low stakes, crew/relationship/environmental focus.
+    Ambient,
+    /// Player-initiated investigation with meaningful stakes — clues,
+    /// resources, danger, threads. Should not be silenced.
+    Discovery,
+}
+
+impl Default for EventKind {
+    fn default() -> Self {
+        EventKind::Ambient
+    }
+}
+
+impl EventKind {
+    pub fn label(&self) -> &'static str {
+        match self {
+            EventKind::Ambient => "ambient",
+            EventKind::Discovery => "discovery",
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SeedEvent — derived accessors for backward compatibility
+// ---------------------------------------------------------------------------
+
+impl SeedEvent {
+    /// The effective trigger for this event.
+    ///
+    /// If `trigger` was explicitly set in JSON, uses that.
+    /// Otherwise derives from the legacy `intents` field:
+    /// - intents non-empty → `Action(intents[0])`
+    /// - intents empty → `Arrival`
+    pub fn effective_trigger(&self) -> EventTrigger {
+        // If trigger was explicitly set to something other than the default
+        // Arrival, use it. Otherwise fall back to intents-based derivation.
+        if self.trigger != EventTrigger::Arrival {
+            return self.trigger.clone();
+        }
+        // Derive from legacy intents.
+        if let Some(first) = self.intents.first() {
+            EventTrigger::Action(first.clone())
+        } else {
+            EventTrigger::Arrival
+        }
+    }
+
+    /// The effective event kind.
+    ///
+    /// If `event_kind` was explicitly set, uses that.
+    /// Otherwise derives: events with intents are Discovery, others Ambient.
+    pub fn effective_kind(&self) -> EventKind {
+        // If explicitly set to Discovery, honor it.
+        if self.event_kind == EventKind::Discovery {
+            return EventKind::Discovery;
+        }
+        // Derive from intents.
+        if !self.intents.is_empty() {
+            EventKind::Discovery
+        } else {
+            EventKind::Ambient
+        }
+    }
+
+    /// Whether this event matches a given trigger.
+    ///
+    /// Action triggers match on the tag string.
+    /// Other triggers match exactly.
+    pub fn matches_trigger(&self, trigger: &EventTrigger) -> bool {
+        let effective = self.effective_trigger();
+        match (trigger, &effective) {
+            // Action triggers match on tag.
+            (EventTrigger::Action(want), EventTrigger::Action(have)) => want == have,
+            // Non-action triggers match exactly.
+            _ => *trigger == effective,
+        }
+    }
 }
 
 /// Conditions for an event to fire. All fields are optional —

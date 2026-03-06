@@ -1384,13 +1384,21 @@ fn generate_star_types(
 
 fn parse_star_type(s: &str) -> StarType {
     match s {
-        "yellow_dwarf" => StarType::YellowDwarf,
-        "red_dwarf" => StarType::RedDwarf,
-        "binary" => StarType::Binary,
-        "blue_giant" => StarType::BlueGiant,
+        "blue_super_giant" | "class_o" => StarType::BlueSuperGiant,
+        "blue_giant" | "class_b" => StarType::BlueGiant,
+        "white_star" | "class_a" => StarType::WhiteStar,
+        "yellow_white_dwarf" | "class_f" => StarType::YellowWhiteDwarf,
+        "yellow_dwarf" | "class_g" => StarType::YellowDwarf,
+        "orange_dwarf" | "class_k" => StarType::OrangeDwarf,
+        "red_dwarf" | "class_m" => StarType::RedDwarf,
+        "red_giant" => StarType::RedGiant,
+        "brown_dwarf" | "class_t" => StarType::BrownDwarf,
         "white_dwarf" => StarType::WhiteDwarf,
-        "neutron" => StarType::Neutron,
+        "wolf_rayet" => StarType::WolfRayet,
+        "pulsar" => StarType::Pulsar,
+        "neutron" | "neutron_star" => StarType::Neutron,
         "black_hole" => StarType::BlackHole,
+        "binary" => StarType::Binary,
         "anomalous" => StarType::Anomalous,
         _ => StarType::RedDwarf,
     }
@@ -1403,12 +1411,12 @@ fn generate_locations(
     rng: &mut StdRng,
 ) -> Vec<Location> {
     let mut locations: Vec<Location> = Vec::new();
-    let mut orbital_distance: f32 = 0.3; // Start near the star
+    let light_desc = star_type.light_description();
 
     // --- Station (for systems with Colony+ infrastructure) ---
     if system_infra >= InfrastructureLevel::Colony {
         let station_name = format!("{} Station", system_name);
-        let station_infra = system_infra; // Station carries the system's main infra level
+        let station_infra = system_infra;
         let mut services = vec![LocationService::Docking, LocationService::Refuel];
         if station_infra >= InfrastructureLevel::Colony {
             services.push(LocationService::Trade);
@@ -1423,11 +1431,30 @@ fn generate_locations(
         }
 
         let desc = match station_infra {
-            InfrastructureLevel::Capital => "A sprawling orbital complex. The political and economic heart of the system.".into(),
-            InfrastructureLevel::Hub => "A busy transit station. Ships from across the sector dock here.".into(),
-            InfrastructureLevel::Established => "A well-maintained station with full services.".into(),
-            InfrastructureLevel::Colony => "A functional station serving the local colony.".into(),
-            _ => "A basic docking facility.".into(),
+            InfrastructureLevel::Capital => format!(
+                "A sprawling orbital complex, the political and economic heart of the system. \
+                 Hundreds of docking berths handle traffic from across the sector. \
+                 Through the viewports, {} paints the hull plating.",
+                light_desc,
+            ),
+            InfrastructureLevel::Hub => format!(
+                "A busy transit hub where ships from multiple systems converge. \
+                 The docking ring is never quiet. Outside, {}.",
+                light_desc,
+            ),
+            InfrastructureLevel::Established => format!(
+                "A well-maintained station with full services and a steady rhythm of commerce. \
+                 The corridors are clean and the air recyclers hum reliably. \
+                 The {} bathes the exterior.",
+                star_type.star_descriptor(),
+            ),
+            InfrastructureLevel::Colony => format!(
+                "A functional station serving the local colony. \
+                 Everything works, nothing is luxurious. \
+                 {} filters through the viewport shielding.",
+                capitalize_star_light(light_desc),
+            ),
+            _ => format!("A basic docking facility. {} outside.", capitalize_star_light(light_desc)),
         };
 
         locations.push(Location {
@@ -1442,10 +1469,13 @@ fn generate_locations(
             services,
             discovered: true,
         });
-    }
-    // Outpost systems get a basic landing pad instead of a full station
-    else if system_infra == InfrastructureLevel::Outpost {
+    } else if system_infra == InfrastructureLevel::Outpost {
         let services = vec![LocationService::Docking, LocationService::Refuel, LocationService::Trade];
+        let desc = format!(
+            "A handful of prefabs and a landing pad, clinging to orbit. \
+             {} washes over the thin hull plating.",
+            capitalize_star_light(light_desc),
+        );
         locations.push(Location {
             id: Uuid::new_v4(),
             name: format!("{} Outpost", system_name),
@@ -1454,38 +1484,51 @@ fn generate_locations(
             infrastructure: InfrastructureLevel::Outpost,
             controlling_faction: None,
             economy: Some(generate_location_economy(InfrastructureLevel::Outpost, rng)),
-            description: "A handful of prefabs and a landing pad. It's something.".into(),
+            description: desc,
             services,
             discovered: true,
         });
     }
 
-    // --- Planets ---
-    let planet_count = match star_type {
-        StarType::Neutron | StarType::BlackHole => rng.gen_range(0..=1),
-        StarType::BlueGiant => rng.gen_range(1..=3),
-        StarType::Anomalous => rng.gen_range(0..=2),
-        _ => rng.gen_range(2..=5),
-    };
+    // --- Planets (star-type-constrained) ---
+    let (min_planets, max_planets) = star_type.planet_count_range();
+    let planet_count = rng.gen_range(min_planets..=max_planets);
+    let habitability = star_type.habitability();
+    let inner_orbit = star_type.inner_orbit_au();
+    let spacing = star_type.orbital_spacing();
 
-    let body_types = [
-        BodyType::Terrestrial,
-        BodyType::GasGiant,
-        BodyType::IceWorld,
-        BodyType::Barren,
-        BodyType::Oceanic,
-    ];
+    let mut orbital_distance = inner_orbit;
+
+    // Body type pools — habitable vs inhospitable.
+    let habitable_bodies = [BodyType::Terrestrial, BodyType::Oceanic, BodyType::Gaia];
+    let inhospitable_bodies = [BodyType::Barren, BodyType::GasGiant, BodyType::IceWorld];
 
     for i in 0..planet_count {
-        orbital_distance += rng.gen_range(0.4..2.0);
-        let body_type = body_types[rng.gen_range(0..body_types.len())];
+        orbital_distance += rng.gen_range(0.3..1.5) * spacing;
+
+        // Star type constrains body type selection.
+        let body_type = if rng.gen::<f64>() < habitability {
+            // Habitable pool — weighted by distance from star.
+            if orbital_distance < inner_orbit + spacing * 0.5 {
+                // Close in — too hot for ocean worlds, terrestrial or barren.
+                if rng.gen_bool(0.6) { BodyType::Terrestrial } else { BodyType::Barren }
+            } else if orbital_distance > inner_orbit + spacing * 4.0 {
+                // Far out — ice worlds and gas giants.
+                if rng.gen_bool(0.5) { BodyType::IceWorld } else { BodyType::GasGiant }
+            } else {
+                // Goldilocks range — full habitable pool.
+                habitable_bodies[rng.gen_range(0..habitable_bodies.len())]
+            }
+        } else {
+            // Inhospitable pool — always safe regardless of star type.
+            inhospitable_bodies[rng.gen_range(0..inhospitable_bodies.len())]
+        };
+
         let planet_name = format!("{} {}", system_name, roman_numeral(i + 1));
 
-        // Determine if this planet is colonized.
-        // Habitable body types in developed systems get colonies.
+        // Determine colonization level.
         let is_habitable = matches!(body_type, BodyType::Terrestrial | BodyType::Oceanic | BodyType::Gaia);
         let planet_infra = if is_habitable && system_infra >= InfrastructureLevel::Colony && i == 0 {
-            // First habitable planet in a developed system gets a colony.
             match system_infra {
                 InfrastructureLevel::Capital | InfrastructureLevel::Hub => InfrastructureLevel::Established,
                 InfrastructureLevel::Established => InfrastructureLevel::Colony,
@@ -1497,35 +1540,18 @@ fn generate_locations(
             InfrastructureLevel::None
         };
 
-        let (desc, services) = if planet_infra >= InfrastructureLevel::Outpost {
+        // --- Build rich description (2-3 sentences, star-aware) ---
+        let desc = build_planet_description(body_type, planet_infra, star_type, orbital_distance, rng);
+
+        let (services, economy) = if planet_infra >= InfrastructureLevel::Outpost {
             let mut svcs = vec![LocationService::Docking];
             if planet_infra >= InfrastructureLevel::Colony {
                 svcs.push(LocationService::Trade);
                 svcs.push(LocationService::Rumors);
             }
-            let d = match body_type {
-                BodyType::Terrestrial => "A rocky world with a thin atmosphere. Settlements dot the surface.",
-                BodyType::Oceanic => "An ocean world. Platform colonies rise above the waves.",
-                BodyType::Gaia => "A living world. Green, breathable, and fiercely contested.",
-                _ => "A settled world.",
-            };
-            (d.into(), svcs)
+            (svcs, Some(generate_location_economy(planet_infra, rng)))
         } else {
-            let d = match body_type {
-                BodyType::GasGiant => "A massive gas giant. Beautiful and uninhabitable.",
-                BodyType::IceWorld => "A frozen world. Sensors detect subsurface water.",
-                BodyType::Barren => "A lifeless rock. Mineral deposits visible on scan.",
-                BodyType::Terrestrial => "A rocky world with a thin atmosphere. No settlements detected.",
-                BodyType::Oceanic => "An ocean world. No infrastructure visible.",
-                _ => "An uncolonized world.",
-            };
-            (d.into(), vec![])
-        };
-
-        let economy = if planet_infra >= InfrastructureLevel::Outpost {
-            Some(generate_location_economy(planet_infra, rng))
-        } else {
-            None
+            (vec![], None)
         };
 
         locations.push(Location {
@@ -1555,11 +1581,7 @@ fn generate_locations(
             } else {
                 vec![]
             };
-            let moon_desc = if moon_infra >= InfrastructureLevel::Outpost {
-                "A small moon with a mining or refueling outpost."
-            } else {
-                "A small moon. Unremarkable on sensors."
-            };
+            let moon_desc = build_moon_description(moon_body, moon_infra, star_type, &planet_name, rng);
             let moon_economy = if moon_infra >= InfrastructureLevel::Outpost {
                 Some(generate_location_economy(moon_infra, rng))
             } else {
@@ -1569,20 +1591,20 @@ fn generate_locations(
                 id: Uuid::new_v4(),
                 name: moon_name,
                 location_type: LocationType::Moon { parent_body: planet_name.clone(), body_type: moon_body },
-                orbital_distance: orbital_distance + 0.01, // Same orbit as parent
+                orbital_distance: orbital_distance + 0.01,
                 infrastructure: moon_infra,
                 controlling_faction: None,
                 economy: moon_economy,
-                description: moon_desc.into(),
+                description: moon_desc,
                 services: moon_services,
                 discovered: true,
             });
         }
     }
 
-    // --- Asteroid belt (chance based on system) ---
+    // --- Asteroid belt ---
     if planet_count >= 2 && rng.gen_bool(0.5) {
-        orbital_distance += rng.gen_range(1.0..3.0);
+        orbital_distance += rng.gen_range(1.0..3.0) * spacing;
         let belt_infra = if system_infra >= InfrastructureLevel::Colony && rng.gen_bool(0.5) {
             InfrastructureLevel::Outpost
         } else {
@@ -1594,9 +1616,17 @@ fn generate_locations(
             vec![]
         };
         let belt_desc = if belt_infra >= InfrastructureLevel::Outpost {
-            "An asteroid belt with active mining operations. Docking available at the processing platform."
+            format!(
+                "An active mining belt with ore processing platforms anchored to the larger rocks. \
+                 Shuttle traffic weaves between asteroids under the {}.",
+                light_desc,
+            )
         } else {
-            "A scattered asteroid belt. Rich in minerals, empty of people."
+            format!(
+                "A scattered asteroid belt, tumbling slowly in the {}. \
+                 Rich in minerals. Sensors show no active operations.",
+                light_desc,
+            )
         };
         let belt_economy = if belt_infra >= InfrastructureLevel::Outpost {
             Some(generate_location_economy(belt_infra, rng))
@@ -1611,32 +1641,21 @@ fn generate_locations(
             infrastructure: belt_infra,
             controlling_faction: None,
             economy: belt_economy,
-            description: belt_desc.into(),
+            description: belt_desc,
             services: belt_services,
             discovered: true,
         });
     }
 
-    // --- Deep space anomalies (hidden, must be discovered via scan) ---
-    // More likely in frontier/distorted systems.
-    let anomaly_chance = match system_infra {
-        InfrastructureLevel::Capital | InfrastructureLevel::Hub => 0.15,
-        InfrastructureLevel::Established | InfrastructureLevel::Colony => 0.25,
-        InfrastructureLevel::Outpost => 0.4,
-        InfrastructureLevel::None => 0.6,
-    };
-
-    if rng.gen_bool(anomaly_chance) {
-        orbital_distance += rng.gen_range(2.0..6.0);
-        let anomaly_descs = [
-            "Faint energy readings at unusual frequencies. Source unknown.",
-            "A gravitational anomaly — something dense, not on any chart.",
-            "Intermittent signal. Mathematical structure. Not natural.",
-            "Debris field. Too uniform to be accidental.",
-            "Sensor ghost — something is here, but it doesn't want to be seen.",
-        ];
-        let desc = anomaly_descs[rng.gen_range(0..anomaly_descs.len())];
-
+    // --- Deep space point (rare, for undeveloped/anomalous systems) ---
+    if system_infra <= InfrastructureLevel::Outpost && rng.gen_bool(0.3) {
+        orbital_distance += rng.gen_range(2.0..5.0) * spacing;
+        let deep_desc = match star_type {
+            StarType::Anomalous => "Sensors register something here — a fold in spacetime, a signal that shouldn't exist. The readings are unstable.".into(),
+            StarType::Neutron | StarType::Pulsar => "A region of intense electromagnetic interference. Navigation instruments flicker.".into(),
+            StarType::BlackHole => "The accretion disk's glow illuminates dust clouds that form and reform in gravitational tides.".into(),
+            _ => format!("Empty space. But your sensors flagged it — a faint anomalous reading, barely above the noise floor. Under the {}, it could be anything.", light_desc),
+        };
         locations.push(Location {
             id: Uuid::new_v4(),
             name: format!("{} Anomaly", system_name),
@@ -1645,37 +1664,119 @@ fn generate_locations(
             infrastructure: InfrastructureLevel::None,
             controlling_faction: None,
             economy: None,
-            description: desc.into(),
+            description: deep_desc,
             services: vec![],
-            discovered: false,
-        });
-    }
-
-    // Second hidden location in wilderness/frontier systems.
-    if system_infra <= InfrastructureLevel::Outpost && rng.gen_bool(0.3) {
-        orbital_distance += rng.gen_range(1.0..4.0);
-        let derelict_descs = [
-            "A ship. Dead in space. No transponder, no power signature.",
-            "Wreckage spread across a kilometer. Recent.",
-            "An old station, dark and drifting. Pre-dates local colonization.",
-        ];
-        let desc = derelict_descs[rng.gen_range(0..derelict_descs.len())];
-
-        locations.push(Location {
-            id: Uuid::new_v4(),
-            name: format!("{} Derelict", system_name),
-            location_type: LocationType::DeepSpace,
-            orbital_distance,
-            infrastructure: InfrastructureLevel::None,
-            controlling_faction: None,
-            economy: None,
-            description: desc.into(),
-            services: vec![],
-            discovered: false,
+            discovered: false, // Hidden until scanned.
         });
     }
 
     locations
+}
+
+/// Build a 2-3 sentence planet description driven by body type, star, and colonization.
+fn build_planet_description(
+    body_type: BodyType,
+    infra: InfrastructureLevel,
+    star_type: StarType,
+    _orbital_au: f32,
+    rng: &mut StdRng,
+) -> String {
+    let light = star_type.light_description();
+
+    let physical = match body_type {
+        BodyType::Terrestrial => {
+            let variants = [
+                format!("A rocky world with a thin atmosphere. {} washes across eroded mountain ranges.", capitalize_star_light(light)),
+                format!("Cratered highlands and dust plains stretch to the horizon under {}.", light),
+                format!("A terrestrial world, its surface scarred by ancient impacts. The sky is a pale haze under {}.", light),
+            ];
+            variants[rng.gen_range(0..variants.len())].clone()
+        }
+        BodyType::Oceanic => {
+            let variants = [
+                format!("An ocean world. Waves catch the {} in patterns that shift with the tides.", light),
+                format!("Water covers ninety percent of the surface. Storms visible from orbit spiral beneath {}.", light),
+                format!("A deep blue world. The ocean floor is uncharted. {} plays across the surface.", capitalize_star_light(light)),
+            ];
+            variants[rng.gen_range(0..variants.len())].clone()
+        }
+        BodyType::Gaia => format!(
+            "A living world — green continents, blue oceans, breathable atmosphere. \
+             Under the {}, it looks like a place worth fighting over.",
+            light,
+        ),
+        BodyType::GasGiant => {
+            let variants = [
+                format!("A massive gas giant, banded in ochre and cream. {} glints off the upper atmosphere.", capitalize_star_light(light)),
+                format!("A gas giant large enough to swallow terrestrial worlds. Its storms are visible from light-minutes away."),
+                format!("Swirling atmospheric bands in rust and amber. The {} catches methane ice crystals in the upper layers.", light),
+            ];
+            variants[rng.gen_range(0..variants.len())].clone()
+        }
+        BodyType::IceWorld => {
+            let variants = [
+                format!("A frozen world. The surface is nitrogen ice over subsurface water. {} barely warms the equator.", capitalize_star_light(light)),
+                format!("Ice from pole to pole. Sensors detect liquid water deep beneath the surface, warmed by tidal forces."),
+                format!("A pale, frozen sphere. Cracks in the ice suggest geological activity beneath the surface."),
+            ];
+            variants[rng.gen_range(0..variants.len())].clone()
+        }
+        BodyType::Barren => {
+            let variants = [
+                format!("A lifeless rock. Mineral deposits visible on scan. {} bakes the surface.", capitalize_star_light(light)),
+                format!("No atmosphere, no water, no life. Just regolith and silence."),
+                format!("A barren world — useful for what's under the surface, not what's on it."),
+            ];
+            variants[rng.gen_range(0..variants.len())].clone()
+        }
+        _ => format!("An uncharted world under the {}.", light),
+    };
+
+    // Add colonization detail if inhabited.
+    if infra >= InfrastructureLevel::Established {
+        format!("{} Settlements are visible from orbit — lights, landing pads, the geometry of habitation.", physical)
+    } else if infra >= InfrastructureLevel::Colony {
+        format!("{} A colony clings to the surface — prefab structures and determination.", physical)
+    } else if infra >= InfrastructureLevel::Outpost {
+        format!("{} A small outpost marks human presence — barely.", physical)
+    } else {
+        physical
+    }
+}
+
+/// Build a moon description.
+fn build_moon_description(
+    body_type: BodyType,
+    infra: InfrastructureLevel,
+    star_type: StarType,
+    parent_name: &str,
+    _rng: &mut StdRng,
+) -> String {
+    let light = star_type.light_description();
+    let base = match body_type {
+        BodyType::IceWorld => format!(
+            "An ice moon orbiting {}. Cracks in the surface suggest subsurface activity. {} reflects off the frost.",
+            parent_name, capitalize_star_light(light),
+        ),
+        _ => format!(
+            "A small, cratered moon orbiting {}. {} casts long shadows across the regolith.",
+            parent_name, capitalize_star_light(light),
+        ),
+    };
+    if infra >= InfrastructureLevel::Outpost {
+        format!("{} A refueling outpost operates from the largest crater.", base)
+    } else {
+        format!("{} No infrastructure detected.", base)
+    }
+}
+
+/// Capitalize the first character of a light description for sentence starts.
+fn capitalize_star_light(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+    }
 }
 
 /// Generate an economy for a single location based on its infrastructure.

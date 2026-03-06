@@ -3,6 +3,10 @@
     "id": "crew_quiet_moment",
     "encounter_type": "crew_dynamic",
     "tone": "quiet",
+    "category": "crew",
+    "priority": 0,
+    "trigger": "arrival",
+    "event_kind": "ambient",
     "context_requirements": {
       "crew_min": 2,
       "location_types": [
@@ -12,60 +16,29 @@
         "asteroid_belt"
       ]
     },
-    "text": "You find two of your crew in the observation lounge during the night watch. They've turned the lights down and are sitting in the glow of the starfield. One of them has a cup of something that stopped being hot a while ago. The other is just looking out.\n\nThey don't stop talking when you enter, which means either they trust you or they've stopped caring about rank. One of them is telling a story about a place they used to live. Details you haven't heard before — a street, a neighbor, the sound rain made on a particular roof.\n\nThe story doesn't have an ending. It just trails off into the hum of the ship.",
+    "text": "Between the bustle of arrival procedures and the first shore rotations, there's a gap. Five minutes where the ship is still and no one has anywhere to be yet.\n\nYou find two of your crew sitting together in the observation bay, not talking. Just watching the view. The kind of silence that happens when people are comfortable enough to share space without filling it.",
     "choices": [
       {
-        "label": "Sit down and listen",
-        "tone_note": "Being present. Not as the captain, just as someone who's here.",
+        "label": "Join them for a moment",
+        "tone_note": "Being part of the crew. Shared quiet.",
         "effects": [
           {
             "type": "crew_stress",
-            "delta": -0.1
+            "delta": -0.02
           },
           {
             "type": "trust_personal",
-            "delta": 0.05
-          },
-          {
-            "type": "crew_mood",
-            "mood": "content"
+            "delta": 0.02
           },
           {
             "type": "narrative",
-            "text": "Sat with the crew. Listened. Was present."
-          }
-        ]
-      },
-      {
-        "label": "Share something of your own",
-        "tone_note": "Vulnerability. Rare from the person who makes the decisions.",
-        "effects": [
-          {
-            "type": "crew_stress",
-            "delta": -0.1
-          },
-          {
-            "type": "trust_personal",
-            "delta": 0.1
-          },
-          {
-            "type": "trust_ideological",
-            "delta": 0.03
-          },
-          {
-            "type": "spawn_thread",
-            "thread_type": "relationship",
-            "description": "Shared something personal with the crew. The walls are a little thinner now."
-          },
-          {
-            "type": "narrative",
-            "text": "You told them something true. It cost you nothing and everything."
+            "text": "Sat with the crew for a few minutes. No words needed."
           }
         ]
       },
       {
         "label": "Leave them to it",
-        "tone_note": "Some moments aren't for you.",
+        "tone_note": "Respect for their space. The captain doesn't need to be everywhere.",
         "effects": [
           {
             "type": "pass"
@@ -73,7 +46,6 @@
         ]
       }
     ],
-    "category": "crew",
-    "priority": 1
+    "intents": []
   }
 ]

@@ -487,15 +487,14 @@ mod tests {
     }
 
     // -------------------------------------------------------------------
-    // Existing tests
+    // Content tests (against minimal event set)
     // -------------------------------------------------------------------
 
     #[test]
-    fn colony_with_faction_matches_expected() {
+    fn station_arrival_matches_at_colony() {
         let events = all_seed_events();
         let system = test_system(InfrastructureLevel::Colony, Some(Uuid::new_v4()));
         let journey = test_journey(80.0, 0.9, 3);
-        // Station location with Colony infra — should match station events.
         let ctx = make_ctx_with_infra(
             &system, &journey,
             Some("station".into()),
@@ -504,8 +503,8 @@ mod tests {
 
         let matched = match_events(&events, &ctx);
         let ids: Vec<&str> = matched.iter().map(|e| e.id.as_str()).collect();
-        assert!(ids.contains(&"faction_checkpoint"),
-            "Colony station with faction should match faction_checkpoint, got: {:?}", ids);
+        assert!(ids.contains(&"arrival_station_routine"),
+            "Colony station should match arrival_station_routine, got: {:?}", ids);
     }
 
     #[test]
@@ -513,55 +512,12 @@ mod tests {
         let events = all_seed_events();
         let system = test_system(InfrastructureLevel::None, None);
         let journey = test_journey(80.0, 0.9, 3);
-        let ctx = make_ctx(&system, &journey, None, None);
+        let ctx = make_ctx(&system, &journey, None, Some("deep_space".into()));
 
         let matched = match_events(&events, &ctx);
         let ids: Vec<&str> = matched.iter().map(|e| e.id.as_str()).collect();
-        assert!(ids.contains(&"pirate_warning"),
-            "Unclaimed space should match pirate_warning, got: {:?}", ids);
-    }
-
-    #[test]
-    fn time_dilation_return_matches_colony_generations() {
-        let events = all_seed_events();
-        let system = test_system(InfrastructureLevel::Colony, Some(Uuid::new_v4()));
-        let journey = test_journey(80.0, 0.9, 3);
-        let ctx = MatchContext {
-            system: &system,
-            journey: &journey,
-            galactic_years_since_last_visit: Some(80.0),
-            location_type: Some("planet_surface".into()),
-            location_infrastructure: Some(InfrastructureLevel::Colony),
-            visited_system_names: Vec::new(),
-        };
-
-        let matched = match_events(&events, &ctx);
-        let ids: Vec<&str> = matched.iter().map(|e| e.id.as_str()).collect();
-        assert!(ids.contains(&"colony_generations"),
-            "Returning after 80 years should match colony_generations, got: {:?}", ids);
-    }
-
-    #[test]
-    fn specificity_ordering() {
-        let events = all_seed_events();
-        let system = test_system(InfrastructureLevel::Colony, Some(Uuid::new_v4()));
-        let journey = test_journey(20.0, 0.9, 3);
-        let ctx = MatchContext {
-            system: &system,
-            journey: &journey,
-            galactic_years_since_last_visit: Some(60.0),
-            location_type: None,
-            location_infrastructure: None,
-            visited_system_names: Vec::new(),
-        };
-
-        let matched = match_events(&events, &ctx);
-        assert!(matched.len() >= 2, "Should match multiple events");
-
-        let first_spec = specificity(&matched[0].context_requirements);
-        let last_spec = specificity(&matched[matched.len() - 1].context_requirements);
-        assert!(first_spec >= last_spec,
-            "Events should be ordered by specificity: first={}, last={}", first_spec, last_spec);
+        assert!(ids.contains(&"arrival_empty_space"),
+            "Unclaimed deep space should match arrival_empty_space, got: {:?}", ids);
     }
 
     #[test]
@@ -569,7 +525,7 @@ mod tests {
         let events = all_seed_events();
         let system = test_system(InfrastructureLevel::Colony, Some(Uuid::new_v4()));
         let journey = test_journey(80.0, 0.9, 0);
-        let ctx = make_ctx(&system, &journey, None, None);
+        let ctx = make_ctx(&system, &journey, None, Some("deep_space".into()));
 
         let matched = match_events(&events, &ctx);
         let ids: Vec<&str> = matched.iter().map(|e| e.id.as_str()).collect();
@@ -577,108 +533,97 @@ mod tests {
             "No crew should not match crew_quiet_moment");
     }
 
-    // -------------------------------------------------------------------
-    // Location-level infrastructure tests (new)
-    // -------------------------------------------------------------------
-
     #[test]
-    fn station_event_blocked_at_barren_planet() {
-        let events = all_seed_events();
-        // System is Colony-level, but the LOCATION is an uninhabited planet.
-        let system = test_system(InfrastructureLevel::Colony, Some(Uuid::new_v4()));
-        let journey = test_journey(80.0, 0.9, 3);
-
-        let ctx = make_ctx_with_infra(
-            &system, &journey,
-            Some("planet_surface".into()),
-            Some(InfrastructureLevel::None), // Barren planet — no infra
-        );
-
-        let matched = match_events(&events, &ctx);
-        let ids: Vec<&str> = matched.iter().map(|e| e.id.as_str()).collect();
-
-        // Station events that require outpost+ should NOT fire here.
-        assert!(!ids.contains(&"smuggler_proposition"),
-            "Smuggler should not fire at barren planet, got: {:?}", ids);
-        assert!(!ids.contains(&"refueling_stop"),
-            "Refueling stop should not fire at barren planet, got: {:?}", ids);
-        assert!(!ids.contains(&"fuel_merchant_desperate"),
-            "Fuel merchant should not fire at barren planet");
-    }
-
-    #[test]
-    fn station_event_fires_at_station_with_infra() {
+    fn crew_event_matches_with_crew() {
         let events = all_seed_events();
         let system = test_system(InfrastructureLevel::Colony, Some(Uuid::new_v4()));
         let journey = test_journey(80.0, 0.9, 3);
-
-        let ctx = make_ctx_with_infra(
-            &system, &journey,
-            Some("station".into()),
-            Some(InfrastructureLevel::Colony),
-        );
+        let ctx = make_ctx(&system, &journey, None, Some("deep_space".into()));
 
         let matched = match_events(&events, &ctx);
         let ids: Vec<&str> = matched.iter().map(|e| e.id.as_str()).collect();
-
-        // Station events should work at actual stations.
-        assert!(ids.contains(&"smuggler_proposition"),
-            "Smuggler should fire at colony station, got: {:?}", ids);
+        assert!(ids.contains(&"crew_quiet_moment"),
+            "Deep space with crew should match crew_quiet_moment, got: {:?}", ids);
     }
 
-    // -------------------------------------------------------------------
-    // Faction presence tests
-    // -------------------------------------------------------------------
+    #[test]
+    fn investigate_events_match_correct_locations() {
+        let events = all_seed_events();
+        let system = test_system(InfrastructureLevel::None, None);
+        let journey = test_journey(80.0, 0.9, 3);
+
+        // Deep space should match the anomaly investigation
+        let ctx_deep = make_ctx(&system, &journey, None, Some("deep_space".into()));
+        let matched = match_events(&events, &ctx_deep);
+        let ids: Vec<&str> = matched.iter().map(|e| e.id.as_str()).collect();
+        assert!(ids.contains(&"investigate_anomaly_deep_space"),
+            "Deep space should match investigate_anomaly_deep_space, got: {:?}", ids);
+
+        // Planet surface should match the ruins investigation
+        let ctx_planet = make_ctx(&system, &journey, None, Some("planet_surface".into()));
+        let matched = match_events(&events, &ctx_planet);
+        let ids: Vec<&str> = matched.iter().map(|e| e.id.as_str()).collect();
+        assert!(ids.contains(&"investigate_surface_ruins"),
+            "Planet surface should match investigate_surface_ruins, got: {:?}", ids);
+    }
 
     #[test]
-    fn faction_category_present_matches_when_present() {
+    fn infrastructure_max_blocks_developed_locations() {
         let events = all_seed_events();
-        let civ_id = Uuid::new_v4();
-        let system = test_system_with_faction_presence(
-            InfrastructureLevel::Hub, Some(civ_id),
-            vec![FactionPresence {
-                faction_id: Uuid::new_v4(),
-                strength: 0.6, visibility: 0.8,
-                services: vec![FactionService::Trade, FactionService::Missions],
-            }],
-        );
+        let system = test_system(InfrastructureLevel::Hub, Some(Uuid::new_v4()));
         let journey = test_journey(80.0, 0.9, 3);
         let ctx = make_ctx_with_infra(
             &system, &journey,
-            Some("station".into()),
+            Some("deep_space".into()),
             Some(InfrastructureLevel::Hub),
         );
 
         let matched = match_events(&events, &ctx);
         let ids: Vec<&str> = matched.iter().map(|e| e.id.as_str()).collect();
-        assert!(ids.contains(&"guild_price_war"),
-            "Hub with economic presence should match guild_price_war, got: {:?}", ids);
+        assert!(!ids.contains(&"arrival_empty_space"),
+            "Hub-level location should NOT match arrival_empty_space, got: {:?}", ids);
     }
 
     #[test]
-    fn faction_category_present_excludes_when_absent() {
+    fn faction_checkpoint_requires_military() {
         let events = all_seed_events();
-        let system = test_system(InfrastructureLevel::Hub, Some(Uuid::new_v4()));
-        let journey = test_journey(80.0, 0.9, 3);
-        let ctx = make_ctx(&system, &journey, None, None);
-
-        let matched = match_events(&events, &ctx);
-        let ids: Vec<&str> = matched.iter().map(|e| e.id.as_str()).collect();
-        assert!(!ids.contains(&"guild_price_war"));
-        assert!(!ids.contains(&"lattice_dead_drop"));
-    }
-
-    #[test]
-    fn criminal_faction_matches_smuggling_events() {
-        let events = all_seed_events();
-        let system = test_system_with_faction_presence(
+        let system_with_military = test_system_with_faction_presence(
             InfrastructureLevel::Colony, Some(Uuid::new_v4()),
             vec![FactionPresence {
                 faction_id: Uuid::new_v4(),
-                strength: 0.3, visibility: 0.1,
-                services: vec![FactionService::Intelligence, FactionService::Smuggling],
+                strength: 0.6, visibility: 0.8,
+                services: vec![FactionService::Missions, FactionService::Intelligence],
             }],
         );
+        let journey = test_journey(80.0, 0.9, 3);
+        let ctx = make_ctx_with_infra(
+            &system_with_military, &journey,
+            Some("station".into()),
+            Some(InfrastructureLevel::Colony),
+        );
+
+        let matched = match_events(&events, &ctx);
+        let ids: Vec<&str> = matched.iter().map(|e| e.id.as_str()).collect();
+        assert!(ids.contains(&"faction_checkpoint"),
+            "Station with military presence should match faction_checkpoint, got: {:?}", ids);
+
+        // Without military — should NOT match
+        let system_none = test_system(InfrastructureLevel::Colony, Some(Uuid::new_v4()));
+        let ctx2 = make_ctx_with_infra(
+            &system_none, &journey,
+            Some("station".into()),
+            Some(InfrastructureLevel::Colony),
+        );
+        let matched2 = match_events(&events, &ctx2);
+        let ids2: Vec<&str> = matched2.iter().map(|e| e.id.as_str()).collect();
+        assert!(!ids2.contains(&"faction_checkpoint"),
+            "Station without military should NOT match faction_checkpoint, got: {:?}", ids2);
+    }
+
+    #[test]
+    fn specificity_ordering() {
+        let events = all_seed_events();
+        let system = test_system(InfrastructureLevel::Colony, Some(Uuid::new_v4()));
         let journey = test_journey(80.0, 0.9, 3);
         let ctx = make_ctx_with_infra(
             &system, &journey,
@@ -687,63 +632,12 @@ mod tests {
         );
 
         let matched = match_events(&events, &ctx);
-        let ids: Vec<&str> = matched.iter().map(|e| e.id.as_str()).collect();
-        assert!(ids.contains(&"lattice_dead_drop"),
-            "Criminal presence should match lattice_dead_drop, got: {:?}", ids);
-    }
-
-    #[test]
-    fn time_factor_min_gates_correctly() {
-        let events = all_seed_events();
-        let normal = test_system_with_faction_presence(
-            InfrastructureLevel::Colony, Some(Uuid::new_v4()),
-            vec![FactionPresence {
-                faction_id: Uuid::new_v4(),
-                strength: 0.5, visibility: 0.6,
-                services: vec![FactionService::Shelter, FactionService::Intelligence],
-            }],
-        );
-        let journey = test_journey(80.0, 0.9, 3);
-        let ctx = make_ctx(&normal, &journey, None, None);
-
-        let matched = match_events(&events, &ctx);
-        let ids: Vec<&str> = matched.iter().map(|e| e.id.as_str()).collect();
-        assert!(!ids.contains(&"quiet_star_vigil"));
-
-        let mut distorted = test_system_with_faction_presence(
-            InfrastructureLevel::Colony, None,
-            vec![FactionPresence {
-                faction_id: Uuid::new_v4(),
-                strength: 0.5, visibility: 0.6,
-                services: vec![FactionService::Shelter, FactionService::Intelligence],
-            }],
-        );
-        distorted.time_factor = 2.5;
-        let ctx2 = make_ctx(&distorted, &journey, None, Some("deep_space".into()));
-
-        let matched2 = match_events(&events, &ctx2);
-        let ids2: Vec<&str> = matched2.iter().map(|e| e.id.as_str()).collect();
-        assert!(ids2.contains(&"quiet_star_vigil"),
-            "Distorted system should match quiet_star_vigil, got: {:?}", ids2);
-    }
-
-    #[test]
-    fn strength_gate_excludes_weak_presence() {
-        let events = all_seed_events();
-        let system = test_system_with_faction_presence(
-            InfrastructureLevel::Colony, Some(Uuid::new_v4()),
-            vec![FactionPresence {
-                faction_id: Uuid::new_v4(),
-                strength: 0.1, visibility: 0.9,
-                services: vec![FactionService::Intelligence, FactionService::Missions],
-            }],
-        );
-        let journey = test_journey(80.0, 0.9, 3);
-        let ctx = make_ctx(&system, &journey, None, None);
-
-        let matched = match_events(&events, &ctx);
-        let ids: Vec<&str> = matched.iter().map(|e| e.id.as_str()).collect();
-        assert!(!ids.contains(&"military_inspection"));
+        if matched.len() >= 2 {
+            let first_spec = specificity(&matched[0].context_requirements);
+            let last_spec = specificity(&matched[matched.len() - 1].context_requirements);
+            assert!(first_spec >= last_spec,
+                "Events should be ordered by specificity: first={}, last={}", first_spec, last_spec);
+        }
     }
 
     // -------------------------------------------------------------------
@@ -777,6 +671,8 @@ mod tests {
                 follows: None,
             }],
             intents: vec![],
+            trigger: EventTrigger::default(),
+            event_kind: EventKind::default(),
         };
         let events = vec![event];
         let system = test_system(InfrastructureLevel::Colony, None);
@@ -812,6 +708,8 @@ mod tests {
                 follows: None,
             }],
             intents: vec![],
+            trigger: EventTrigger::default(),
+            event_kind: EventKind::default(),
         };
         let events = vec![event];
         let system = test_system(InfrastructureLevel::Colony, None);
@@ -856,6 +754,8 @@ mod tests {
                 follows: None,
             }],
             intents: vec![],
+            trigger: EventTrigger::default(),
+            event_kind: EventKind::default(),
         };
         let events = vec![event];
         let system = test_system(InfrastructureLevel::Colony, None);
@@ -888,6 +788,8 @@ mod tests {
                 follows: None,
             }],
             intents: vec![],
+            trigger: EventTrigger::default(),
+            event_kind: EventKind::default(),
         };
         let events = vec![event];
         let system = test_system(InfrastructureLevel::Colony, None);

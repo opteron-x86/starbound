@@ -18,19 +18,20 @@ use starbound_core::crew::*;
 use starbound_core::galaxy::*;
 use starbound_core::journey::Journey;
 use starbound_core::mission::*;
-use starbound_core::npc::Npc;
+use starbound_core::npc::{Npc, NpcRelationType, DispositionTier};
 use starbound_core::ship::*;
 use starbound_core::reputation::PlayerProfile;
 use starbound_core::time::Timestamp;
 
 use starbound_encounters::library::all_seed_events;
 use starbound_encounters::pipeline::{
-    run_pipeline, PipelineConfig, PipelineResult, PipelineState, PlayerIntent,
+    run_pipeline, PipelineConfig, PipelineResult, PipelineState, PlayerIntent, EventTrigger,
 };
 use starbound_encounters::seed_event::{SeedEvent, EffectDef, FollowUpDelay};
 use starbound_encounters::templates::{resolve_template, TemplateContext};
 
 use starbound_simulation::generate::{generate_galaxy, GeneratedGalaxy};
+use starbound_simulation::templates::load_people_templates;
 use starbound_simulation::travel::{describe_plan, plan_all_routes, TravelPlan};
 use starbound_simulation::tick::{tick_galaxy, TickResult, TickEventCategory};
 
@@ -40,6 +41,13 @@ use starbound_game::crew_conversation::{
     generate_topics, conversation_effects_to_game_effects, apply_concern_removals,
     describe_crew_state, ConversationTopic, ConversationEffect,
 };
+use starbound_game::npc_interaction::{
+    build_npc_presentation, ask_about_area, ask_about_connection,
+    contract_refusal_text, farewell_text, NpcAction,
+};
+
+use starbound_llm::config::LlmConfig;
+use starbound_llm::generate::generate_encounter;
 
 // ---------------------------------------------------------------------------
 // Display helpers
@@ -113,6 +121,19 @@ struct GameState {
     pending_followups: Vec<String>,
     /// Topic IDs recently discussed in crew conversations (anti-repeat).
     discussed_topics: HashMap<Uuid, Vec<String>>,
+    /// Knowledge items already shared by each NPC (NPC ID → shared items).
+    /// Prevents NPCs from repeating themselves across visits.
+    npc_shared_knowledge: HashMap<Uuid, Vec<String>>,
+    /// Cached personality expressions from people.json (loaded once).
+    personality_expressions: HashMap<String, Vec<String>>,
+    /// LLM configuration. When enabled, encounter generation tries
+    /// the LLM first and falls back to the seed library.
+    llm_config: LlmConfig,
+    /// Counter for generating unique LLM event IDs.
+    llm_event_counter: u32,
+    /// Recent scene summaries for LLM context continuity.
+    /// Prevents re-introductions and contradictions. Capped at 5.
+    scene_history: Vec<String>,
 }
 
 impl GameState {
@@ -199,6 +220,158 @@ impl GameState {
         self.journey.current_location.and_then(|loc_id| {
             self.current_system().locations.iter().find(|l| l.id == loc_id)
         })
+    }
+
+    /// Get the NPC's faction name, or "Independent".
+    fn npc_faction_name(&self, npc: &Npc) -> String {
+        npc.faction_id
+            .and_then(|fid| self.galaxy.factions.iter().find(|f| f.id == fid))
+            .map(|f| f.name.clone())
+            .unwrap_or_else(|| "Independent".into())
+    }
+
+    /// Get the system name where an NPC lives.
+    fn npc_system_name(&self, npc: &Npc) -> &str {
+        self.galaxy.systems.iter()
+            .find(|s| s.id == npc.home_system_id)
+            .map(|s| s.name.as_str())
+            .unwrap_or("Unknown")
+    }
+
+    /// Get the location name where an NPC is posted.
+    fn npc_location_name(&self, npc: &Npc) -> &str {
+        npc.home_location_id
+            .and_then(|loc_id| {
+                self.galaxy.systems.iter()
+                    .find(|s| s.id == npc.home_system_id)
+                    .and_then(|s| s.locations.iter().find(|l| l.id == loc_id))
+                    .map(|l| l.name.as_str())
+            })
+            .unwrap_or("Unknown")
+    }
+
+    /// Find an NPC by ID.
+    fn find_npc(&self, npc_id: Uuid) -> Option<&Npc> {
+        self.galaxy.npcs.iter().find(|n| n.id == npc_id)
+    }
+
+    /// Generate a unique ID for an LLM-generated event.
+    fn next_llm_id(&mut self) -> String {
+        self.llm_event_counter += 1;
+        format!("llm_{:04}", self.llm_event_counter)
+    }
+
+    /// Record a scene summary for LLM context continuity.
+    /// Keeps the last 5 scenes.
+    fn record_scene(&mut self, summary: String) {
+        self.scene_history.push(summary);
+        if self.scene_history.len() > 5 {
+            self.scene_history.remove(0);
+        }
+    }
+
+    /// Build established facts about the current location for the LLM.
+    /// These are non-negotiable truths the LLM must not contradict.
+    fn build_established_facts(&self) -> Vec<String> {
+        let mut facts = Vec::new();
+        let system = self.current_system();
+
+        // Location facts.
+        if let Some(loc) = self.current_location() {
+            facts.push(format!(
+                "You are at {}, a {} in the {} system",
+                loc.name, loc.location_type.category_str(), system.name,
+            ));
+            if !loc.description.is_empty() {
+                facts.push(format!("Location description: {}", loc.description));
+            }
+            let services: Vec<String> = loc.services.iter().map(|s| format!("{}", s)).collect();
+            if !services.is_empty() {
+                facts.push(format!("Available services: {}", services.join(", ")));
+            }
+        } else {
+            facts.push(format!("You are at the edge of the {} system, not docked", system.name));
+        }
+
+        // Civilization and faction facts.
+        if let Some(civ_id) = system.controlling_civ {
+            facts.push(format!("This system is controlled by {}", self.civ_name(civ_id)));
+        } else {
+            facts.push("This system is unclaimed — no controlling civilization".into());
+        }
+
+        // Faction presence — what IS and ISN'T here.
+        let present_factions: Vec<String> = system.faction_presence.iter()
+            .filter_map(|fp| {
+                self.galaxy.factions.iter()
+                    .find(|f| f.id == fp.faction_id)
+                    .map(|f| format!("{} ({}, strength {:.0}%)", f.name, f.category, fp.strength * 100.0))
+            })
+            .collect();
+        if !present_factions.is_empty() {
+            facts.push(format!("Factions present: {}", present_factions.join("; ")));
+        }
+
+        // NPCs at this location — who the player can meet.
+        let npcs = self.npcs_here();
+        if npcs.is_empty() {
+            facts.push("No notable NPCs at this location".into());
+        } else {
+            for npc in &npcs {
+                let faction_str = self.npc_faction_name(npc);
+                let mut npc_fact = format!(
+                    "NPC here: {} — {} ({})", npc.name, npc.title, faction_str
+                );
+                if let Some(last) = npc.last_interaction() {
+                    npc_fact.push_str(&format!(". Previously: {}", last.summary));
+                }
+                facts.push(npc_fact);
+            }
+        }
+
+        // Star type fact — helps prevent astrophysics contradictions.
+        facts.push(format!("Star type: {} (use this for any astronomical references)", system.star_type));
+
+        // Active contracts — what the player is carrying and where it's going.
+        for contract in &self.journey.active_contracts {
+            if contract.state == ContractState::Active {
+                let dest_sys = self.system_name(contract.destination_system_id);
+                let dest_loc = contract.destination_location_id
+                    .and_then(|loc_id| {
+                        self.galaxy.systems.iter()
+                            .find(|s| s.id == contract.destination_system_id)
+                            .and_then(|s| s.locations.iter().find(|l| l.id == loc_id))
+                            .map(|l| l.name.clone())
+                    });
+                let dest_str = match dest_loc {
+                    Some(loc) => format!("{} in {} system", loc, dest_sys),
+                    None => format!("{} system", dest_sys),
+                };
+                let mut fact = format!("Active contract: {} — destination: {}", contract.title, dest_str);
+                if let Some((ref cargo, qty)) = contract.cargo_required {
+                    fact.push_str(&format!(". Carrying {} x{} for this delivery", cargo, qty));
+                }
+                // Clarify if current location is NOT the destination.
+                if contract.destination_system_id != self.journey.current_system {
+                    fact.push_str(". Destination is in ANOTHER system, not here");
+                } else if let Some(dest_loc_id) = contract.destination_location_id {
+                    if self.journey.current_location != Some(dest_loc_id) {
+                        fact.push_str(". Destination is at a different location in this system, not here");
+                    }
+                }
+                facts.push(fact);
+            }
+        }
+
+        // Cargo context — what's in the hold and why.
+        if !self.journey.ship.cargo.is_empty() {
+            let cargo_items: Vec<String> = self.journey.ship.cargo.iter()
+                .map(|(name, qty)| format!("{} x{}", name, qty))
+                .collect();
+            facts.push(format!("Cargo hold: {}", cargo_items.join(", ")));
+        }
+
+        facts
     }
 
     /// Get the economy at the current location.
@@ -383,6 +556,10 @@ fn new_game(seed: u64) -> GameState {
     let mut visit_log = HashMap::new();
     visit_log.insert(start_system.id, 0.0);
 
+    // Load personality expressions from people.json (cached for the session).
+    let people_templates = load_people_templates();
+    let personality_expressions = people_templates.personality_expressions;
+
     GameState {
         galaxy,
         journey,
@@ -394,6 +571,11 @@ fn new_game(seed: u64) -> GameState {
         last_ticked_day: 0.0,
         pending_followups: Vec::new(),
         discussed_topics: HashMap::new(),
+        npc_shared_knowledge: HashMap::new(),
+        personality_expressions,
+        llm_config: LlmConfig::default(), // Disabled by default — enabled at startup.
+        llm_event_counter: 0,
+        scene_history: Vec::new(),
     }
 }
 
@@ -765,6 +947,128 @@ fn run_encounter<'a>(
 
 /// Run an encounter and follow any immediate chains. Queues NextArrival
 /// follow-ups in GameState for later.
+// ---------------------------------------------------------------------------
+// Encounter generation — LLM with seed library fallback
+// ---------------------------------------------------------------------------
+
+/// Try to generate and run an encounter. Tries LLM first (if enabled),
+/// falls back to the seed library pipeline.
+///
+/// Returns true if an encounter fired, false if silence.
+fn try_encounter(
+    gs: &mut GameState,
+    trigger: EventTrigger,
+    years_since: Option<f64>,
+) -> bool {
+    // Gather context needed by both LLM and pipeline.
+    let system = gs.current_system().clone();
+    let loc_type = gs.current_location_type_str();
+    let loc_infra = gs.current_location().map(|l| l.infrastructure);
+
+    let faction_name = system.faction_presence.iter()
+        .max_by(|a, b| a.strength.partial_cmp(&b.strength).unwrap())
+        .and_then(|fp| gs.galaxy.factions.iter().find(|f| f.id == fp.faction_id))
+        .map(|f| f.name.clone());
+
+    let civ_name = system.controlling_civ
+        .and_then(|cid| gs.galaxy.civilizations.iter().find(|c| c.id == cid))
+        .map(|c| c.name.clone());
+
+    let location_name = gs.current_location().map(|l| l.name.clone());
+    let location_description = gs.current_location().map(|l| l.description.clone());
+
+    // --- Try LLM generation first ---
+    if gs.llm_config.is_available() {
+        // Build context that requires &mut self first.
+        let event_id = gs.next_llm_id();
+        let established_facts = gs.build_established_facts();
+        let recent_scenes = gs.scene_history.clone();
+
+        // Now gather immutable references.
+        let npcs_here: Vec<&Npc> = gs.npcs_here();
+        let example = gs.events.iter()
+            .find(|e| e.matches_trigger(&trigger))
+            .or_else(|| gs.events.first());
+
+        let result = generate_encounter(
+            &gs.llm_config,
+            &trigger,
+            &system,
+            &gs.journey,
+            npcs_here,
+            location_name.clone(),
+            loc_type.clone(),
+            location_description.clone(),
+            faction_name,
+            civ_name,
+            recent_scenes,
+            established_facts,
+            example,
+            &event_id,
+        );
+
+        if let Some(gen) = result {
+            if let Some(tokens) = gen.tokens_used {
+                eprintln!("  [LLM] Generated {} ({} tokens)", event_id, tokens);
+            }
+
+            // Record scene summary before running the encounter.
+            // Use the first ~150 chars of the generated text + choice labels.
+            let text_preview: String = gen.event.text.chars().take(150).collect();
+            let choice_labels: Vec<&str> = gen.event.choices.iter()
+                .map(|c| c.label.as_str())
+                .collect();
+            let scene_summary = format!(
+                "At {}: {}... [choices: {}]",
+                location_name.as_deref().unwrap_or("unknown"),
+                text_preview.trim(),
+                choice_labels.join(", "),
+            );
+            gs.record_scene(scene_summary);
+
+            let event = gen.event;
+            run_encounter_chain(gs, &event);
+            return true;
+        }
+        // LLM failed — fall through to seed pipeline.
+    }
+
+    // --- Seed library pipeline fallback ---
+    let result = run_pipeline(
+        &gs.events, &system, &gs.journey, years_since,
+        &gs.pipeline_state, &gs.pipeline_config, &mut gs.rng,
+        trigger,
+        loc_type.as_deref(),
+        loc_infra,
+    );
+
+    match result {
+        PipelineResult::Event { event, .. } => {
+            let event = event.clone();
+
+            // Record seed event scene too.
+            let text_preview: String = event.text.chars().take(150).collect();
+            let scene_summary = format!(
+                "At {}: {}...",
+                location_name.as_deref().unwrap_or("unknown"),
+                text_preview.trim(),
+            );
+            gs.record_scene(scene_summary);
+
+            run_encounter_chain(gs, &event);
+            true
+        }
+        PipelineResult::Silence { .. } => {
+            gs.pipeline_state.record_silence();
+            false
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Encounter display and resolution
+// ---------------------------------------------------------------------------
+
 fn run_encounter_chain(gs: &mut GameState, initial_event: &SeedEvent) {
     // Run the initial event.
     let followup = run_encounter(gs, initial_event);
@@ -1376,7 +1680,8 @@ fn system_map(gs: &mut GameState) {
 }
 
 /// Sublight travel to a location within the current system.
-/// Costs personal time and supplies. Fires an encounter on arrival.
+/// Costs personal time and supplies. May fire a transit ambient event
+/// during the journey and an arrival encounter at the destination.
 fn navigate_to_location(gs: &mut GameState, target_id: Uuid, from_dist: f32) {
     // Snapshot target info before borrowing gs mutably.
     let (target_name, target_desc, target_dist, can_dock) = {
@@ -1423,6 +1728,10 @@ fn navigate_to_location(gs: &mut GameState, target_id: Uuid, from_dist: f32) {
         println!("  {}", line);
     }
 
+    // --- Transit ambient event (fires during the journey) ---
+    // ~22% chance of a small moment during sublight travel.
+    try_encounter(gs, EventTrigger::Transit, None);
+
     // Set location.
     gs.journey.current_location = Some(target_id);
 
@@ -1437,30 +1746,15 @@ fn navigate_to_location(gs: &mut GameState, target_id: Uuid, from_dist: f32) {
 
     pause();
 
-    // --- Fire encounter pipeline on location arrival ---
-    let system = gs.current_system().clone();
-    let years_since = gs.galactic_years_since_last_visit();
-    let loc_type = gs.current_location_type_str();
-    let loc_infra = gs.current_location().map(|l| l.infrastructure);
-
-    let result = run_pipeline(
-        &gs.events, &system, &gs.journey, years_since,
-        &gs.pipeline_state, &gs.pipeline_config, &mut gs.rng,
-        None,
-        loc_type.as_deref(),
-        loc_infra,
-    );
-
-    match result {
-        PipelineResult::Event { event, .. } => {
-            let event = event.clone();
-            run_encounter_chain(gs, &event);
-        }
-        PipelineResult::Silence { .. } => {
-            gs.pipeline_state.record_silence();
-            // No message on silence at a location — the description was enough.
-        }
+    // --- Docked/orbit ambient event ---
+    // ~27% chance of a small atmosphere moment on arrival.
+    if can_dock {
+        try_encounter(gs, EventTrigger::Docked, None);
     }
+
+    // --- Fire encounter on location arrival ---
+    let years_since = gs.galactic_years_since_last_visit();
+    try_encounter(gs, EventTrigger::Arrival, years_since);
 }
 
 /// Scan the system to reveal hidden locations.
@@ -1522,28 +1816,7 @@ fn run_system_scan(gs: &mut GameState) {
     }
 
     // Fire a scan encounter (for events like "your scan attracts attention").
-    let system_clone = gs.current_system().clone();
-    let years_since = gs.galactic_years_since_last_visit();
-    let loc_type = gs.current_location_type_str();
-    let loc_infra = gs.current_location().map(|l| l.infrastructure);
-    let result = run_pipeline(
-        &gs.events, &system_clone, &gs.journey, years_since,
-        &gs.pipeline_state, &gs.pipeline_config, &mut gs.rng,
-        Some(PlayerIntent::Scan),
-        loc_type.as_deref(),
-        loc_infra,
-    );
-
-    match result {
-        PipelineResult::Event { event, .. } => {
-            let event = event.clone();
-            println!();
-            run_encounter_chain(gs, &event);
-        }
-        PipelineResult::Silence { .. } => {
-            gs.pipeline_state.record_silence();
-        }
-    }
+    try_encounter(gs, PlayerIntent::Scan.into(), None);
 
     pause();
 }
@@ -2130,50 +2403,31 @@ fn repair_screen(gs: &mut GameState) {
 }
 
 fn run_intent_encounter(gs: &mut GameState, intent: PlayerIntent) {
-    let system = gs.current_system().clone();
-    let years_since = gs.galactic_years_since_last_visit();
-    let loc_type = gs.current_location_type_str();
-    let loc_infra = gs.current_location().map(|l| l.infrastructure);
+    let fired = try_encounter(gs, intent.into(), None);
 
-    let result = run_pipeline(
-        &gs.events, &system, &gs.journey, years_since,
-        &gs.pipeline_state, &gs.pipeline_config, &mut gs.rng,
-        Some(intent),
-        loc_type.as_deref(),
-        loc_infra,
-    );
+    if !fired {
+        // Custom silence messages per intent.
+        clear_screen();
+        display_header(intent.label());
+        println!();
 
-    match result {
-        PipelineResult::Event { event, .. } => {
-            let event = event.clone();
-            run_encounter_chain(gs, &event);
+        let msg = match intent {
+            PlayerIntent::Trade => "No one here is interested in trading right now.",
+            PlayerIntent::Investigate => "Your sensors find nothing worth investigating at the moment.",
+            PlayerIntent::Repair => "No repair facilities available at this system.",
+            PlayerIntent::Resupply => "Supplies aren't available here.",
+            PlayerIntent::Scan => "Your sensors sweep the system but find nothing unusual.",
+            PlayerIntent::Recruit => "No one here is looking for work.",
+            PlayerIntent::Rest => "The crew takes a moment to breathe.",
+            PlayerIntent::Smuggle => "No opportunity for that kind of work here.",
+            PlayerIntent::Negotiate => "There's no one to negotiate with.",
+        };
+
+        for line in wrap_text(msg, 60) {
+            println!("  {}", line);
         }
-        PipelineResult::Silence { reason, .. } => {
-            clear_screen();
-            display_header(intent.label());
-            println!();
 
-            let msg = match intent {
-                PlayerIntent::Trade => "No one here is interested in trading right now.",
-                PlayerIntent::Investigate => "Your sensors find nothing worth investigating at the moment.",
-                PlayerIntent::Repair => "No repair facilities available at this system.",
-                PlayerIntent::Resupply => "Supplies aren't available here.",
-                PlayerIntent::Scan => "Your sensors sweep the system but find nothing unusual.",
-                PlayerIntent::Recruit => "No one here is looking for work.",
-                PlayerIntent::Rest => "The crew takes a moment to breathe.",
-                PlayerIntent::Smuggle => "No opportunity for that kind of work here.",
-                PlayerIntent::Negotiate => "There's no one to negotiate with.",
-            };
-
-            for line in wrap_text(msg, 60) {
-                println!("  {}", line);
-            }
-
-            // Log it for debugging.
-            let _ = reason;
-
-            pause();
-        }
+        pause();
     }
 }
 
@@ -2197,10 +2451,28 @@ fn people_menu(gs: &mut GameState) {
     println!();
 
     for (i, npc) in npcs.iter().enumerate() {
-        let faction_str = npc.faction_id
-            .map(|fid| gs.faction_name(fid).to_string())
-            .unwrap_or_else(|| "Independent".into());
-        println!("  {}) {} — {} ({})", i + 1, npc.name, npc.title, faction_str);
+        let faction_str = gs.npc_faction_name(npc);
+        let tier = npc.disposition_tier();
+
+        // Disposition hint — subtle, not a number.
+        let disposition_hint = match tier {
+            DispositionTier::Hostile => " — hostile",
+            DispositionTier::Cold => " — cold",
+            DispositionTier::Neutral => "",
+            DispositionTier::Warm => " — seems friendly",
+            DispositionTier::Friendly => " — warmly disposed",
+            DispositionTier::Trusted => " — trusts you",
+        };
+
+        // Species hint for synthetics.
+        let species_hint = if npc.species.is_synthetic() {
+            format!(" [{}]", npc.species.display_label())
+        } else {
+            String::new()
+        };
+
+        println!("  {}) {} — {} ({}){}{}", 
+            i + 1, npc.name, npc.title, faction_str, species_hint, disposition_hint);
     }
     println!("  0) Back");
     println!();
@@ -2224,83 +2496,359 @@ fn talk_to_npc(gs: &mut GameState, npc_id: Uuid) {
     loop {
         let npc = &gs.galaxy.npcs[npc_idx];
 
+        // Gather context for the presentation layer.
+        let has_turnable = gs.journey.active_contracts.iter()
+            .any(|c| c.issuer_npc_id == npc_id && c.state == ContractState::ReadyToComplete);
+        let ship_name = gs.journey.ship.name.clone();
+        let system_name = gs.current_system().name.clone();
+        let faction_name = gs.npc_faction_name(npc);
+
+        // Build the full NPC presentation.
+        let pres = build_npc_presentation(
+            npc,
+            has_turnable,
+            &ship_name,
+            &system_name,
+            &faction_name,
+            &gs.personality_expressions,
+            &mut gs.rng,
+        );
+
         clear_screen();
         display_header(&format!("{} — {}", npc.name, npc.title));
         println!();
 
+        // Bio.
         for line in wrap_text(&npc.bio, 60) {
             println!("  {}", line);
         }
         println!();
 
-        // Check if the player has a completable contract from this NPC.
-        let has_turnable = gs.journey.active_contracts.iter()
-            .any(|c| c.issuer_npc_id == npc_id && c.state == ContractState::ReadyToComplete);
-
-        let mut options: Vec<&str> = Vec::new();
-        options.push("Ask about work");
-        if has_turnable {
-            options.push("Turn in contract");
+        // Personality sketch.
+        if !pres.personality_sketch.is_empty() {
+            for line in wrap_text(&pres.personality_sketch, 60) {
+                println!("  {}", line);
+            }
+            println!();
         }
-        options.push("Ask about the area");
-        options.push("Leave");
 
-        for (i, opt) in options.iter().enumerate() {
-            println!("  {}) {}", i + 1, opt);
+        println!("{}", THIN_DIVIDER);
+        println!();
+
+        // Greeting.
+        for line in wrap_text(&pres.greeting, 60) {
+            println!("  {}", line);
+        }
+
+        // Memory of previous interaction.
+        if let Some(ref memory) = pres.memory_line {
+            println!();
+            for line in wrap_text(memory, 60) {
+                println!("  {}", line);
+            }
+        }
+
+        println!();
+
+        // Menu options.
+        for (i, opt) in pres.options.iter().enumerate() {
+            println!("  {}) {}", i + 1, opt.label);
         }
         println!();
 
         let input = prompt("  > ");
         let choice: usize = input.parse::<usize>().unwrap_or(0);
 
-        if choice == 0 || choice > options.len() {
+        if choice == 0 || choice > pres.options.len() {
+            // Record the visit.
+            let npc = &mut gs.galaxy.npcs[npc_idx];
+            npc.record_interaction(
+                "visited briefly",
+                gs.journey.time.galactic_days,
+                0.0,
+            );
             return;
         }
 
-        let chosen = options[choice - 1];
-        match chosen {
-            "Ask about work" => offer_contracts(gs, npc_idx),
-            "Turn in contract" => turn_in_contract(gs, npc_idx),
-            "Ask about the area" => {
-                let system = gs.current_system();
-                clear_screen();
-                display_header("Local Intel");
-                println!();
-
-                let msg = format!(
-                    "\"{}? It's a {} system. {}. Not much changes here, \
-                     unless you count the ships passing through.\"",
-                    system.name,
-                    system.infrastructure_level,
-                    if system.faction_presence.len() > 2 {
-                        "Lot of factions have a stake here"
-                    } else {
-                        "Quiet, mostly"
+        match &pres.options[choice - 1].action {
+            NpcAction::AskAboutWork => {
+                let npc = &gs.galaxy.npcs[npc_idx];
+                if !npc.will_offer_contracts() {
+                    // Disposition too low for contracts.
+                    let refusal = contract_refusal_text(
+                        npc, &ship_name, &system_name, &faction_name,
+                        &mut gs.rng,
+                    );
+                    clear_screen();
+                    display_header("No Work Available");
+                    println!();
+                    for line in wrap_text(&refusal, 60) {
+                        println!("  {}", line);
                     }
+                    pause();
+                } else {
+                    offer_contracts(gs, npc_idx);
+                }
+            }
+            NpcAction::TurnInContract => {
+                turn_in_contract(gs, npc_idx);
+            }
+            NpcAction::AskAboutArea => {
+                npc_ask_about_area(gs, npc_idx);
+            }
+            NpcAction::AskAboutConnection(_) => {
+                npc_connections_menu(gs, npc_idx);
+            }
+            NpcAction::Leave => {
+                // Farewell.
+                let npc = &gs.galaxy.npcs[npc_idx];
+                let farewell = farewell_text(
+                    npc, &ship_name, &system_name, &faction_name,
+                    &mut gs.rng,
                 );
-                for line in wrap_text(&msg, 60) {
+                println!();
+                for line in wrap_text(&farewell, 60) {
                     println!("  {}", line);
                 }
-
-                // Mention active threads in the area if the NPC knows something.
-                if !system.active_threads.is_empty() {
-                    println!();
-                    let npc = &gs.galaxy.npcs[npc_idx];
-                    println!("  {} pauses, as if deciding whether to say more.", npc.name);
-                    println!("  \"There have been some... unusual reports lately.\"");
-                }
-
                 pause();
+                return;
             }
-            "Leave" => return,
-            _ => return,
         }
     }
+}
+
+/// NPC "Ask about the area" — knowledge-driven, personality-shaped.
+fn npc_ask_about_area(gs: &mut GameState, npc_idx: usize) {
+    let npc = &gs.galaxy.npcs[npc_idx];
+    let npc_id = npc.id;
+    let ship_name = gs.journey.ship.name.clone();
+    let system_name = gs.current_system().name.clone();
+    let faction_name = gs.npc_faction_name(npc);
+
+    // Get what we've already shared with this NPC.
+    let already_shared = gs.npc_shared_knowledge
+        .get(&npc_id)
+        .cloned()
+        .unwrap_or_default();
+
+    let area = ask_about_area(
+        npc,
+        &system_name,
+        &ship_name,
+        &faction_name,
+        &gs.galaxy.npcs,
+        &already_shared,
+        &mut gs.rng,
+    );
+
+    clear_screen();
+    display_header("Local Intel");
+    println!();
+
+    // Framing line.
+    if !area.framing.is_empty() {
+        for line in wrap_text(&area.framing, 60) {
+            println!("  {}", line);
+        }
+        println!();
+    }
+
+    if area.items.is_empty() {
+        let npc = &gs.galaxy.npcs[npc_idx];
+        if npc.disposition_tier() <= DispositionTier::Cold {
+            println!("  {} doesn't seem inclined to share anything.", npc.name);
+        } else {
+            println!("  {} has nothing new to tell you.", npc.name);
+        }
+    } else {
+        // Display each knowledge item.
+        let mut newly_shared = Vec::new();
+        for item in &area.items {
+            for line in wrap_text(&item.delivered, 60) {
+                println!("  {}", line);
+            }
+            println!();
+            newly_shared.push(item.raw.clone());
+        }
+
+        // Record what was shared.
+        gs.npc_shared_knowledge
+            .entry(npc_id)
+            .or_insert_with(Vec::new)
+            .extend(newly_shared);
+    }
+
+    // Connection mention.
+    if let Some(ref mention) = area.connection_mention {
+        println!("{}", THIN_DIVIDER);
+        println!();
+        for line in wrap_text(mention, 60) {
+            println!("  {}", line);
+        }
+    }
+
+    // Record the interaction.
+    let npc = &mut gs.galaxy.npcs[npc_idx];
+    npc.record_interaction(
+        "asked about the area",
+        gs.journey.time.galactic_days,
+        0.02, // Small positive — showing interest.
+    );
+
+    pause();
+}
+
+/// NPC connections sub-menu — ask about people this NPC knows.
+fn npc_connections_menu(gs: &mut GameState, npc_idx: usize) {
+    let npc = &gs.galaxy.npcs[npc_idx];
+    let npc_name = npc.name.clone();
+    let connections: Vec<(Uuid, NpcRelationType, String)> = npc.connections.iter()
+        .map(|c| (c.npc_id, c.relationship, c.context.clone()))
+        .collect();
+
+    if connections.is_empty() {
+        clear_screen();
+        display_header("Contacts");
+        println!();
+        println!("  {} doesn't mention anyone.", npc_name);
+        pause();
+        return;
+    }
+
+    clear_screen();
+    display_header(&format!("{}'s Contacts", npc_name));
+    println!();
+
+    // Build list of connected NPCs we can display.
+    // Use direct field access to avoid borrowing all of `gs` through methods.
+    let mut display_conns: Vec<(usize, String, String, NpcRelationType)> = Vec::new();
+
+    for (i, (conn_id, rel_type, _context)) in connections.iter().enumerate() {
+        if let Some(connected) = gs.galaxy.npcs.iter().find(|n| n.id == *conn_id) {
+            let loc = if connected.home_system_id == gs.journey.current_system {
+                connected.home_location_id
+                    .and_then(|loc_id| {
+                        gs.galaxy.systems.iter()
+                            .find(|s| s.id == connected.home_system_id)
+                            .and_then(|s| s.locations.iter().find(|l| l.id == loc_id))
+                            .map(|l| l.name.clone())
+                    })
+                    .unwrap_or_else(|| "Unknown".into())
+            } else {
+                let sys_name = gs.galaxy.systems.iter()
+                    .find(|s| s.id == connected.home_system_id)
+                    .map(|s| s.name.as_str())
+                    .unwrap_or("Unknown");
+                format!("{} system", sys_name)
+            };
+            display_conns.push((i, connected.name.clone(), loc, *rel_type));
+        }
+    }
+
+    for (i, (_orig_idx, name, loc, rel)) in display_conns.iter().enumerate() {
+        println!("  {}) {} — {} ({})", i + 1, name, rel, loc);
+    }
+    println!("  0) Back");
+    println!();
+
+    let input = prompt("  > ");
+    let choice: usize = match input.parse::<usize>() {
+        Ok(n) if n >= 1 && n <= display_conns.len() => n - 1,
+        _ => return,
+    };
+
+    let (orig_idx, _name, _loc, _rel) = &display_conns[choice];
+    let (conn_npc_id, _, _) = &connections[*orig_idx];
+
+    // Gather all data needed for the connection query.
+    // Clone/extract what we need to avoid holding &self borrows across &mut gs.rng.
+    let current_system_name = gs.galaxy.systems.iter()
+        .find(|s| s.id == gs.journey.current_system)
+        .map(|s| s.name.clone())
+        .unwrap_or_else(|| "Unknown".into());
+    let ship_name = gs.journey.ship.name.clone();
+
+    // Look up the connected NPC — direct field access.
+    let connected_npc_idx = match gs.galaxy.npcs.iter().position(|n| n.id == *conn_npc_id) {
+        Some(i) => i,
+        None => return,
+    };
+
+    let connected_sys_name = gs.galaxy.systems.iter()
+        .find(|s| s.id == gs.galaxy.npcs[connected_npc_idx].home_system_id)
+        .map(|s| s.name.clone())
+        .unwrap_or_else(|| "Unknown".into());
+
+    let faction_name = gs.galaxy.npcs[npc_idx].faction_id
+        .and_then(|fid| gs.galaxy.factions.iter().find(|f| f.id == fid))
+        .map(|f| f.name.clone())
+        .unwrap_or_else(|| "Independent".into());
+
+    // Find the connection struct.
+    let connection_clone = gs.galaxy.npcs[npc_idx].connections.iter()
+        .find(|c| c.npc_id == *conn_npc_id)
+        .cloned();
+    let connection = match connection_clone {
+        Some(c) => c,
+        None => return,
+    };
+
+    let info = ask_about_connection(
+        &gs.galaxy.npcs[npc_idx],
+        &connection,
+        &gs.galaxy.npcs[connected_npc_idx],
+        &current_system_name,
+        &connected_sys_name,
+        &ship_name,
+        &faction_name,
+        &mut gs.rng,
+    );
+
+    clear_screen();
+    display_header(&format!("About {}", info.name));
+    println!();
+
+    println!("  {} — {}", info.name, info.title);
+    println!("  Located: {}", info.location);
+    println!();
+    for line in wrap_text(&info.description, 60) {
+        println!("  {}", line);
+    }
+
+    // Record the interaction.
+    let npc = &mut gs.galaxy.npcs[npc_idx];
+    npc.record_interaction(
+        format!("asked about {}", info.name),
+        gs.journey.time.galactic_days,
+        0.01,
+    );
+
+    pause();
 }
 
 fn offer_contracts(gs: &mut GameState, npc_idx: usize) {
     let npc = &gs.galaxy.npcs[npc_idx];
     let npc_id = npc.id;
+    let npc_name = npc.name.clone();
+
+    // Check disposition — cold NPCs won't offer work.
+    if !npc.will_offer_contracts() {
+        let ship_name = gs.journey.ship.name.clone();
+        let system_name = gs.current_system().name.clone();
+        let faction_name = gs.npc_faction_name(npc);
+        let refusal = contract_refusal_text(
+            npc, &ship_name, &system_name, &faction_name,
+            &mut gs.rng,
+        );
+        clear_screen();
+        display_header("Contracts");
+        println!();
+        for line in wrap_text(&refusal, 60) {
+            println!("  {}", line);
+        }
+        pause();
+        return;
+    }
 
     // Check if the player already has an active contract from this NPC.
     let already_working = gs.journey.active_contracts.iter()
@@ -2317,6 +2865,7 @@ fn offer_contracts(gs: &mut GameState, npc_idx: usize) {
     }
 
     // Generate a contract based on faction category.
+    // Disposition affects reward: warm+ NPCs offer better pay.
     let contract = generate_contract_for_npc(gs, npc_idx);
 
     let contract = match contract {
@@ -2330,6 +2879,19 @@ fn offer_contracts(gs: &mut GameState, npc_idx: usize) {
             return;
         }
     };
+
+    // Apply disposition bonus to reward.
+    let npc = &gs.galaxy.npcs[npc_idx];
+    let tier = npc.disposition_tier();
+    let reward_multiplier = match tier {
+        DispositionTier::Neutral => 1.0,
+        DispositionTier::Warm => 1.15,
+        DispositionTier::Friendly => 1.3,
+        DispositionTier::Trusted => 1.5,
+        _ => 1.0,
+    };
+    let mut contract = contract;
+    contract.reward_credits *= reward_multiplier;
 
     // Display the offer.
     clear_screen();
@@ -2356,6 +2918,9 @@ fn offer_contracts(gs: &mut GameState, npc_idx: usize) {
     };
     println!("  Destination: {}", dest_display);
     println!("  Reward: {:.0} credits", contract.reward_credits);
+    if reward_multiplier > 1.0 {
+        println!("  (Better terms — {} regards you well.)", npc_name);
+    }
     if let Some((ref cargo, qty)) = contract.cargo_given {
         println!("  Cargo provided: {} x{}", cargo, qty);
     }
@@ -2381,17 +2946,47 @@ fn offer_contracts(gs: &mut GameState, npc_idx: usize) {
 
             let mut accepted = contract;
             accepted.state = ContractState::Active;
+            let title_clone = accepted.title.clone();
             gs.journey.active_contracts.push(accepted);
+
+            // Record interaction.
+            let npc = &mut gs.galaxy.npcs[npc_idx];
+            npc.record_interaction(
+                format!("accepted contract: {}", title_clone),
+                gs.journey.time.galactic_days,
+                0.05,
+            );
 
             clear_screen();
             println!();
-            println!("  \"Good. Don't let me down.\"");
+            // Personality-shaped acceptance.
+            let boldness = gs.galaxy.npcs[npc_idx].personality.boldness;
+            if boldness > 0.6 {
+                println!("  \"Good. I like someone who doesn't hesitate.\"");
+            } else if boldness < 0.4 {
+                println!("  \"Good. Be careful out there.\"");
+            } else {
+                println!("  \"Good. Don't let me down.\"");
+            }
             println!();
             println!("  Contract accepted. Check your contracts log.");
             pause();
         }
         _ => {
-            println!("  \"Your call. Offer stands if you change your mind.\"");
+            // Record the decline.
+            let npc = &mut gs.galaxy.npcs[npc_idx];
+            npc.record_interaction(
+                "declined a contract",
+                gs.journey.time.galactic_days,
+                -0.02,
+            );
+
+            let warmth = npc.personality.warmth;
+            if warmth > 0.6 {
+                println!("  \"No worries. Offer stands if you change your mind.\"");
+            } else {
+                println!("  \"Your call.\"");
+            }
             pause();
         }
     }
@@ -2527,6 +3122,8 @@ fn generate_contract_for_npc(gs: &GameState, npc_idx: usize) -> Option<Contract>
 fn turn_in_contract(gs: &mut GameState, npc_idx: usize) {
     let npc_id = gs.galaxy.npcs[npc_idx].id;
     let npc_name = gs.galaxy.npcs[npc_idx].name.clone();
+    let npc_warmth = gs.galaxy.npcs[npc_idx].personality.warmth;
+    let npc_boldness = gs.galaxy.npcs[npc_idx].personality.boldness;
 
     // Find the completable contract.
     let contract_idx = gs.journey.active_contracts.iter()
@@ -2547,19 +3144,30 @@ fn turn_in_contract(gs: &mut GameState, npc_idx: usize) {
 
     println!("  {}", title);
     println!();
-    println!("  {} nods. \"Job's done. Clean work.\"", npc_name);
+
+    // Personality-shaped completion dialogue.
+    if npc_warmth > 0.6 {
+        println!("  {} smiles. \"Nicely done. I knew I picked the right person.\"", npc_name);
+    } else if npc_boldness > 0.6 {
+        println!("  {} nods sharply. \"Clean work. That's what I like.\"", npc_name);
+    } else if npc_warmth < 0.3 {
+        println!("  {} checks the manifest without comment. \"Everything's in order.\"", npc_name);
+    } else {
+        println!("  {} nods. \"Job's done. Clean work.\"", npc_name);
+    }
     println!();
     println!("  +{:.0} credits", reward);
 
     // Pay the player.
     gs.journey.resources += reward;
 
-    // Improve disposition.
+    // Improve disposition (more than Phase A's flat 0.15 — scales with contract quality).
+    let disposition_boost = if reward > 250.0 { 0.15 } else { 0.1 };
     let npc = &mut gs.galaxy.npcs[npc_idx];
     npc.record_interaction(
-        format!("Completed contract: {}", title),
+        format!("completed contract: {}", title),
         gs.journey.time.galactic_days,
-        0.15,
+        disposition_boost,
     );
 
     // Mark contract completed.
@@ -2830,6 +3438,9 @@ fn execute_travel_and_arrive(gs: &mut GameState, plan: &TravelPlan, dest_name: &
     // Reset crew conversation topics — new system, new things to talk about.
     gs.discussed_topics.clear();
 
+    // Reset scene history — new system, fresh context for LLM.
+    gs.scene_history.clear();
+
     // Player arrives at system edge — not yet docked.
     gs.journey.current_location = None;
 
@@ -2881,6 +3492,38 @@ fn main() {
 
             println!("  Seed: {}", seed);
             let mut gs = new_game(seed);
+
+            // --- LLM configuration ---
+            let llm_input = prompt("  Enable LLM generation? (y/n, default n): ");
+            if llm_input.trim().eq_ignore_ascii_case("y") || llm_input.trim().eq_ignore_ascii_case("yes") {
+                gs.llm_config.enabled = true;
+
+                // Check for API key — env var first, then prompt.
+                if gs.llm_config.resolve_api_key().is_none() {
+                    let key_input = prompt("  OpenRouter API key: ");
+                    let key = key_input.trim().to_string();
+                    if !key.is_empty() {
+                        gs.llm_config.api_key = key;
+                    }
+                }
+
+                if gs.llm_config.resolve_api_key().is_some() {
+                    println!("  LLM enabled (model: {})", gs.llm_config.model);
+                } else {
+                    println!("  No API key provided. Falling back to seed library.");
+                    gs.llm_config.enabled = false;
+                }
+
+                // Allow model override.
+                if gs.llm_config.enabled {
+                    let model_input = prompt("  Model (enter for default): ");
+                    if !model_input.trim().is_empty() {
+                        gs.llm_config.model = model_input.trim().to_string();
+                        println!("  Using model: {}", gs.llm_config.model);
+                    }
+                }
+            }
+
             game_loop(&mut gs);
         }
         _ => {
