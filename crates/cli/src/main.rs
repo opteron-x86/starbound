@@ -36,6 +36,10 @@ use starbound_simulation::tick::{tick_galaxy, TickResult, TickEventCategory};
 
 use starbound_game::travel::execute_travel;
 use starbound_game::consequences::{convert_effects, apply_effects};
+use starbound_game::crew_conversation::{
+    generate_topics, conversation_effects_to_game_effects, apply_concern_removals,
+    describe_crew_state, ConversationTopic, ConversationEffect,
+};
 
 // ---------------------------------------------------------------------------
 // Display helpers
@@ -107,6 +111,8 @@ struct GameState {
     last_ticked_day: f64,
     /// Event IDs queued to fire on next arrival (from `FollowUpDelay::NextArrival`).
     pending_followups: Vec<String>,
+    /// Topic IDs recently discussed in crew conversations (anti-repeat).
+    discussed_topics: HashMap<Uuid, Vec<String>>,
 }
 
 impl GameState {
@@ -387,6 +393,7 @@ fn new_game(seed: u64) -> GameState {
         visit_log,
         last_ticked_day: 0.0,
         pending_followups: Vec::new(),
+        discussed_topics: HashMap::new(),
     }
 }
 
@@ -843,6 +850,217 @@ fn display_crew_detail(gs: &GameState) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Crew menu — interactive crew conversations
+// ---------------------------------------------------------------------------
+
+fn crew_menu(gs: &mut GameState) {
+    loop {
+        clear_screen();
+        display_header("Crew");
+        println!();
+
+        for (i, member) in gs.journey.crew.iter().enumerate() {
+            let mood_hint = match member.state.mood {
+                Mood::Content => "",
+                Mood::Anxious => " — seems anxious",
+                Mood::Determined => " — focused",
+                Mood::Grieving => " — carrying something",
+                Mood::Restless => " — restless",
+                Mood::Hopeful => " — in good spirits",
+                Mood::Withdrawn => " — withdrawn",
+                Mood::Angry => " — tense",
+                Mood::Inspired => " — energized",
+            };
+            println!("  {}) {} — {}{}", i + 1, member.name, member.role, mood_hint);
+        }
+        println!();
+        println!("  v) View crew details");
+        println!("  0) Back");
+        println!();
+
+        let input = prompt("  > ");
+        let input = input.trim().to_lowercase();
+
+        if input == "0" || input == "back" {
+            return;
+        }
+
+        if input == "v" || input == "view" {
+            display_crew_detail(gs);
+            pause();
+            continue;
+        }
+
+        if let Ok(idx) = input.parse::<usize>() {
+            if idx >= 1 && idx <= gs.journey.crew.len() {
+                let member_id = gs.journey.crew[idx - 1].id;
+                crew_conversation_screen(gs, member_id);
+            }
+        }
+    }
+}
+
+fn crew_conversation_screen(gs: &mut GameState, member_id: Uuid) {
+    // Get discussed topics for this crew member (anti-repeat).
+    let discussed = gs.discussed_topics
+        .entry(member_id)
+        .or_insert_with(Vec::new)
+        .clone();
+
+    // Find the member index.
+    let member_idx = match gs.journey.crew.iter().position(|c| c.id == member_id) {
+        Some(i) => i,
+        None => return,
+    };
+
+    // Generate topics.
+    let topics = generate_topics(
+        &gs.journey.crew[member_idx],
+        &gs.journey,
+        &discussed,
+    );
+
+    if topics.is_empty() {
+        clear_screen();
+        let name = gs.journey.crew[member_idx].name.clone();
+        display_header(&format!("Talking to {}", name));
+        println!();
+        println!("  {} doesn't seem to have anything pressing to discuss.", name);
+        println!("  Sometimes silence between people is enough.");
+        pause();
+        return;
+    }
+
+    // Show the conversation.
+    loop {
+        clear_screen();
+        let member = &gs.journey.crew[member_idx];
+        display_header(&format!("{}", member.name));
+        println!();
+
+        // Narrative state description.
+        let state_desc = describe_crew_state(member);
+        for line in wrap_text(&state_desc, 60) {
+            println!("  {}", line);
+        }
+        println!();
+        println!("{}", THIN_DIVIDER);
+
+        // Show available topics (max 3).
+        let available: Vec<&ConversationTopic> = topics.iter().take(3).collect();
+
+        println!();
+        for (i, topic) in available.iter().enumerate() {
+            // Show a brief label derived from the prompt (first sentence).
+            let label = topic.prompt
+                .split('\n').next().unwrap_or(&topic.prompt)
+                .chars().take(70).collect::<String>();
+            let label = if topic.prompt.split('\n').next().unwrap_or("").len() > 70 {
+                format!("{}...", label.trim())
+            } else {
+                label.trim().to_string()
+            };
+            println!("  {}) {}", i + 1, label);
+        }
+        println!("  0) Leave");
+        println!();
+
+        let input = prompt("  > ");
+        let idx: usize = match input.trim().parse::<usize>() {
+            Ok(n) if n >= 1 && n <= available.len() => n - 1,
+            _ => return,
+        };
+
+        // Show the full topic and get response.
+        let topic = available[idx].clone();
+        run_crew_topic(gs, member_idx, &topic);
+
+        // Record as discussed.
+        gs.discussed_topics
+            .entry(member_id)
+            .or_insert_with(Vec::new)
+            .push(topic.id.clone());
+
+        // One topic per visit — return after.
+        return;
+    }
+}
+
+fn run_crew_topic(gs: &mut GameState, member_idx: usize, topic: &ConversationTopic) {
+    clear_screen();
+    let member_name = gs.journey.crew[member_idx].name.clone();
+    display_header(&member_name);
+    println!();
+
+    // Show the full topic prompt.
+    for line in wrap_text(&topic.prompt, 60) {
+        println!("  {}", line);
+    }
+
+    println!();
+    println!("{}", THIN_DIVIDER);
+    println!();
+
+    // Show response options.
+    for (i, response) in topic.responses.iter().enumerate() {
+        println!("  {}) {}", i + 1, response.label);
+    }
+    println!();
+
+    let input = prompt("  > ");
+    let choice: usize = match input.trim().parse::<usize>() {
+        Ok(n) if n >= 1 && n <= topic.responses.len() => n - 1,
+        _ => 0, // Default to first response.
+    };
+
+    let response = &topic.responses[choice];
+
+    // Display follow-up.
+    if let Some(ref follow_up) = response.follow_up {
+        println!();
+        for line in wrap_text(follow_up, 60) {
+            println!("  {}", line);
+        }
+    }
+
+    // Convert and apply effects.
+    let game_effects = conversation_effects_to_game_effects(&response.effects);
+    let description = format!("Crew conversation: {} — {}", member_name, response.label);
+    let _report = apply_effects(&game_effects, &mut gs.journey, &description);
+
+    // Apply concern removals (special handling outside normal effects).
+    apply_concern_removals(&mut gs.journey.crew[member_idx], &response.effects);
+
+    // Show what changed (subtle, not a full consequence report).
+    let trust_changed = response.effects.iter().any(|e| matches!(e,
+        ConversationEffect::TrustProfessional(_) |
+        ConversationEffect::TrustPersonal(_) |
+        ConversationEffect::TrustIdeological(_)
+    ));
+    let stress_changed = response.effects.iter().any(|e| matches!(e,
+        ConversationEffect::Stress(_)
+    ));
+
+    if trust_changed || stress_changed {
+        println!();
+        println!("{}", THIN_DIVIDER);
+        if trust_changed {
+            println!("  Something shifted between you.");
+        }
+        if stress_changed {
+            let member = &gs.journey.crew[member_idx];
+            if member.state.stress < 0.3 {
+                println!("  {} seems lighter.", member.name);
+            } else {
+                println!("  The weight didn't lift, but it's shared now.");
+            }
+        }
+    }
+
+    pause();
+}
+
 fn display_mission(gs: &GameState) {
     display_header("Mission");
 
@@ -1021,10 +1239,7 @@ fn game_loop(gs: &mut GameState) {
             "2" | "actions" | "act" if is_docked => action_menu(gs),
             "3" | "people" | "talk" if is_docked => people_menu(gs),
             "4" | "contracts" if is_docked => display_contracts(gs),
-            "5" | "crew" => {
-                display_crew_detail(gs);
-                pause();
-            }
+            "5" | "crew" => crew_menu(gs),
             "6" | "mission" => {
                 display_mission(gs);
                 pause();
@@ -1226,12 +1441,14 @@ fn navigate_to_location(gs: &mut GameState, target_id: Uuid, from_dist: f32) {
     let system = gs.current_system().clone();
     let years_since = gs.galactic_years_since_last_visit();
     let loc_type = gs.current_location_type_str();
+    let loc_infra = gs.current_location().map(|l| l.infrastructure);
 
     let result = run_pipeline(
         &gs.events, &system, &gs.journey, years_since,
         &gs.pipeline_state, &gs.pipeline_config, &mut gs.rng,
         None,
         loc_type.as_deref(),
+        loc_infra,
     );
 
     match result {
@@ -1308,11 +1525,13 @@ fn run_system_scan(gs: &mut GameState) {
     let system_clone = gs.current_system().clone();
     let years_since = gs.galactic_years_since_last_visit();
     let loc_type = gs.current_location_type_str();
+    let loc_infra = gs.current_location().map(|l| l.infrastructure);
     let result = run_pipeline(
         &gs.events, &system_clone, &gs.journey, years_since,
         &gs.pipeline_state, &gs.pipeline_config, &mut gs.rng,
         Some(PlayerIntent::Scan),
         loc_type.as_deref(),
+        loc_infra,
     );
 
     match result {
@@ -1914,12 +2133,14 @@ fn run_intent_encounter(gs: &mut GameState, intent: PlayerIntent) {
     let system = gs.current_system().clone();
     let years_since = gs.galactic_years_since_last_visit();
     let loc_type = gs.current_location_type_str();
+    let loc_infra = gs.current_location().map(|l| l.infrastructure);
 
     let result = run_pipeline(
         &gs.events, &system, &gs.journey, years_since,
         &gs.pipeline_state, &gs.pipeline_config, &mut gs.rng,
         Some(intent),
         loc_type.as_deref(),
+        loc_infra,
     );
 
     match result {
@@ -2335,8 +2556,11 @@ fn turn_in_contract(gs: &mut GameState, npc_idx: usize) {
 
     // Improve disposition.
     let npc = &mut gs.galaxy.npcs[npc_idx];
-    npc.disposition = (npc.disposition + 0.15).min(1.0);
-    npc.notes.push(format!("Completed contract: {}", title));
+    npc.record_interaction(
+        format!("Completed contract: {}", title),
+        gs.journey.time.galactic_days,
+        0.15,
+    );
 
     // Mark contract completed.
     gs.journey.active_contracts[contract_idx].state = ContractState::Completed;
@@ -2602,6 +2826,9 @@ fn execute_travel_and_arrive(gs: &mut GameState, plan: &TravelPlan, dest_name: &
 
     // Record visit.
     gs.record_visit();
+
+    // Reset crew conversation topics — new system, new things to talk about.
+    gs.discussed_topics.clear();
 
     // Player arrives at system edge — not yet docked.
     gs.journey.current_location = None;

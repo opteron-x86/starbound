@@ -136,6 +136,43 @@ impl PlayerProfile {
 
         weight
     }
+
+    /// Shift a behavioral axis by label name. Used by encounter effects
+    /// to adjust the player's profile based on choices.
+    ///
+    /// Label names map to axes:
+    /// - "explorer" / "seeker" → curiosity
+    /// - "trader" / "merchant" → reliability (via economic activity)
+    /// - "diplomat" → mercy + discretion
+    /// - "fighter" / "mercenary" → aggression
+    /// - "pirate" → aggression + (negative mercy)
+    /// - "scholar" → curiosity + discretion
+    pub fn shift_label(&mut self, label: &str, delta: f32) {
+        match label.to_lowercase().as_str() {
+            "explorer" | "seeker" => {
+                self.curiosity = (self.curiosity + delta).clamp(0.0, 1.0);
+            }
+            "trader" | "merchant" => {
+                self.reliability = (self.reliability + delta * 0.5).clamp(0.0, 1.0);
+            }
+            "diplomat" => {
+                self.mercy = (self.mercy + delta * 0.5).clamp(0.0, 1.0);
+                self.discretion = (self.discretion + delta * 0.5).clamp(0.0, 1.0);
+            }
+            "fighter" | "mercenary" => {
+                self.aggression = (self.aggression + delta).clamp(0.0, 1.0);
+            }
+            "pirate" => {
+                self.aggression = (self.aggression + delta).clamp(0.0, 1.0);
+                self.mercy = (self.mercy - delta * 0.5).clamp(0.0, 1.0);
+            }
+            "scholar" => {
+                self.curiosity = (self.curiosity + delta * 0.7).clamp(0.0, 1.0);
+                self.discretion = (self.discretion + delta * 0.3).clamp(0.0, 1.0);
+            }
+            _ => {} // Unknown labels are silently ignored.
+        }
+    }
 }
 
 impl Default for PlayerProfile {

@@ -1,32 +1,479 @@
 {
   "_schema": "starbound.entity_template.people.v1",
-  "_description": "People name generation templates. TODO: Full implementation. Crew, NPCs, historical figures. Names should reflect cultural origin — a person from a 'Kestari' civilization sounds different from someone raised in an 'Iron Hegemony'.",
 
-  "_design_notes": [
-    "Names should carry cultural signal tied to civilization flavor tags",
-    "Frontier-born people might have simpler or rougher names",
-    "Station-born people might have corporate-influenced naming",
-    "Crew members recruited in different regions should sound like they come from different places",
-    "Historical figures referenced in events need consistent naming with their culture",
-    "Consider: given name pools per culture, family name pools, nickname/callsign pools for spacers"
-  ],
+  "name_pools": {
+    "human": {
+      "default": {
+        "given_male": [
+          "Kael", "Joss", "Dav", "Orin", "Cade", "Tomas", "Vek", "Idris",
+          "Leong", "Harlan", "Tam", "Nik", "Jace", "Renn", "Callum",
+          "Arlo", "Fenn", "Matteo", "Zev", "Ronan", "Elias", "Soren",
+          "Kian", "Milo", "Theron", "Cassian", "Lucien", "Dorian"
+        ],
+        "given_female": [
+          "Maren", "Suri", "Thea", "Lys", "Nessa", "Asha", "Petra",
+          "Yara", "Sienna", "Kira", "Elara", "Sable", "Lena", "Zara",
+          "Ren", "Dex", "Orla", "Wren", "Isolde", "Talia", "Vesper",
+          "Naia", "Cleo", "Rhea", "Iris", "Dahlia", "Freya", "Linnea"
+        ],
+        "family": [
+          "Vasquez", "Achebe", "Tark", "Okonkwo", "Chen", "Volkov", "Reeves",
+          "Koskinen", "Nair", "Oduya", "Cortez", "Strand", "Halloran", "Voss",
+          "Kaur", "Okoro", "Tanaka", "Dubois", "Rashid", "Brennan",
+          "Solari", "Kessler", "Okafor", "Tannen", "Haig", "Reyes",
+          "Vasil", "Torren", "Ashcroft", "Nazari", "Loh", "Duval",
+          "Mikkelsen", "Cross", "Sato", "Morales", "Ivarsson", "Adeyemi"
+        ]
+      },
+      "by_culture_tag": {
+        "earth_origin": {
+          "given_male": [
+            "Thomas", "James", "Marcus", "David", "Wei", "Aleksandr",
+            "Henrik", "Kenji", "Daniel", "Rafael"
+          ],
+          "given_female": [
+            "Elena", "Sarah", "Mei", "Katarina", "Amara", "Ingrid",
+            "Yuki", "Clara", "Sofia", "Priya"
+          ],
+          "family": [
+            "Chen", "Okafor", "Reeves", "Petrov", "Johansson", "Nakamura",
+            "Brennan", "Silva", "Morales", "Nair", "Adeyemi", "Larsson"
+          ]
+        },
+        "nomadic_heritage": {
+          "given_male": [
+            "Ren", "Tam", "Vek", "Arlo", "Fenn", "Kian", "Soren", "Zev"
+          ],
+          "given_female": [
+            "Suri", "Asha", "Wren", "Naia", "Dex", "Lys", "Orla", "Vesper"
+          ],
+          "family": [
+            "Solari", "Strand", "Kaur", "Torren", "Voss", "Haig", "Cross"
+          ]
+        },
+        "forged_in_conflict": {
+          "given_male": [
+            "Harlan", "Dorian", "Cassian", "Theron", "Ronan", "Idris"
+          ],
+          "given_female": [
+            "Petra", "Isolde", "Sable", "Freya", "Sienna", "Maren"
+          ],
+          "family": [
+            "Ashcroft", "Kessler", "Tannen", "Ivarsson", "Halloran", "Reyes"
+          ]
+        }
+      }
+    },
+    "synthetic": {
+      "designations": [
+        "Unit KV-7", "Index", "Compass", "Relay-3", "Arbiter",
+        "Strand-9", "Meridian", "Archive", "Axiom", "Lattice",
+        "Beacon-4", "Sentinel", "Crucible", "Vector", "Prism-2",
+        "Fulcrum", "Sextant", "Ledger", "Quorum", "Sigil"
+      ],
+      "adopted_names": [
+        "Seven", "Patience", "Clarity", "Dusk", "Margin",
+        "Constance", "Vale", "Threshold", "Bridge", "Quiet",
+        "Ember", "Cairn", "Solace", "Thorn", "Lantern",
+        "Vigil", "Ashen", "Parcel", "Respite", "Notion"
+      ],
+      "chassis_types": [
+        "humanoid frame",
+        "station-embedded terminal",
+        "maintenance unit",
+        "diplomatic interface",
+        "security platform",
+        "analysis core",
+        "logistics coordinator",
+        "communications relay"
+      ]
+    }
+  },
 
-  "placeholder_pools": {
-    "given_names": [
-      "Lena", "Tomás", "Josen", "Reva", "Kael", "Suri", "Dex", "Maren",
-      "Yael", "Asa", "Tam", "Petra", "Nik", "Zara", "Orrin", "Hale",
-      "Voss", "Kira", "Jace", "Elara", "Renn", "Callum", "Sable", "Idris"
+  "species_distribution": {
+    "military":  { "human": 0.95, "synthetic": 0.05 },
+    "economic":  { "human": 0.85, "synthetic": 0.15 },
+    "guild":     { "human": 0.85, "synthetic": 0.15 },
+    "criminal":  { "human": 0.90, "synthetic": 0.10 },
+    "religious": { "human": 0.95, "synthetic": 0.05 },
+    "academic":  { "human": 0.80, "synthetic": 0.20 },
+    "political": { "human": 0.95, "synthetic": 0.05 }
+  },
+
+  "roles": {
+    "military": {
+      "titles": [
+        { "title": "Garrison Commander", "weight": 1.0, "min_infra": "colony" },
+        { "title": "Watch Officer", "weight": 1.0, "min_infra": "outpost" },
+        { "title": "Security Chief", "weight": 0.8, "min_infra": "established" },
+        { "title": "Intelligence Liaison", "weight": 0.5, "min_infra": "hub" },
+        { "title": "Port Authority Captain", "weight": 0.7, "min_infra": "colony" }
+      ],
+      "bio_templates": {
+        "human": [
+          "Career officer posted to {system}. {personality_note}.",
+          "Transferred here after years in the service. Knows the sector's trouble spots. {personality_note}.",
+          "Runs the local garrison with a steady hand. {personality_note}."
+        ],
+        "synthetic": [
+          "Military-grade tactical intelligence assigned to {system}. {personality_note}.",
+          "Security analysis platform integrated into the garrison command structure. {personality_note}."
+        ]
+      },
+      "motivation_pool": [
+        "maintain order and security",
+        "keep the border stable",
+        "root out smuggling operations",
+        "advance through the ranks",
+        "protect civilians from pirate activity",
+        "gather intelligence on faction movements",
+        "enforce trade regulations",
+        "prepare the garrison for potential conflict"
+      ],
+      "knowledge_pool": [
+        "patrol route schedules in the sector",
+        "recent pirate activity in nearby systems",
+        "military readiness of the local garrison",
+        "wanted persons and bounty listings",
+        "restricted zones and classified survey data",
+        "fleet movements along the corridor",
+        "smuggling routes the patrols haven't caught yet"
+      ],
+      "personality_bias": {
+        "boldness": [0.4, 0.9],
+        "idealism": [0.2, 0.8],
+        "warmth": [0.1, 0.6]
+      },
+      "background_tags": ["career_military", "veteran", "security_specialist", "border_patrol"]
+    },
+
+    "economic": {
+      "titles": [
+        { "title": "Trade Liaison", "weight": 1.0, "min_infra": "colony" },
+        { "title": "Commerce Director", "weight": 0.7, "min_infra": "hub" },
+        { "title": "Market Analyst", "weight": 0.8, "min_infra": "established" },
+        { "title": "Trade Representative", "weight": 1.0, "min_infra": "outpost" },
+        { "title": "Commodities Broker", "weight": 0.6, "min_infra": "colony" }
+      ],
+      "bio_templates": {
+        "human": [
+          "Manages commercial operations at {system}. Knows the price of everything. {personality_note}.",
+          "Coordinates trade between systems along the corridor. {personality_note}.",
+          "Keeps the local economy running. {personality_note}."
+        ],
+        "synthetic": [
+          "Automated trade analysis system managing commodity flows at {system}. {personality_note}.",
+          "Market optimization platform. Processes more trade data than any human counterpart. {personality_note}."
+        ]
+      },
+      "motivation_pool": [
+        "expand trade routes and profits",
+        "establish new commercial partnerships",
+        "undercut the competition",
+        "stabilize local commodity prices",
+        "open markets in frontier systems",
+        "protect trade convoys from piracy",
+        "find reliable shipping partners"
+      ],
+      "knowledge_pool": [
+        "commodity price trends across the sector",
+        "which systems produce what goods",
+        "trade route disruptions and their causes",
+        "upcoming trade agreements between factions",
+        "black market activity affecting legal trade",
+        "supply chain bottlenecks at frontier stations"
+      ],
+      "personality_bias": {
+        "boldness": [0.3, 0.7],
+        "idealism": [0.1, 0.5],
+        "warmth": [0.3, 0.8]
+      },
+      "background_tags": ["merchant", "trader", "financial", "logistics"]
+    },
+
+    "guild": {
+      "titles": [
+        { "title": "Guild Factor", "weight": 1.0, "min_infra": "colony" },
+        { "title": "Dock Supervisor", "weight": 0.9, "min_infra": "outpost" },
+        { "title": "Chief Mechanic", "weight": 0.8, "min_infra": "colony" },
+        { "title": "Guild Arbiter", "weight": 0.5, "min_infra": "hub" },
+        { "title": "Contracts Manager", "weight": 0.7, "min_infra": "established" }
+      ],
+      "bio_templates": {
+        "human": [
+          "The local face of the Guild at {system}. Handles contracts, repairs, and the quiet logistics that keep ships moving. {personality_note}.",
+          "Keeps the docks running. Every captain who passes through owes {pronoun.object} a favor or two. {personality_note}.",
+          "Guild-certified and proud of it. {personality_note}."
+        ],
+        "synthetic": [
+          "Guild logistics platform coordinating repair schedules and contract fulfillment at {system}. {personality_note}.",
+          "Automated dock management system. Efficient, precise, never takes a day off. {personality_note}."
+        ]
+      },
+      "motivation_pool": [
+        "keep ships flying and contracts honored",
+        "maintain Guild standards across the sector",
+        "recruit skilled mechanics and pilots",
+        "mediate disputes between captains",
+        "ensure fair pricing for repairs",
+        "expand Guild presence to frontier systems",
+        "uphold the spacer's code"
+      ],
+      "knowledge_pool": [
+        "which ships have been through recently",
+        "repair backlogs and parts availability",
+        "captain reputations and reliability ratings",
+        "Guild contract opportunities",
+        "unsafe vessels that should be grounded",
+        "new routes being opened by independent captains"
+      ],
+      "personality_bias": {
+        "boldness": [0.3, 0.7],
+        "idealism": [0.3, 0.8],
+        "warmth": [0.3, 0.8]
+      },
+      "background_tags": ["spacer", "mechanic", "guild_trained", "dock_worker"]
+    },
+
+    "criminal": {
+      "titles": [
+        { "title": "Fixer", "weight": 1.0, "min_infra": "outpost" },
+        { "title": "Broker", "weight": 0.8, "min_infra": "colony" },
+        { "title": "Information Dealer", "weight": 0.6, "min_infra": "established" },
+        { "title": "Procurement Specialist", "weight": 0.7, "min_infra": "colony" },
+        { "title": "Facilitator", "weight": 0.5, "min_infra": "outpost" }
+      ],
+      "bio_templates": {
+        "human": [
+          "Operates in the spaces between official channels at {system}. {personality_note}.",
+          "Everyone knows what {pronoun.subject} does. Nobody says it out loud. {personality_note}.",
+          "Has connections in places that don't officially exist. {personality_note}."
+        ],
+        "synthetic": [
+          "Repurposed data analysis unit running unsanctioned logistics at {system}. {personality_note}.",
+          "Black market coordination platform. Officially decommissioned. Clearly still running. {personality_note}."
+        ]
+      },
+      "motivation_pool": [
+        "move goods without questions asked",
+        "expand the network into new systems",
+        "avoid faction security attention",
+        "profit from instability",
+        "protect the operation from informants",
+        "find reliable smuggling partners",
+        "stay one step ahead of the law"
+      ],
+      "knowledge_pool": [
+        "smuggling routes that bypass patrols",
+        "which officials can be bribed",
+        "black market prices for restricted goods",
+        "faction security patrol patterns",
+        "safe houses and dead drops in nearby systems",
+        "who's talking to the authorities"
+      ],
+      "personality_bias": {
+        "boldness": [0.3, 0.9],
+        "idealism": [0.0, 0.4],
+        "warmth": [0.1, 0.6]
+      },
+      "background_tags": ["underworld", "smuggler", "ex_convict", "street_smart"]
+    },
+
+    "religious": {
+      "titles": [
+        { "title": "Prior", "weight": 1.0, "min_infra": "outpost" },
+        { "title": "Keeper of the Silence", "weight": 0.6, "min_infra": "colony" },
+        { "title": "Temple Warden", "weight": 0.7, "min_infra": "established" },
+        { "title": "Pilgrim Guide", "weight": 0.8, "min_infra": "outpost" },
+        { "title": "Distortion Scholar", "weight": 0.5, "min_infra": "hub" }
+      ],
+      "bio_templates": {
+        "human": [
+          "Tends to the spiritual needs of travelers at {system}. Speaks carefully, listens more carefully. {personality_note}.",
+          "Drawn to the distortions. Sees meaning where others see danger. {personality_note}.",
+          "Has spent years at the edges of settled space. {pronoun.subject_cap} came back changed. {personality_note}."
+        ],
+        "synthetic": [
+          "An unusual case — a synthetic unit that developed what its order calls contemplative processes. Stationed at {system}. {personality_note}.",
+          "Theological analysis platform. Its conclusions sometimes unsettle the human faithful. {personality_note}."
+        ]
+      },
+      "motivation_pool": [
+        "understand the distortions",
+        "guide travelers through dangerous space",
+        "preserve the old rites",
+        "spread the faith to new systems",
+        "study the anomalies at the edge",
+        "provide shelter for the lost",
+        "find the source of the signal"
+      ],
+      "knowledge_pool": [
+        "anomalous readings in distorted space",
+        "pilgrim routes through high-dilation zones",
+        "ancient artifacts found at system edges",
+        "stories from travelers who returned changed",
+        "the order's theories about the signal",
+        "places where time behaves strangely"
+      ],
+      "personality_bias": {
+        "boldness": [0.2, 0.6],
+        "idealism": [0.5, 1.0],
+        "warmth": [0.4, 0.9]
+      },
+      "background_tags": ["faithful", "pilgrim", "contemplative", "mystic"]
+    },
+
+    "academic": {
+      "titles": [
+        { "title": "Research Coordinator", "weight": 1.0, "min_infra": "colony" },
+        { "title": "Field Scientist", "weight": 0.9, "min_infra": "outpost" },
+        { "title": "Data Analyst", "weight": 0.8, "min_infra": "established" },
+        { "title": "Survey Lead", "weight": 0.7, "min_infra": "colony" },
+        { "title": "Xenoarchaeologist", "weight": 0.4, "min_infra": "hub" }
+      ],
+      "bio_templates": {
+        "human": [
+          "Manages scientific operations at {system}. Perpetually underfunded, perpetually curious. {personality_note}.",
+          "Came out here to study what the surveys missed. {personality_note}.",
+          "Published three papers on frontier geology before anyone noticed {pronoun.subject} was also mapping anomalies. {personality_note}."
+        ],
+        "synthetic": [
+          "Research analysis platform processing field data at {system}. {personality_note}.",
+          "Scientific data aggregation unit. Has catalogued more specimens than the entire field team combined. {personality_note}."
+        ]
+      },
+      "motivation_pool": [
+        "gather data and publish findings",
+        "secure funding for extended research",
+        "map uncharted anomalies",
+        "understand pre-human artifacts",
+        "collect biological samples from frontier worlds",
+        "decode the signal patterns",
+        "establish a permanent research station"
+      ],
+      "knowledge_pool": [
+        "uncharted anomalies detected by long-range sensors",
+        "geological survey data for nearby systems",
+        "pre-human artifact catalogues",
+        "research grant opportunities",
+        "other researchers working in the sector",
+        "classified findings about the distortions"
+      ],
+      "personality_bias": {
+        "boldness": [0.2, 0.6],
+        "idealism": [0.4, 0.9],
+        "warmth": [0.3, 0.8]
+      },
+      "background_tags": ["researcher", "academic", "field_scientist", "ex_university"]
+    },
+
+    "political": {
+      "titles": [
+        { "title": "Administrator", "weight": 1.0, "min_infra": "colony" },
+        { "title": "Governor's Attaché", "weight": 0.6, "min_infra": "hub" },
+        { "title": "Diplomatic Envoy", "weight": 0.5, "min_infra": "established" },
+        { "title": "Colonial Magistrate", "weight": 0.7, "min_infra": "colony" },
+        { "title": "Civil Affairs Officer", "weight": 0.8, "min_infra": "colony" }
+      ],
+      "bio_templates": {
+        "human": [
+          "The local face of governance at {system}. Manages disputes, allocates resources, keeps the peace. {personality_note}.",
+          "Appointed to keep this system from falling apart. Some days {pronoun.subject} succeeds. {personality_note}.",
+          "A career bureaucrat who asked for a frontier posting. {personality_note}."
+        ],
+        "synthetic": [
+          "Administrative coordination platform managing civil operations at {system}. {personality_note}.",
+          "Governance assistance unit. Processes permit applications and mediates disputes with algorithmic fairness. {personality_note}."
+        ]
+      },
+      "motivation_pool": [
+        "keep the peace and grow influence",
+        "manage disputes between local factions",
+        "secure more resources from the core",
+        "maintain order without military intervention",
+        "build alliances with neighboring systems",
+        "advance their political career",
+        "protect the colony's interests"
+      ],
+      "knowledge_pool": [
+        "inter-faction tensions at this system",
+        "resource allocation disputes",
+        "diplomatic status with neighboring civilizations",
+        "upcoming elections or political shifts",
+        "classified communications from the core",
+        "colonial development plans"
+      ],
+      "personality_bias": {
+        "boldness": [0.2, 0.7],
+        "idealism": [0.2, 0.8],
+        "warmth": [0.3, 0.8]
+      },
+      "background_tags": ["politician", "bureaucrat", "diplomat", "administrator"]
+    }
+  },
+
+  "personality_expressions": {
+    "warmth_high": [
+      "greets you like an old friend",
+      "offers you something to drink before getting to business",
+      "remembers the name of your ship",
+      "asks how your crew is holding up",
+      "makes you feel like you're the first person they've wanted to talk to all day"
     ],
-    "family_names": [
-      "Vasquez", "Achebe", "Tark", "Okonkwo", "Chen", "Volkov", "Reeves",
-      "Koskinen", "Nair", "Oduya", "Cortez", "Strand", "Halloran", "Voss",
-      "Maren", "Kaur", "Okoro", "Tanaka", "Dubois", "Rashid", "Brennan"
+    "warmth_low": [
+      "evaluates you with a glance and decides how much you're worth",
+      "speaks in clipped, efficient sentences",
+      "doesn't waste words on pleasantries",
+      "keeps the conversation strictly professional",
+      "watches the door while talking to you"
     ],
-    "spacer_callsigns": [
-      "Patch", "Drift", "Wrench", "Scope", "Needle", "Coil", "Fuse",
-      "Bolt", "Tether", "Crimp", "Shim", "Gasket", "Rivet", "Solder"
+    "boldness_high": [
+      "says what they think, even when it's uncomfortable",
+      "makes decisions fast and stands by them",
+      "doesn't flinch from confrontation",
+      "has a reputation for getting things done regardless of obstacles",
+      "looks you in the eye when delivering bad news"
+    ],
+    "boldness_low": [
+      "hedges every statement with qualifications",
+      "looks over their shoulder before speaking freely",
+      "prefers to let others take the lead",
+      "chooses words with visible care",
+      "has survived this long by knowing when to stay quiet"
+    ],
+    "idealism_high": [
+      "believes in what they're doing, not just the paycheck",
+      "has turned down promotions for principle",
+      "speaks about the work like it matters",
+      "still remembers why they took this posting",
+      "treats every person who comes through with the same respect"
+    ],
+    "idealism_low": [
+      "does the job because it's the job",
+      "knows the price of everything",
+      "has stopped pretending this is about anything but survival",
+      "has seen enough to know that principles are expensive",
+      "measures every interaction by what it costs and what it pays"
     ]
   },
 
-  "_todo": "Expand with: culture-specific name pools keyed to civ flavor tags, name generation rules (given+family vs single name cultures), title/rank prefixes, NPC role-specific naming"
+  "connection_templates": {
+    "same_faction": [
+      "{npc_a} and {npc_b} serve the same faction, though their approaches differ.",
+      "{npc_a} reports to {npc_b}'s chain of command.",
+      "{npc_a} and {npc_b} have a quiet professional rivalry.",
+      "{npc_a} mentored {npc_b} when they first arrived."
+    ],
+    "cross_faction_same_system": [
+      "{npc_a} and {npc_b} have learned to coexist at {system}.",
+      "{npc_a} doesn't trust {npc_b}, but they need each other.",
+      "{npc_a} occasionally passes information to {npc_b} — for a price.",
+      "{npc_a} and {npc_b} share a drink now and then. Neither would admit it."
+    ],
+    "same_faction_different_system": [
+      "{npc_a} at {system_a} coordinates with {npc_b} at {system_b}.",
+      "{npc_a} has heard of {npc_b}'s work. Professional respect, from a distance.",
+      "{npc_a} and {npc_b} trained together years ago."
+    ]
+  }
 }

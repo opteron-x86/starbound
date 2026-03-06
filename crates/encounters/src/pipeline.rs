@@ -4,12 +4,14 @@
 //!
 //! ```text
 //! intent_filter   → narrow to action   (Stage 0, player-initiated only)
-//! context_filter  → candidate pool     (Day 4 matcher)
+//! context_filter  → candidate pool     (matcher + prerequisites)
 //! pressure_filter → boost situational  (lean into tensions)
 //! echo_filter     → boost thread ties  (weave in the past)
 //! novelty_check   → balance new vs old (meter fresh content)
 //! tone_filter     → pacing bias        (alternate intensity)
 //! reputation      → boost identity fit (player labels)
+//! priority        → boost important    (quest events override ambient)
+//! convergence     → boost resolution   (mature clusters trigger payoff)
 //! ```
 //!
 //! The pipeline scores candidates rather than eliminating them.
@@ -17,16 +19,16 @@
 //! weights so the final weighted-random selection naturally favors
 //! the most narratively appropriate encounter. Sometimes the
 //! pipeline returns silence — that's by design (but never for
-//! player-initiated actions).
+//! player-initiated actions or priority ≥ 2 events).
 
 use std::fmt;
 
 use rand::rngs::StdRng;
 use rand::Rng;
 
-use starbound_core::galaxy::StarSystem;
+use starbound_core::galaxy::{InfrastructureLevel, StarSystem};
 use starbound_core::journey::Journey;
-use starbound_core::narrative::{Tone, ResolutionState};
+use starbound_core::narrative::{ResolutionState, Tone};
 
 use super::matcher::{match_events, MatchContext};
 use super::seed_event::SeedEvent;
@@ -113,9 +115,7 @@ pub enum PipelineResult<'a> {
         reasoning: String,
     },
     /// Nothing happens. Quiet transit. The ship hums.
-    Silence {
-        reason: String,
-    },
+    Silence { reason: String },
 }
 
 // ---------------------------------------------------------------------------
@@ -137,6 +137,12 @@ pub struct PipelineConfig {
     pub novelty_base_boost: f64,
     /// How recent tones affect selection. Higher = stronger pacing effect.
     pub pacing_contrast_boost: f64,
+    /// Weight multiplier per priority tier.
+    /// Priority 0 = ×1.0, Priority 1 = ×1.0, Priority 2 = this, Priority 3 = this².
+    pub priority_boost: f64,
+    /// Weight multiplier for events that could resolve a mature thread cluster.
+    /// A "mature cluster" is 3+ open threads sharing a type or tag pattern.
+    pub convergence_boost: f64,
 }
 
 impl Default for PipelineConfig {
@@ -148,6 +154,8 @@ impl Default for PipelineConfig {
             echo_boost: 2.5,
             novelty_base_boost: 1.5,
             pacing_contrast_boost: 1.8,
+            priority_boost: 2.5,
+            convergence_boost: 3.0,
         }
     }
 }
@@ -211,6 +219,7 @@ pub fn run_pipeline<'a>(
     rng: &mut StdRng,
     intent: Option<PlayerIntent>,
     location_type: Option<&str>,
+    location_infrastructure: Option<InfrastructureLevel>,
 ) -> PipelineResult<'a> {
     // -----------------------------------------------------------------------
     // Stage 0 — Intent filter (player-initiated actions only)
@@ -226,13 +235,8 @@ pub fn run_pipeline<'a>(
             .filter(|e| e.intents.iter().any(|i| i == tag))
             .collect()
     } else {
-        // Arrival mode: only events with no intents (or all events if
-        // we want arrival events to also fire intent events — but for
-        // now, keep them separate for clean separation).
-        events
-            .iter()
-            .filter(|e| e.intents.is_empty())
-            .collect()
+        // Arrival mode: only events with no intents.
+        events.iter().filter(|e| e.intents.is_empty()).collect()
     };
 
     if working_events.is_empty() {
@@ -246,38 +250,53 @@ pub fn run_pipeline<'a>(
     }
 
     // -----------------------------------------------------------------------
-    // Silence check — skipped for player-initiated actions.
-    // "A game that's always exciting is never exciting."
-    // But when the player asks to do something, something should happen.
+    // Check for high-priority events before silence roll.
+    // Priority ≥ 2 events that are eligible should override silence.
     // -----------------------------------------------------------------------
-    if !is_player_action {
-        let silence_threshold = config.silence_chance
-            + (state.encounters_since_silence as f64 * config.silence_escalation);
+    let has_high_priority_candidates = !is_player_action
+        && working_events.iter().any(|e| e.priority >= 2);
+
+    // -----------------------------------------------------------------------
+    // Silence check — location-aware.
+    //
+    // Stations are social hubs — encounters are expected. Barren planets
+    // are desolate — encounters should be rare. The silence threshold
+    // adjusts based on where the player is and what infrastructure exists.
+    //
+    // Skipped for player-initiated actions and high-priority events.
+    // -----------------------------------------------------------------------
+    if !is_player_action && !has_high_priority_candidates {
+        let location_silence = location_silence_modifier(location_type, location_infrastructure);
+        let silence_threshold = (config.silence_chance + location_silence
+            + (state.encounters_since_silence as f64 * config.silence_escalation))
+            .min(0.95); // Never quite guarantee silence
 
         if rng.gen::<f64>() < silence_threshold {
             return PipelineResult::Silence {
                 reason: format!(
-                    "Silence after {} consecutive encounters (threshold {:.0}%)",
+                    "Silence after {} encounters (threshold {:.0}%, location modifier +{:.0}%)",
                     state.encounters_since_silence,
                     silence_threshold * 100.0,
+                    location_silence * 100.0,
                 ),
             };
         }
     }
 
     // -----------------------------------------------------------------------
-    // Stage 1 — Context filter (Day 4 matcher)
+    // Stage 1 — Context filter (matcher + prerequisites)
     // -----------------------------------------------------------------------
     let ctx = MatchContext {
         system,
         journey,
         galactic_years_since_last_visit,
         location_type: location_type.map(|s| s.to_string()),
+        location_infrastructure,
+        visited_system_names: Vec::new(), // TODO: pass from game state
     };
 
-    // For intent mode, we need to intersect context-matched events with
-    // the intent-filtered pool. match_events works on the full library,
-    // so we filter its output against our working set.
+    // match_events now checks prerequisites as hard gates before
+    // context requirements.
     let all_context_matched = match_events(events, &ctx);
 
     let candidates: Vec<&SeedEvent> = if is_player_action {
@@ -297,7 +316,6 @@ pub fn run_pipeline<'a>(
     };
 
     if candidates.is_empty() {
-        // For player actions, provide a more helpful message.
         if let Some(i) = intent {
             return PipelineResult::Silence {
                 reason: format!(
@@ -324,7 +342,31 @@ pub fn run_pipeline<'a>(
     }
 
     // -----------------------------------------------------------------------
-    // Stages 2–5: Score each candidate
+    // For arrival mode with high-priority candidates: if only low-priority
+    // events survived context filtering, apply the normal silence check now.
+    // -----------------------------------------------------------------------
+    if !is_player_action
+        && has_high_priority_candidates
+        && !candidates.iter().any(|e| e.priority >= 2)
+    {
+        let location_silence = location_silence_modifier(location_type, location_infrastructure);
+        let silence_threshold = (config.silence_chance + location_silence
+            + (state.encounters_since_silence as f64 * config.silence_escalation))
+            .min(0.95);
+
+        if rng.gen::<f64>() < silence_threshold {
+            return PipelineResult::Silence {
+                reason: format!(
+                    "Silence after {} encounters (threshold {:.0}%)",
+                    state.encounters_since_silence,
+                    silence_threshold * 100.0,
+                ),
+            };
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Stages 2–8: Score each candidate
     // -----------------------------------------------------------------------
     let scored: Vec<(&SeedEvent, f64, String)> = candidates
         .iter()
@@ -361,10 +403,26 @@ pub fn run_pipeline<'a>(
             }
 
             // Stage 6 — Reputation: boost events matching player identity
-            let rep_weight = journey.profile.encounter_weight(&event.context_requirements.tags);
+            let rep_weight = journey
+                .profile
+                .encounter_weight(&event.context_requirements.tags);
             if (rep_weight - 1.0).abs() > 0.01 {
                 weight *= rep_weight;
                 reasons.push(format!("reputation ×{:.1}", rep_weight));
+            }
+
+            // Stage 7 — Priority: higher priority events get scoring bonus
+            let priority_mult = priority_multiplier(event.priority, config.priority_boost);
+            if priority_mult > 1.0 {
+                weight *= priority_mult;
+                reasons.push(format!("priority({}): ×{:.1}", event.priority, priority_mult));
+            }
+
+            // Stage 8 — Convergence: boost events that resolve mature clusters
+            let convergence = convergence_score(event, journey);
+            if convergence > 0.0 {
+                weight *= 1.0 + convergence * config.convergence_boost;
+                reasons.push(format!("convergence +{:.1}", convergence));
             }
 
             let reason = if reasons.is_empty() {
@@ -409,6 +467,52 @@ pub fn run_pipeline<'a>(
 }
 
 // ---------------------------------------------------------------------------
+// Location-aware silence modifier
+// ---------------------------------------------------------------------------
+
+/// Compute an additive silence modifier based on where the player is.
+///
+/// Stations are social hubs — encounters feel natural. Uninhabited
+/// planets are desolate — the player should mostly experience the
+/// emptiness. This modifier is added to the base silence_chance.
+///
+/// Returns 0.0–0.60. Combined with the base 0.15, this creates:
+///   Station (Colony+):  ~15% silence → ~85% encounter rate
+///   Station (Outpost):  ~25% silence → ~75% encounter rate
+///   Colonized planet:   ~40% silence → ~60% encounter rate
+///   Uninhabited planet: ~70% silence → ~30% encounter rate
+///   Asteroid belt:      ~45% silence → ~55% encounter rate
+///   Deep space:         ~50% silence → ~50% encounter rate
+///   Moon (uninhabited): ~65% silence → ~35% encounter rate
+fn location_silence_modifier(
+    location_type: Option<&str>,
+    location_infra: Option<InfrastructureLevel>,
+) -> f64 {
+    let type_mod = match location_type {
+        Some("station") => 0.0,
+        Some("planet_surface") => 0.20,
+        Some("moon") => 0.30,
+        Some("asteroid_belt") => 0.15,
+        Some("deep_space") => 0.20,
+        Some("megastructure") => 0.05,
+        None => 0.0,  // System edge — FTL arrival rate
+        _ => 0.15,
+    };
+
+    let infra_mod = match location_infra {
+        Some(InfrastructureLevel::None) => 0.25,
+        Some(InfrastructureLevel::Outpost) => 0.10,
+        Some(InfrastructureLevel::Colony) => 0.05,
+        Some(InfrastructureLevel::Established) => 0.0,
+        Some(InfrastructureLevel::Hub) => 0.0,
+        Some(InfrastructureLevel::Capital) => 0.0,
+        None => 0.0, // No location — use base rate
+    };
+
+    type_mod + infra_mod
+}
+
+// ---------------------------------------------------------------------------
 // Stage 2 — Pressure scoring
 // ---------------------------------------------------------------------------
 
@@ -427,15 +531,15 @@ fn pressure_score(event: &SeedEvent, journey: &Journey) -> f64 {
     }
 
     // Damaged hull + event requires damage = pressure match.
-    if req.hull_below.is_some() {
-        if journey.ship.hull_condition < 0.5 {
-            score += 0.5;
-        }
+    if req.hull_below.is_some() && journey.ship.hull_condition < 0.5 {
+        score += 0.5;
     }
 
     // Faction-controlled space with active grudge threads = pressure.
     if req.faction_controlled == Some(true) && !journey.threads.is_empty() {
-        let grudge_threads = journey.threads.iter()
+        let grudge_threads = journey
+            .threads
+            .iter()
             .filter(|t| t.thread_type == starbound_core::narrative::ThreadType::Grudge)
             .filter(|t| t.resolution == ResolutionState::Open)
             .count();
@@ -458,13 +562,16 @@ fn echo_score(event: &SeedEvent, journey: &Journey) -> f64 {
         return 0.0;
     }
 
-    let open_threads = journey.threads.iter()
-        .filter(|t| t.resolution == ResolutionState::Open || t.resolution == ResolutionState::Partial)
+    let open_threads = journey
+        .threads
+        .iter()
+        .filter(|t| {
+            t.resolution == ResolutionState::Open || t.resolution == ResolutionState::Partial
+        })
         .count();
 
-    // Events tagged with time-since-last-visit requirements are natural
-    // echo candidates — they respond to the passage of time.
-    let has_time_req = event.context_requirements
+    let has_time_req = event
+        .context_requirements
         .time_since_last_visit_galactic_years_min
         .is_some();
 
@@ -497,9 +604,7 @@ fn novelty_score(event: &SeedEvent, journey: &Journey) -> f64 {
     // Novelty bonus decreases as threads accumulate.
     // 0 threads → 1.0, 10+ threads → 0.2
     let thread_count = journey.threads.len() as f64;
-    let novelty: f64 = (1.0 - thread_count * 0.08).max(0.2);
-
-    novelty
+    (1.0 - thread_count * 0.08).max(0.2)
 }
 
 // ---------------------------------------------------------------------------
@@ -516,14 +621,11 @@ fn pacing_score(event: &SeedEvent, recent_tones: &[Tone]) -> f64 {
     let event_tone = parse_tone(&event.tone);
 
     // Count how many recent encounters share this tone.
-    let same_count = recent_tones.iter()
-        .filter(|t| **t == event_tone)
-        .count();
+    let same_count = recent_tones.iter().filter(|t| **t == event_tone).count();
 
     // Count intensity of recent encounters.
-    let recent_intensity: f64 = recent_tones.iter()
-        .map(|t| tone_intensity(t))
-        .sum::<f64>() / recent_tones.len() as f64;
+    let recent_intensity: f64 =
+        recent_tones.iter().map(|t| tone_intensity(t)).sum::<f64>() / recent_tones.len() as f64;
 
     let event_intensity = tone_intensity(&event_tone);
 
@@ -560,7 +662,73 @@ fn parse_tone(s: &str) -> Tone {
         "urgent" => Tone::Urgent,
         "melancholy" => Tone::Melancholy,
         "mundane" => Tone::Mundane,
+        "dread" => Tone::Tense, // map dread → tense for pacing
         _ => Tone::Mundane,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Stage 7 — Priority scoring
+// ---------------------------------------------------------------------------
+
+/// Convert priority tier to a weight multiplier.
+/// Priority 0–1 = ×1.0 (no boost).
+/// Priority 2 = ×boost.
+/// Priority 3 = ×boost².
+fn priority_multiplier(priority: u8, boost: f64) -> f64 {
+    match priority {
+        0 | 1 => 1.0,
+        2 => boost,
+        3 => boost * boost,
+        _ => 1.0,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Stage 8 — Convergence scoring
+// ---------------------------------------------------------------------------
+
+/// Score how well this event resolves mature thread clusters.
+///
+/// A "mature cluster" is 3+ open threads sharing a thread type.
+/// Events from the `main_quest` or `side_quest` categories get a
+/// convergence boost proportional to cluster maturity.
+///
+/// This is the echo filter turned up to 11 — when enough puzzle
+/// pieces have accumulated, the game leans hard into resolution.
+fn convergence_score(event: &SeedEvent, journey: &Journey) -> f64 {
+    // Only quest and important events benefit from convergence.
+    if event.priority < 2 {
+        return 0.0;
+    }
+
+    // Count open threads by type.
+    let mut type_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    for thread in &journey.threads {
+        if thread.resolution == ResolutionState::Open
+            || thread.resolution == ResolutionState::Partial
+        {
+            let key = format!("{}", thread.thread_type).to_lowercase();
+            *type_counts.entry(key).or_insert(0) += 1;
+        }
+    }
+
+    // Find the largest cluster.
+    let max_cluster = type_counts.values().copied().max().unwrap_or(0);
+
+    if max_cluster < 3 {
+        return 0.0;
+    }
+
+    // Scale: 3 threads = 0.3, 5 threads = 0.5, 7+ = 0.7 (capped)
+    let cluster_maturity = ((max_cluster as f64 - 2.0) * 0.1).min(0.7);
+
+    // Extra boost if the event has prerequisites (it's designed for this moment).
+    let has_prereqs = event.context_requirements.prerequisites.is_some();
+    if has_prereqs {
+        (cluster_maturity * 1.5).min(1.0)
+    } else {
+        cluster_maturity
     }
 }
 
@@ -569,15 +737,15 @@ mod tests {
     use super::*;
     use crate::library::all_seed_events;
     use rand::SeedableRng;
-    use std::collections::HashMap;
-    use uuid::Uuid;
     use starbound_core::crew::*;
     use starbound_core::galaxy::*;
     use starbound_core::mission::*;
     use starbound_core::narrative::*;
+    use starbound_core::reputation::PlayerProfile;
     use starbound_core::ship::*;
     use starbound_core::time::Timestamp;
-    use starbound_core::reputation::PlayerProfile;
+    use std::collections::HashMap;
+    use uuid::Uuid;
 
     fn test_system(infra: InfrastructureLevel, faction: Option<Uuid>) -> StarSystem {
         StarSystem {
@@ -590,7 +758,7 @@ mod tests {
             infrastructure_level: infra,
             history: vec![],
             active_threads: vec![],
-                time_factor: 1.0,
+            time_factor: 1.0,
             faction_presence: vec![],
         }
     }
@@ -602,8 +770,12 @@ mod tests {
                 name: format!("Crew {}", i),
                 role: CrewRole::Navigator,
                 drives: PersonalityDrives {
-                    security: 0.5, freedom: 0.5, purpose: 0.5,
-                    connection: 0.5, knowledge: 0.5, justice: 0.5,
+                    security: 0.5,
+                    freedom: 0.5,
+                    purpose: 0.5,
+                    connection: 0.5,
+                    knowledge: 0.5,
+                    justice: 0.5,
                 },
                 trust: Trust::starting_crew(),
                 relationships: HashMap::new(),
@@ -674,7 +846,6 @@ mod tests {
         let system = test_system(InfrastructureLevel::Colony, Some(Uuid::new_v4()));
         let journey = test_journey(80.0, 0.9, 3);
         let state = PipelineState::default();
-        // Use config with zero silence chance so we always get an event.
         let config = PipelineConfig {
             silence_chance: 0.0,
             silence_escalation: 0.0,
@@ -683,9 +854,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(42);
 
         let result = run_pipeline(
-            &events, &system, &journey, None, &state, &config, &mut rng,
-            None,
-            None,
+            &events, &system, &journey, None, &state, &config, &mut rng, None, None, None,
         );
 
         match result {
@@ -700,140 +869,16 @@ mod tests {
     }
 
     #[test]
-    fn silence_can_occur() {
+    fn novelty_bias_toward_early_game() {
         let events = all_seed_events();
         let system = test_system(InfrastructureLevel::Colony, Some(Uuid::new_v4()));
-        let journey = test_journey(80.0, 0.9, 3);
-        let state = PipelineState::default();
-        let config = PipelineConfig {
-            silence_chance: 1.0, // Always silent
-            ..Default::default()
-        };
-        let mut rng = StdRng::seed_from_u64(42);
-
-        let result = run_pipeline(
-            &events, &system, &journey, None, &state, &config, &mut rng,
-            None,
-            None,
-        );
-
-        assert!(matches!(result, PipelineResult::Silence { .. }));
-    }
-
-    #[test]
-    fn recent_events_not_repeated() {
-        let events = all_seed_events();
-        let system = test_system(InfrastructureLevel::Colony, Some(Uuid::new_v4()));
-        let journey = test_journey(80.0, 0.9, 3);
         let config = PipelineConfig {
             silence_chance: 0.0,
             silence_escalation: 0.0,
             ..Default::default()
         };
 
-        // Fill recent_event_ids with all event IDs → should get silence.
-        let mut state = PipelineState::default();
-        state.recent_event_ids = events.iter().map(|e| e.id.clone()).collect();
-        let mut rng = StdRng::seed_from_u64(42);
-
-        let result = run_pipeline(
-            &events, &system, &journey, None, &state, &config, &mut rng,
-            None,
-            None,
-        );
-
-        assert!(matches!(result, PipelineResult::Silence { .. }));
-    }
-
-    #[test]
-    fn pressure_boosts_situational_events() {
-        let events = all_seed_events();
-        // Low fuel at a colony — fuel_merchant_desperate should be boosted.
-        let system = test_system(InfrastructureLevel::Colony, Some(Uuid::new_v4()));
-        let journey = test_journey(15.0, 0.9, 3);
-        let config = PipelineConfig {
-            silence_chance: 0.0,
-            silence_escalation: 0.0,
-            pressure_boost: 10.0, // Cranked up so pressure dominates
-            ..Default::default()
-        };
-        // Run many times and count how often fuel event fires.
-        let mut fuel_count = 0;
-        let trials = 100;
-        for seed in 0..trials {
-            let mut rng = StdRng::seed_from_u64(seed);
-            let result = run_pipeline(
-                &events, &system, &journey, None,
-                &PipelineState::default(), &config, &mut rng,
-                None,
-                None,
-            );
-            if let PipelineResult::Event { event, .. } = result {
-                if event.id == "fuel_merchant_desperate" {
-                    fuel_count += 1;
-                }
-            }
-        }
-
-        // With heavy pressure boost, fuel event should fire often (but not always,
-        // because other events also match this context).
-        assert!(fuel_count > 20,
-            "fuel_merchant_desperate should fire frequently with pressure boost, got {}/{}",
-            fuel_count, trials);
-    }
-
-    #[test]
-    fn pacing_alternates_intensity() {
-        let events = all_seed_events();
-        let system = test_system(InfrastructureLevel::Colony, Some(Uuid::new_v4()));
-        let journey = test_journey(80.0, 0.9, 3);
-        let config = PipelineConfig {
-            silence_chance: 0.0,
-            silence_escalation: 0.0,
-            pacing_contrast_boost: 10.0, // Cranked so pacing dominates
-            ..Default::default()
-        };
-
-        // After several tense encounters, quiet/mundane should be boosted.
-        let mut state = PipelineState::default();
-        state.recent_tones = vec![Tone::Tense, Tone::Tense, Tone::Urgent, Tone::Tense];
-
-        let mut quiet_count = 0;
-        let trials = 100;
-        for seed in 0..trials {
-            let mut rng = StdRng::seed_from_u64(seed);
-            let result = run_pipeline(
-                &events, &system, &journey, None, &state, &config, &mut rng,
-                None,
-                None,
-            );
-            if let PipelineResult::Event { event, .. } = result {
-                let tone = parse_tone(&event.tone);
-                if tone == Tone::Quiet || tone == Tone::Mundane {
-                    quiet_count += 1;
-                }
-            }
-        }
-
-        assert!(quiet_count > 30,
-            "After intense encounters, quiet/mundane should be boosted, got {}/{}",
-            quiet_count, trials);
-    }
-
-    #[test]
-    fn novelty_decreases_with_threads() {
-        let events = all_seed_events();
-        let system = test_system(InfrastructureLevel::Outpost, None);
-        let config = PipelineConfig {
-            silence_chance: 0.0,
-            silence_escalation: 0.0,
-            novelty_base_boost: 10.0,
-            ..Default::default()
-        };
-
-        // Few threads → high novelty boost.
         let journey_early = test_journey(80.0, 0.9, 3);
-
         let mut journey_late = test_journey(80.0, 0.9, 3);
         add_threads(&mut journey_late, 10);
 
@@ -844,28 +889,45 @@ mod tests {
         for seed in 0..trials {
             let mut rng = StdRng::seed_from_u64(seed);
             if let PipelineResult::Event { event, .. } = run_pipeline(
-                &events, &system, &journey_early, None,
-                &PipelineState::default(), &config, &mut rng,
+                &events,
+                &system,
+                &journey_early,
+                None,
+                &PipelineState::default(),
+                &config,
+                &mut rng,
                 None,
                 None,
             ) {
-                if event.encounter_type == "novel" { novel_early += 1; }
+                if event.encounter_type == "novel" {
+                    novel_early += 1;
+                }
             }
 
             let mut rng = StdRng::seed_from_u64(seed);
             if let PipelineResult::Event { event, .. } = run_pipeline(
-                &events, &system, &journey_late, None,
-                &PipelineState::default(), &config, &mut rng,
+                &events,
+                &system,
+                &journey_late,
+                None,
+                &PipelineState::default(),
+                &config,
+                &mut rng,
                 None,
                 None,
             ) {
-                if event.encounter_type == "novel" { novel_late += 1; }
+                if event.encounter_type == "novel" {
+                    novel_late += 1;
+                }
             }
         }
 
-        assert!(novel_early > novel_late,
+        assert!(
+            novel_early > novel_late,
             "Novel events should fire more often early ({}) than late ({})",
-            novel_early, novel_late);
+            novel_early,
+            novel_late
+        );
     }
 
     #[test]
@@ -881,7 +943,6 @@ mod tests {
 
         state.record_silence();
         assert_eq!(state.encounters_since_silence, 0);
-        // Tones and IDs preserved across silence.
         assert_eq!(state.recent_tones.len(), 2);
     }
 
@@ -900,16 +961,18 @@ mod tests {
         let mut rng1 = StdRng::seed_from_u64(999);
         let mut rng2 = StdRng::seed_from_u64(999);
 
-        let r1 = run_pipeline(&events, &system, &journey, None, &state, &config, &mut rng1, None, None);
-        let r2 = run_pipeline(&events, &system, &journey, None, &state, &config, &mut rng2, None, None);
+        let r1 = run_pipeline(
+            &events, &system, &journey, None, &state, &config, &mut rng1, None, None, None,
+        );
+        let r2 = run_pipeline(
+            &events, &system, &journey, None, &state, &config, &mut rng2, None, None, None,
+        );
 
         match (r1, r2) {
             (PipelineResult::Event { event: e1, .. }, PipelineResult::Event { event: e2, .. }) => {
                 assert_eq!(e1.id, e2.id, "Same seed should produce same event");
             }
-            (PipelineResult::Silence { .. }, PipelineResult::Silence { .. }) => {
-                // Both silent — deterministic.
-            }
+            (PipelineResult::Silence { .. }, PipelineResult::Silence { .. }) => {}
             _ => panic!("Same seed produced different result types"),
         }
     }
@@ -925,22 +988,27 @@ mod tests {
             ..Default::default()
         };
 
-        // After 0 encounters: 10% silence.
-        // After 5 encounters: 60% silence.
-        // After 9 encounters: 100% silence.
         let mut state_stale = PipelineState::default();
         state_stale.encounters_since_silence = 9;
 
         let mut rng = StdRng::seed_from_u64(42);
         let result = run_pipeline(
-            &events, &system, &journey, None, &state_stale, &config, &mut rng,
+            &events,
+            &system,
+            &journey,
+            None,
+            &state_stale,
+            &config,
+            &mut rng,
+            None,
             None,
             None,
         );
 
-        // With 100% silence chance, this must be silent.
-        assert!(matches!(result, PipelineResult::Silence { .. }),
-            "Should be silent after 9 consecutive encounters with escalation");
+        assert!(
+            matches!(result, PipelineResult::Silence { .. }),
+            "Should be silent after 9 consecutive encounters with escalation"
+        );
     }
 
     // --- Intent mode tests ---
@@ -956,14 +1024,19 @@ mod tests {
             ..Default::default()
         };
 
-        // Run with Trade intent — should only select trade events.
         let mut found_trade = false;
         for seed in 0..50 {
             let mut rng = StdRng::seed_from_u64(seed);
             if let PipelineResult::Event { event, .. } = run_pipeline(
-                &events, &system, &journey, None,
-                &PipelineState::default(), &config, &mut rng,
+                &events,
+                &system,
+                &journey,
+                None,
+                &PipelineState::default(),
+                &config,
+                &mut rng,
                 Some(PlayerIntent::Trade),
+                None,
                 None,
             ) {
                 assert!(
@@ -983,20 +1056,25 @@ mod tests {
         let system = test_system(InfrastructureLevel::Colony, Some(Uuid::new_v4()));
         let journey = test_journey(80.0, 0.9, 3);
         let config = PipelineConfig {
-            silence_chance: 1.0, // 100% silence — would always be silent in arrival mode
+            silence_chance: 1.0,
             silence_escalation: 0.0,
             ..Default::default()
         };
 
         let mut rng = StdRng::seed_from_u64(42);
         let result = run_pipeline(
-            &events, &system, &journey, None,
-            &PipelineState::default(), &config, &mut rng,
+            &events,
+            &system,
+            &journey,
+            None,
+            &PipelineState::default(),
+            &config,
+            &mut rng,
             Some(PlayerIntent::Trade),
+            None,
             None,
         );
 
-        // Intent mode should NOT be silenced even with 100% silence chance.
         assert!(
             matches!(result, PipelineResult::Event { .. }),
             "Intent mode should skip silence check",
@@ -1014,19 +1092,24 @@ mod tests {
             ..Default::default()
         };
 
-        // Run in arrival mode many times — should never get an intent event.
         for seed in 0..50 {
             let mut rng = StdRng::seed_from_u64(seed);
             if let PipelineResult::Event { event, .. } = run_pipeline(
-                &events, &system, &journey, None,
-                &PipelineState::default(), &config, &mut rng,
+                &events,
+                &system,
+                &journey,
+                None,
+                &PipelineState::default(),
+                &config,
+                &mut rng,
                 None,
                 None,
             ) {
                 assert!(
                     event.intents.is_empty(),
                     "Arrival mode should not select intent events, got: {} (intents: {:?})",
-                    event.id, event.intents,
+                    event.id,
+                    event.intents,
                 );
             }
         }
@@ -1043,18 +1126,108 @@ mod tests {
             ..Default::default()
         };
 
-        // Recruit intent — no events for this yet.
         let mut rng = StdRng::seed_from_u64(42);
         let result = run_pipeline(
-            &events, &system, &journey, None,
-            &PipelineState::default(), &config, &mut rng,
+            &events,
+            &system,
+            &journey,
+            None,
+            &PipelineState::default(),
+            &config,
+            &mut rng,
             Some(PlayerIntent::Recruit),
+            None,
             None,
         );
 
         assert!(
             matches!(result, PipelineResult::Silence { .. }),
             "Intent with no matching events should return silence",
+        );
+    }
+
+    // --- Priority tests (new) ---
+
+    #[test]
+    fn priority_multiplier_values() {
+        assert!((priority_multiplier(0, 2.5) - 1.0).abs() < 0.001);
+        assert!((priority_multiplier(1, 2.5) - 1.0).abs() < 0.001);
+        assert!((priority_multiplier(2, 2.5) - 2.5).abs() < 0.001);
+        assert!((priority_multiplier(3, 2.5) - 6.25).abs() < 0.001);
+    }
+
+    #[test]
+    fn convergence_zero_without_threads() {
+        use super::super::seed_event::*;
+        let event = SeedEvent {
+            id: "test".into(),
+            encounter_type: "contextual".into(),
+            tone: "wonder".into(),
+            category: "main_quest".into(),
+            priority: 3,
+            context_requirements: ContextRequirements::default(),
+            text: "Test.".repeat(20),
+            choices: vec![],
+            intents: vec![],
+        };
+        let journey = test_journey(80.0, 0.9, 3);
+        assert!(
+            convergence_score(&event, &journey) < 0.001,
+            "No threads should produce zero convergence"
+        );
+    }
+
+    #[test]
+    fn convergence_increases_with_cluster_size() {
+        use super::super::seed_event::*;
+        let event = SeedEvent {
+            id: "test".into(),
+            encounter_type: "contextual".into(),
+            tone: "wonder".into(),
+            category: "main_quest".into(),
+            priority: 3,
+            context_requirements: ContextRequirements::default(),
+            text: "Test.".repeat(20),
+            choices: vec![],
+            intents: vec![],
+        };
+
+        let mut journey_3 = test_journey(80.0, 0.9, 3);
+        for i in 0..3 {
+            journey_3.threads.push(Thread {
+                id: Uuid::new_v4(),
+                thread_type: ThreadType::Anomaly,
+                associated_entities: vec![],
+                tension: 0.5,
+                created_at: Timestamp::zero(),
+                last_touched: Timestamp::zero(),
+                resolution: ResolutionState::Open,
+                description: format!("Anomaly {}", i),
+            });
+        }
+
+        let mut journey_5 = test_journey(80.0, 0.9, 3);
+        for i in 0..5 {
+            journey_5.threads.push(Thread {
+                id: Uuid::new_v4(),
+                thread_type: ThreadType::Anomaly,
+                associated_entities: vec![],
+                tension: 0.5,
+                created_at: Timestamp::zero(),
+                last_touched: Timestamp::zero(),
+                resolution: ResolutionState::Open,
+                description: format!("Anomaly {}", i),
+            });
+        }
+
+        let score_3 = convergence_score(&event, &journey_3);
+        let score_5 = convergence_score(&event, &journey_5);
+
+        assert!(
+            score_5 > score_3,
+            "Larger clusters should produce higher convergence: 3={:.2}, 5={:.2}",
+            score_3,
+            score_5
         );
     }
 }

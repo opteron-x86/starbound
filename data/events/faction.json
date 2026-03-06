@@ -1,0 +1,644 @@
+[
+  {
+    "id": "faction_checkpoint",
+    "encounter_type": "contextual",
+    "tone": "tense",
+    "context_requirements": {
+      "faction_controlled": true,
+      "infrastructure_min": "colony",
+      "location_types": [
+        "station"
+      ]
+    },
+    "text": "Two {faction.name} patrol ships slide into formation around you before your comms officer can even open a channel.\n\n\"Vessel, you are entering controlled space. Transmit registration, cargo manifest, and crew roster. Do not deviate from your current heading.\"\n\nThe voice is professional but flat — someone who says this sentence forty times a shift. Your ship's registration is valid, probably. Your cargo is legal, mostly. Your crew roster is accurate, as far as anyone knows.\n\nThe patrol ships match your speed exactly. Patient. Unhurried. They have nowhere else to be.",
+    "choices": [
+      {
+        "label": "Comply fully — transmit everything",
+        "tone_note": "Nothing to hide. Or at least nothing they'll find.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "Inspection passed without incident."
+          }
+        ]
+      },
+      {
+        "label": "Comply but ask questions",
+        "tone_note": "Cooperative but not submissive.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "The checkpoint officer mentioned something interesting — increased patrols, a missing ship, a restricted zone that wasn't restricted last year."
+          },
+          {
+            "type": "narrative",
+            "text": "Complied and asked questions. Learned something worth knowing."
+          }
+        ]
+      },
+      {
+        "label": "Transmit registration only — cite independent vessel rights",
+        "tone_note": "Principled. Possibly stupid.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": 0.05
+          },
+          {
+            "type": "trust_ideological",
+            "delta": 0.05
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "grudge",
+            "description": "Cited independent vessel rights at a faction checkpoint. They let you through, but they remembered your ship."
+          },
+          {
+            "type": "narrative",
+            "text": "Stood on principle. Made an impression. Not sure what kind."
+          }
+        ]
+      }
+    ],
+    "category": "faction",
+    "priority": 1
+  },
+  {
+    "id": "guild_price_war",
+    "encounter_type": "contextual",
+    "tone": "mundane",
+    "context_requirements": {
+      "faction_category_present": "economic",
+      "faction_min_strength": 0.4,
+      "infrastructure_min": "established",
+      "location_types": [
+        "station"
+      ]
+    },
+    "text": "The trade board at the station is chaos. Prices are shifting in real time — fuel up twelve percent, then down eight, then up again. A Corridor Guild representative stands near the exchange terminal, watching numbers move with the calm of someone who already knows how this ends.\n\nYour navigator leans over. \"They're squeezing out the independents. Anyone who bought at yesterday's rate is underwater.\"\n\nThe Guild rep catches you watching and raises a hand — not a wave, exactly. An acknowledgment. The kind that comes with an invitation attached.\n\n\"Captain. If you're looking to move cargo, we can offer preferred rates. Our logistics network is... comprehensive.\"",
+    "choices": [
+      {
+        "label": "Accept the Guild's rates — business is business",
+        "tone_note": "Pragmatic. The galaxy runs on deals like this.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": 30.0
+          },
+          {
+            "type": "resources",
+            "delta": -50.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "debt",
+            "description": "Accepted Corridor Guild preferred rates. They'll remember — and they'll expect reciprocity."
+          },
+          {
+            "type": "narrative",
+            "text": "Signed on with the Guild's network. Good prices. Strings attached."
+          }
+        ]
+      },
+      {
+        "label": "Buy fuel at the inflated independent rate instead",
+        "tone_note": "Principle has a price. You can afford it today.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": 20.0
+          },
+          {
+            "type": "resources",
+            "delta": -80.0
+          },
+          {
+            "type": "narrative",
+            "text": "Paid more than you had to. The independent seller looked grateful."
+          }
+        ]
+      },
+      {
+        "label": "Ask what 'comprehensive' means, exactly",
+        "tone_note": "Curiosity. Every network has edges worth knowing.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "The Corridor Guild's logistics network extends further than official records suggest. They know shipping routes, cargo manifests, and who's moving what — including near the frontier."
+          },
+          {
+            "type": "narrative",
+            "text": "Learned more than the Guild rep intended to share."
+          }
+        ]
+      }
+    ],
+    "category": "faction",
+    "priority": 1
+  },
+  {
+    "id": "lattice_dead_drop",
+    "encounter_type": "contextual",
+    "tone": "tense",
+    "context_requirements": {
+      "faction_category_present": "criminal",
+      "faction_max_visibility": 0.3,
+      "infrastructure_min": "colony",
+      "location_types": [
+        "station"
+      ]
+    },
+    "text": "It's in the docking bay, tucked behind a maintenance panel that shouldn't be loose but is. A data chip, commercial grade, nothing remarkable. Except someone scratched a symbol into the casing — a lattice pattern, geometric, precise.\n\nYour comms officer turns it over. \"This is a dead drop. Someone left it for someone. Maybe us, maybe not.\"\n\nThe chip is unencrypted. That's either trust or a trap. The data inside is a set of coordinates, a name you don't recognize, and a single line of text: THEY KNOW ABOUT THE SIGNAL.\n\nThe scratched symbol catches the light as you turn the chip. Someone in the shadows is paying attention to the same mystery you are.",
+    "choices": [
+      {
+        "label": "Copy the data and leave the chip where you found it",
+        "tone_note": "Take the knowledge, leave no trace.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Copied data from a Lattice dead drop. Coordinates, a name, and a warning: someone else knows about the signal."
+          },
+          {
+            "type": "narrative",
+            "text": "Took the knowledge. Left no trace."
+          }
+        ]
+      },
+      {
+        "label": "Take the chip — if it was meant for you, you'll need it",
+        "tone_note": "If they wanted to reach you, now they know they did.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Took a Lattice dead drop chip. The coordinates and name might be useful. Taking the chip means they know you found it."
+          },
+          {
+            "type": "add_cargo",
+            "item": "Lattice data chip",
+            "quantity": 1
+          },
+          {
+            "type": "narrative",
+            "text": "Pocketed the chip. Someone will notice it's gone."
+          }
+        ]
+      },
+      {
+        "label": "Destroy it — you don't need shadow network complications",
+        "tone_note": "Some doors you don't open.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "Crushed the chip under your boot. Some connections aren't worth making."
+          }
+        ]
+      }
+    ],
+    "category": "faction",
+    "priority": 1
+  },
+  {
+    "id": "quiet_star_vigil",
+    "encounter_type": "contextual",
+    "tone": "wonder",
+    "context_requirements": {
+      "faction_category_present": "religious",
+      "time_factor_min": 1.5,
+      "location_types": [
+        "station",
+        "deep_space"
+      ]
+    },
+    "text": "They've built something here, in the distorted space where time moves differently. Not a station — a vigil. A ring of small ships linked by tether cables, drifting in formation around nothing in particular. Or nothing your sensors can identify.\n\nThe Order of the Quiet Star. You've heard of them. Pilgrims who believe that time distortion is a wound in the universe, and that if you listen at the edges of that wound, you can hear what tore it.\n\nA voice comes through on an open channel. Unhurried. The kind of voice that has been saying the same words for a very long time.\n\n\"Traveler. You feel it too, don't you? The way time bends here. We have been listening for eleven years, ship-time. Outside, forty-three years have passed. We have heard things.\"\n\nA pause.\n\n\"Would you like to know what we've heard?\"",
+    "choices": [
+      {
+        "label": "Yes. Tell me everything.",
+        "tone_note": "Awe and hunger. This is what the edges of the map are for.",
+        "effects": [
+          {
+            "type": "crew_mood",
+            "mood": "inspired",
+            "all": true
+          },
+          {
+            "type": "crew_stress",
+            "delta": -0.05
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "The Order describes patterns in the time distortion — rhythmic fluctuations that correlate with the signal's frequency. They believe the distortion and the signal share a source."
+          },
+          {
+            "type": "narrative",
+            "text": "Listened. What they described changes the shape of everything."
+          }
+        ]
+      },
+      {
+        "label": "What do you know about the signal?",
+        "tone_note": "Direct. The mission pulls at you even here.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "The Order has been tracking the signal independently. Their data suggests the source is deep in distorted space — somewhere time runs so slowly it might as well have stopped."
+          },
+          {
+            "type": "narrative",
+            "text": "They know about the signal. They've been listening longer than you have."
+          }
+        ]
+      },
+      {
+        "label": "Join the vigil for a time — listen for yourself",
+        "tone_note": "Patience. Some things you have to hear firsthand.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": -0.1
+          },
+          {
+            "type": "crew_mood",
+            "mood": "hopeful",
+            "all": true
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Spent time in the vigil, listening at the edge of distorted space. Something was there — not a sound exactly, but a structure in the silence."
+          },
+          {
+            "type": "narrative",
+            "text": "Sat in the quiet. Heard something. Can't explain what."
+          }
+        ]
+      },
+      {
+        "label": "Thank them and move on",
+        "tone_note": "Respect without commitment. Not everyone who listens hears.",
+        "effects": [
+          {
+            "type": "pass"
+          }
+        ]
+      }
+    ],
+    "category": "faction",
+    "priority": 1
+  },
+  {
+    "id": "ashfall_workshop",
+    "encounter_type": "contextual",
+    "tone": "quiet",
+    "context_requirements": {
+      "faction_category_present": "criminal",
+      "infrastructure_max": "colony",
+      "hull_below": 0.8,
+      "location_types": [
+        "station"
+      ]
+    },
+    "text": "The workshop is built into the side of an asteroid, accessible through a docking tunnel that doesn't appear on any chart. Your navigator found it the old way — following transponder echoes that someone left for people who know to look.\n\nInside, it's surprisingly clean. Three bays, two occupied. Tools organized with the care of someone who respects their work. The woman running the place has hands stained with engine coolant and eyes that don't miss much.\n\n\"Ashfall Salvage,\" she says, like you should know the name. \"We fix things out here where nobody else will. Pay is flexible. Questions are not included.\"\n\nShe glances at your hull readout on her display. \"Your ship has seen better days. I can help with that. Standard rate, or if you're carrying anything interesting, we can talk trade.\"",
+    "choices": [
+      {
+        "label": "Pay for repairs — credits",
+        "tone_note": "Clean transaction. Worth the price for hull integrity.",
+        "effects": [
+          {
+            "type": "hull",
+            "delta": 0.2
+          },
+          {
+            "type": "repair_module",
+            "module": "engine",
+            "amount": 0.15
+          },
+          {
+            "type": "resources",
+            "delta": -120.0
+          },
+          {
+            "type": "narrative",
+            "text": "Professional work. No questions asked. Hull integrity restored."
+          }
+        ]
+      },
+      {
+        "label": "Offer to trade cargo for repair work",
+        "tone_note": "Barter economy. Out here, flexibility matters.",
+        "effects": [
+          {
+            "type": "hull",
+            "delta": 0.15
+          },
+          {
+            "type": "repair_module",
+            "module": "engine",
+            "amount": 0.1
+          },
+          {
+            "type": "jettison_cargo"
+          },
+          {
+            "type": "narrative",
+            "text": "Traded cargo for repairs. Fair deal, out where fair is relative."
+          }
+        ]
+      },
+      {
+        "label": "Ask what else they can do besides repairs",
+        "tone_note": "Curiosity about what lives at the edges.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Ashfall Salvage runs more than a repair shop — they move people, cargo, and information across borders the official routes don't cross. The frontier has its own economy."
+          },
+          {
+            "type": "narrative",
+            "text": "Asked around. The frontier has layers you hadn't seen."
+          }
+        ]
+      },
+      {
+        "label": "Too risky — leave",
+        "tone_note": "Paranoia is a survival trait.",
+        "effects": [
+          {
+            "type": "pass"
+          }
+        ]
+      }
+    ],
+    "category": "faction",
+    "priority": 1
+  },
+  {
+    "id": "military_inspection",
+    "encounter_type": "contextual",
+    "tone": "tense",
+    "context_requirements": {
+      "faction_category_present": "military",
+      "faction_min_strength": 0.5,
+      "faction_controlled": true,
+      "location_types": [
+        "station"
+      ]
+    },
+    "text": "A {civ.name} cruiser drops in three kilometers off your bow, close enough to read the hull markings with your eyes. Hegemony Military Command. Not patrol boats this time — a proper warship, running a sweep.\n\nYour comms light up before you can react. \"Independent vessel, you are in a security zone. Cut engines and prepare for inspection. This is not a request.\"\n\nThe officer who boards is thorough, professional, and takes her time. She scans cargo, checks crew manifests against a database you can't see, and lingers over your navigation logs.\n\n\"You've been spending time near the frontier,\" she notes. Not a question. \"Lot of traffic headed that way lately. Most of it doesn't come back the same.\"\n\nShe pauses on something in your logs. You can't see what.\n\n\"You're clear. For now. But Captain — be careful what you go looking for out there.\"",
+    "choices": [
+      {
+        "label": "Ask what she means about traffic not coming back the same",
+        "tone_note": "The warning is the interesting part.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "The military officer let slip that ships returning from deep-frontier distorted space show anomalous navigation log corruption. Hegemony Command is tracking it."
+          },
+          {
+            "type": "narrative",
+            "text": "She said more than she meant to. Or exactly as much as she intended."
+          }
+        ]
+      },
+      {
+        "label": "Comply silently — don't invite further scrutiny",
+        "tone_note": "Endure the process. Say nothing memorable.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "Inspection passed without incident."
+          }
+        ]
+      },
+      {
+        "label": "Ask about restricted zones near your planned route",
+        "tone_note": "Practical. Use the encounter to plan ahead.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Learned that Hegemony Military Command has designated certain frontier routes as restricted — specifically near systems with high time distortion. They're not saying why."
+          },
+          {
+            "type": "narrative",
+            "text": "Restricted zones. Near the frontier. Near the signal. That's not a coincidence."
+          }
+        ]
+      }
+    ],
+    "category": "faction",
+    "priority": 1
+  },
+  {
+    "id": "spacers_rumor_mill",
+    "encounter_type": "contextual",
+    "tone": "quiet",
+    "context_requirements": {
+      "faction_category_present": "guild",
+      "infrastructure_min": "outpost",
+      "location_types": [
+        "station"
+      ]
+    },
+    "text": "The Spacers' hall is easy to find — it's wherever the dock workers eat. Here, it's a converted cargo module with benches, a food printer that's seen better decades, and a board covered in handwritten notes.\n\nCrew postings. Route warnings. Someone selling a sensor array, used, mostly functional. A drawing of something that might be a star system or might be a joke. The usual noise of people who live between the stars.\n\nAn older spacer with a Collective badge sewn onto a jacket that's older than your ship waves you over. \"You're the one with the Persistence, right? Been hearing your transponder code at some interesting ports.\"\n\nHe slides a drink across the table. \"Sit. I've got a few things you might want to hear, and a favor I might want to ask.\"",
+    "choices": [
+      {
+        "label": "Sit and listen — spacers always know something useful",
+        "tone_note": "The network matters. These people are the galaxy's memory.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": -0.05
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "The spacer's network has noticed unusual shipping pattern changes — routes being rerouted around certain frontier systems, contracts drying up near distorted space."
+          },
+          {
+            "type": "narrative",
+            "text": "Bought a round. Heard three rumors. Two of them might even be true."
+          }
+        ]
+      },
+      {
+        "label": "Ask about the favor first",
+        "tone_note": "Practical. Know the cost before you accept the gift.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "debt",
+            "description": "The spacer needs a message delivered to a contact at a frontier system. Simple job, he says. Spacers don't ask for favors unless the official channels won't work."
+          },
+          {
+            "type": "add_cargo",
+            "item": "Sealed message tube (Spacers' Collective)",
+            "quantity": 1
+          },
+          {
+            "type": "narrative",
+            "text": "Took the job. A message, a destination, and a handshake."
+          }
+        ]
+      },
+      {
+        "label": "Check the job board instead — you'll find your own leads",
+        "tone_note": "Self-reliance. You don't owe anyone conversation.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "debt",
+            "description": "Took a contract — delivery, investigation, or escort. Someone is counting on you now."
+          },
+          {
+            "type": "narrative",
+            "text": "Found work. The kind that keeps the tanks full."
+          }
+        ]
+      }
+    ],
+    "category": "faction",
+    "priority": 1
+  },
+  {
+    "id": "lattice_broker",
+    "encounter_type": "contextual",
+    "tone": "tense",
+    "context_requirements": {
+      "faction_category_present": "criminal",
+      "faction_max_visibility": 0.3,
+      "infrastructure_min": "established",
+      "location_types": [
+        "station"
+      ]
+    },
+    "text": "The message arrives through three relays, stripped of metadata, timed to land when your comms officer is on a meal break. Professional.\n\n\"Captain. We trade in information. You have been asking questions that align with questions we have been paid to answer. There may be mutual benefit.\"\n\nNo name. No affiliation. But the routing pattern has a signature you've seen before — the same lattice geometry, the same careful anonymity.\n\n\"We can provide intelligence on faction movements, restricted zones, and certain... signals of interest. Our rates are reasonable. Our discretion is absolute. Reply on this channel if interested.\"\n\nThe channel will close in sixty seconds. The timer is already running.",
+    "choices": [
+      {
+        "label": "Reply — you need every advantage you can get",
+        "tone_note": "The shadows have something you need. The cost is being known by them.",
+        "effects": [
+          {
+            "type": "resources",
+            "delta": -100.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Established a channel with a Lattice intelligence broker. They have information about the signal and faction movements near distorted space. The relationship is transactional — for now."
+          },
+          {
+            "type": "narrative",
+            "text": "Made contact with the shadows. They had exactly what you needed."
+          }
+        ]
+      },
+      {
+        "label": "Reply but negotiate terms first",
+        "tone_note": "Interest, but on your terms. Show them you're not desperate.",
+        "effects": [
+          {
+            "type": "resources",
+            "delta": -60.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Negotiated limited terms with a Lattice broker. They provided partial intelligence — enough to be useful, not enough to feel comfortable."
+          },
+          {
+            "type": "narrative",
+            "text": "Bargained them down. They respected the counter-offer."
+          }
+        ]
+      },
+      {
+        "label": "Let the timer expire",
+        "tone_note": "Silence is an answer too. They'll understand.",
+        "effects": [
+          {
+            "type": "pass"
+          }
+        ]
+      }
+    ],
+    "category": "faction",
+    "priority": 1
+  },
+  {
+    "id": "quiet_star_clue",
+    "encounter_type": "contextual",
+    "tone": "wonder",
+    "context_requirements": {
+      "faction_category_present": "religious",
+      "time_factor_min": 3.0,
+      "location_types": [
+        "deep_space",
+        "planet_surface",
+        "moon",
+        "asteroid_belt"
+      ]
+    },
+    "text": "The pilgrim finds you in the observation bay, where the stars look wrong. Time moves strangely here — you can feel it in the way light shifts, the way sounds arrive a half-beat late, the way your own heartbeat seems to be keeping time with something else.\n\n\"You are looking for the source,\" the pilgrim says. Not asks. Says.\n\nShe's old in a way that's hard to place. Ship-time old or real-time old — in space like this, the distinction loses meaning.\n\n\"We have spent decades listening at the edges. The signal you chase — we have heard its echoes here. Not the signal itself. Its shadow. The shape of what sent it.\"\n\nShe draws something on the fogged viewport. A pattern. Mathematical. Familiar in a way you can't quite place.\n\n\"It is not a message. It is a question. And it has been waiting a very long time for someone to understand what it's asking.\"",
+    "choices": [
+      {
+        "label": "What is the question?",
+        "tone_note": "The mission tightens. This is real. This matters.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "The pilgrim described the signal as a question — mathematical, patient, waiting for comprehension. The pattern she drew matches nothing in human mathematics, but your science officer thinks it resembles a topology proof."
+          },
+          {
+            "type": "crew_mood",
+            "mood": "inspired"
+          },
+          {
+            "type": "narrative",
+            "text": "The pattern burns in your mind. It means something. You almost understand."
+          }
+        ]
+      },
+      {
+        "label": "Record the pattern she drew — analyze it later",
+        "tone_note": "Collect the evidence. Trust the science over the mysticism.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Recorded the pattern the pilgrim drew on the viewport. Analysis pending, but initial comparison suggests non-human mathematical notation."
+          },
+          {
+            "type": "narrative",
+            "text": "Captured the image. Science will find what faith can't."
+          }
+        ]
+      },
+      {
+        "label": "How did you know about our mission?",
+        "tone_note": "Suspicion and wonder in equal measure.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "The pilgrim knew about the mission — claims the Order has contacts who share information about signal-seekers. Unclear whether this means allies or surveillance."
+          },
+          {
+            "type": "narrative",
+            "text": "She smiled. 'The distortion tells us who is listening.' Make of that what you will."
+          }
+        ]
+      }
+    ],
+    "category": "faction",
+    "priority": 1
+  }
+]

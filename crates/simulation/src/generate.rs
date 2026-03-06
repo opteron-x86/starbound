@@ -9,7 +9,9 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use starbound_core::galaxy::*;
-use starbound_core::npc::Npc;
+use starbound_core::npc::{
+    Npc, Species, BiologicalSex, NpcPersonality, NpcConnection, NpcRelationType,
+};
 use starbound_core::time::Timestamp;
 
 use crate::templates;
@@ -72,7 +74,7 @@ pub fn generate_galaxy(seed: u64) -> GeneratedGalaxy {
         system_ids: systems.iter().map(|s| s.id).collect(),
     };
 
-    let npcs = generate_npcs(&systems, &factions, &mut rng);
+    let npcs = generate_npcs(&systems, &factions, &civilizations, &mut rng);
 
     GeneratedGalaxy {
         sector,
@@ -1925,81 +1927,34 @@ enum EconomyArchetype {
 }
 
 // ===========================================================================
-// NPC generation
+// NPC generation (template-driven)
 // ===========================================================================
 
-/// First names and last names for NPC generation.
-const NPC_FIRST_NAMES: [&str; 20] = [
-    "Maren", "Joss", "Kael", "Suri", "Dav", "Ren", "Thea", "Orin",
-    "Lys", "Cade", "Nessa", "Tomas", "Asha", "Vek", "Petra", "Idris",
-    "Yara", "Leong", "Sienna", "Harlan",
-];
-
-const NPC_LAST_NAMES: [&str; 20] = [
-    "Solari", "Voss", "Kessler", "Okafor", "Tannen", "Haig", "Reyes",
-    "Strand", "Vasil", "Torren", "Ashcroft", "Nazari", "Brennan", "Loh",
-    "Duval", "Mikkelsen", "Achebe", "Cross", "Sato", "Kaur",
-];
-
-/// Title and bio template per faction category.
-fn npc_template_for_category(category: FactionCategory) -> (&'static str, &'static str) {
-    match category {
-        FactionCategory::Military => (
-            "Garrison Commander",
-            "Career officer posted here to maintain order. Efficient, formal, \
-             evaluates everyone by whether they're useful or a problem.",
-        ),
-        FactionCategory::Economic => (
-            "Trade Liaison",
-            "Manages commercial operations and trade agreements. Knows the price \
-             of everything and the value of reliable partners.",
-        ),
-        FactionCategory::Guild => (
-            "Guild Factor",
-            "The local representative of the Corridor Guild. Handles contracts, \
-             repairs, and the quiet logistics that keep ships moving.",
-        ),
-        FactionCategory::Criminal => (
-            "Fixer",
-            "Operates in the spaces between official channels. Knows who needs \
-             what moved and who doesn't ask questions.",
-        ),
-        FactionCategory::Religious => (
-            "Prior",
-            "Tends to the spiritual needs of travelers and locals. Speaks carefully, \
-             listens more carefully, knows things about distorted space.",
-        ),
-        FactionCategory::Academic => (
-            "Research Coordinator",
-            "Manages scientific operations and data collection. Perpetually underfunded, \
-             perpetually curious.",
-        ),
-        FactionCategory::Political => (
-            "Administrator",
-            "The local face of governance. Manages disputes, allocates resources, \
-             and tries to keep everyone from each other's throats.",
-        ),
-    }
-}
-
 /// Generate permanent NPCs for systems with Colony+ infrastructure.
-/// One NPC per major faction presence at each qualifying system.
+///
+/// Uses `data/templates/people.json` for name pools, role templates,
+/// personality biases, and knowledge pools. Procedural personality
+/// generation combines faction bias, civ ethos influence, and noise
+/// to create distinct characters. Connections are generated between
+/// NPCs at the same system and sparsely across systems.
 fn generate_npcs(
     systems: &[StarSystem],
     factions: &[Faction],
+    civs: &[Civilization],
     rng: &mut StdRng,
 ) -> Vec<Npc> {
-    let mut npcs = Vec::new();
-    let mut name_idx = 0usize;
+    let pt = templates::load_people_templates();
+    let mut npcs: Vec<Npc> = Vec::new();
+    let mut used_names: Vec<String> = Vec::new();
 
     for system in systems {
         // Only systems with real infrastructure get NPCs.
-        let infra_rank = match system.infrastructure_level {
+        let max_npcs = match system.infrastructure_level {
             InfrastructureLevel::None | InfrastructureLevel::Outpost => continue,
             InfrastructureLevel::Colony => 1,
             InfrastructureLevel::Established => 2,
             InfrastructureLevel::Hub => 3,
-            InfrastructureLevel::Capital => 3,
+            InfrastructureLevel::Capital => 4,
         };
 
         // Find dockable locations sorted by infrastructure (best first).
@@ -2013,12 +1968,16 @@ fn generate_npcs(
             continue;
         }
 
-        // Pick the top faction presences by strength, up to infra_rank.
+        // Pick top faction presences by strength.
         let mut presences: Vec<&FactionPresence> = system.faction_presence.iter()
             .filter(|fp| fp.strength >= 0.3)
             .collect();
         presences.sort_by(|a, b| b.strength.partial_cmp(&a.strength).unwrap());
-        presences.truncate(infra_rank);
+        presences.truncate(max_npcs);
+
+        // Look up the controlling civ for culture-tagged names.
+        let controlling_civ = system.controlling_civ
+            .and_then(|cid| civs.iter().find(|c| c.id == cid));
 
         for (fi, presence) in presences.iter().enumerate() {
             let faction = match factions.iter().find(|f| f.id == presence.faction_id) {
@@ -2026,42 +1985,377 @@ fn generate_npcs(
                 None => continue,
             };
 
-            let (title, bio) = npc_template_for_category(faction.category);
+            let category_key = faction_category_key(faction.category);
 
-            // Deterministic name selection using a rotating index + rng.
-            let first = NPC_FIRST_NAMES[name_idx % NPC_FIRST_NAMES.len()];
-            let last_offset: usize = rng.gen_range(0..NPC_LAST_NAMES.len());
-            let last = NPC_LAST_NAMES[(name_idx + last_offset) % NPC_LAST_NAMES.len()];
-            name_idx += 1;
+            // --- Species ---
+            let species = pick_species(&pt, &category_key, rng);
 
-            // Assign to a dockable location. Spread NPCs across locations.
+            // --- Name ---
+            let name = pick_npc_name(&pt, &species, controlling_civ, &used_names, rng);
+            used_names.push(name.clone());
+
+            // --- Title ---
+            let role = match pt.roles.get(&category_key) {
+                Some(r) => r,
+                None => continue,
+            };
+            let title = pick_title(role, system.infrastructure_level, rng);
+
+            // --- Personality ---
+            let personality = generate_personality(role, controlling_civ, &species, rng);
+
+            // --- Bio ---
+            let personality_note = personality.dominant_description();
+            let species_key = if species.is_human() { "human" } else { "synthetic" };
+            let bio = pick_bio(role, species_key, &system.name, personality_note, &species, rng);
+
+            // --- Motivations ---
+            let motivations = pick_items(&role.motivation_pool, 2, 3, rng);
+
+            // --- Knowledge ---
+            let knowledge = pick_items(&role.knowledge_pool, 2, 4, rng);
+
+            // --- Background tags ---
+            let background_tags = pick_items(&role.background_tags, 1, 2, rng);
+
+            // --- Assemble ---
             let loc = dockable_locs[fi % dockable_locs.len()];
 
             let mut npc = Npc::new(
-                format!("{} {}", first, last),
+                name,
                 title,
+                species,
                 Some(faction.id),
                 system.id,
                 bio,
             );
             npc.home_location_id = Some(loc.id);
-
-            // Add a motivation based on faction category.
-            npc.motivations.push(match faction.category {
-                FactionCategory::Military => "maintain order and security".into(),
-                FactionCategory::Economic => "expand trade routes and profits".into(),
-                FactionCategory::Guild => "keep ships flying and contracts honored".into(),
-                FactionCategory::Criminal => "move goods, avoid attention".into(),
-                FactionCategory::Religious => "understand the distortions".into(),
-                FactionCategory::Academic => "gather data, publish findings".into(),
-                FactionCategory::Political => "keep the peace, grow influence".into(),
-            });
+            npc.origin_civ_id = system.controlling_civ;
+            npc.personality = personality;
+            npc.motivations = motivations;
+            npc.knowledge = knowledge;
+            npc.background_tags = background_tags;
 
             npcs.push(npc);
         }
     }
 
+    // --- Generate connections between NPCs ---
+    generate_npc_connections(&mut npcs, rng);
+
     npcs
+}
+
+/// Map FactionCategory to the string key used in people.json.
+fn faction_category_key(category: FactionCategory) -> String {
+    match category {
+        FactionCategory::Military => "military",
+        FactionCategory::Economic => "economic",
+        FactionCategory::Guild => "guild",
+        FactionCategory::Criminal => "criminal",
+        FactionCategory::Religious => "religious",
+        FactionCategory::Academic => "academic",
+        FactionCategory::Political => "political",
+    }.into()
+}
+
+/// Pick a species based on the faction's distribution weights.
+fn pick_species(
+    pt: &templates::PeopleTemplates,
+    category_key: &str,
+    rng: &mut StdRng,
+) -> Species {
+    let dist = pt.species_distribution.get(category_key);
+    let human_weight = dist.and_then(|d| d.get("human")).copied().unwrap_or(0.9);
+    let synth_weight = dist.and_then(|d| d.get("synthetic")).copied().unwrap_or(0.1);
+
+    let roll: f64 = rng.gen();
+    if roll < human_weight {
+        let sex = if rng.gen_bool(0.5) {
+            BiologicalSex::Male
+        } else {
+            BiologicalSex::Female
+        };
+        Species::Human { sex }
+    } else if roll < human_weight + synth_weight {
+        let chassis = &pt.name_pools.synthetic.chassis_types;
+        let chassis_str = if chassis.is_empty() {
+            "humanoid frame".into()
+        } else {
+            chassis[rng.gen_range(0..chassis.len())].clone()
+        };
+        Species::Synthetic { chassis: chassis_str }
+    } else {
+        // Alien placeholder — rare in the Near Reach.
+        Species::Human {
+            sex: if rng.gen_bool(0.5) { BiologicalSex::Male } else { BiologicalSex::Female },
+        }
+    }
+}
+
+/// Pick a name based on species and cultural context.
+fn pick_npc_name(
+    pt: &templates::PeopleTemplates,
+    species: &Species,
+    controlling_civ: Option<&Civilization>,
+    used_names: &[String],
+    rng: &mut StdRng,
+) -> String {
+    match species {
+        Species::Human { sex } => {
+            // Try culture-tagged pool first, fall back to default.
+            let name_set = controlling_civ
+                .and_then(|civ| {
+                    // Check civ name prefix for culture matching.
+                    let civ_lower = civ.name.to_lowercase();
+                    for (tag, pool) in &pt.name_pools.human.by_culture_tag {
+                        // Match if civ name contains the tag or vice versa.
+                        if civ_lower.contains(tag) || tag.contains(&civ_lower.split_whitespace().next().unwrap_or("").to_lowercase()) {
+                            return Some(pool);
+                        }
+                    }
+                    None
+                })
+                .unwrap_or(&pt.name_pools.human.default);
+
+            let given_pool = match sex {
+                BiologicalSex::Male => &name_set.given_male,
+                BiologicalSex::Female => &name_set.given_female,
+            };
+
+            // Try up to 10 times to find a unique name.
+            for _ in 0..10 {
+                let given = &given_pool[rng.gen_range(0..given_pool.len())];
+                let family = &name_set.family[rng.gen_range(0..name_set.family.len())];
+                let full = format!("{} {}", given, family);
+                if !used_names.contains(&full) {
+                    return full;
+                }
+            }
+            // Fallback: just pick something.
+            let given = &given_pool[rng.gen_range(0..given_pool.len())];
+            let family = &name_set.family[rng.gen_range(0..name_set.family.len())];
+            format!("{} {}", given, family)
+        }
+        Species::Synthetic { .. } => {
+            let pools = &pt.name_pools.synthetic;
+            if rng.gen_bool(0.5) && !pools.adopted_names.is_empty() {
+                pools.adopted_names[rng.gen_range(0..pools.adopted_names.len())].clone()
+            } else if !pools.designations.is_empty() {
+                pools.designations[rng.gen_range(0..pools.designations.len())].clone()
+            } else {
+                "Unit".into()
+            }
+        }
+        Species::Alien { kind, .. } => {
+            format!("{} envoy", kind)
+        }
+    }
+}
+
+/// Pick a title from role templates, filtered by infrastructure level.
+fn pick_title(
+    role: &templates::RoleTemplate,
+    infra: InfrastructureLevel,
+    rng: &mut StdRng,
+) -> String {
+    let eligible: Vec<&templates::TitleEntry> = role.titles.iter()
+        .filter(|t| {
+            let min = parse_infra_level(&t.min_infra);
+            infra_level_rank(infra) >= infra_level_rank(min)
+        })
+        .collect();
+
+    if eligible.is_empty() {
+        return role.titles.first()
+            .map(|t| t.title.clone())
+            .unwrap_or_else(|| "Representative".into());
+    }
+
+    // Weighted selection.
+    let total: f64 = eligible.iter().map(|t| t.weight).sum();
+    let mut roll = rng.gen::<f64>() * total;
+    for entry in &eligible {
+        roll -= entry.weight;
+        if roll <= 0.0 {
+            return entry.title.clone();
+        }
+    }
+    eligible.last().unwrap().title.clone()
+}
+
+fn parse_infra_level(s: &str) -> InfrastructureLevel {
+    match s.to_lowercase().as_str() {
+        "none" => InfrastructureLevel::None,
+        "outpost" => InfrastructureLevel::Outpost,
+        "colony" => InfrastructureLevel::Colony,
+        "established" => InfrastructureLevel::Established,
+        "hub" => InfrastructureLevel::Hub,
+        "capital" => InfrastructureLevel::Capital,
+        _ => InfrastructureLevel::None,
+    }
+}
+
+fn infra_level_rank(level: InfrastructureLevel) -> u8 {
+    match level {
+        InfrastructureLevel::None => 0,
+        InfrastructureLevel::Outpost => 1,
+        InfrastructureLevel::Colony => 2,
+        InfrastructureLevel::Established => 3,
+        InfrastructureLevel::Hub => 4,
+        InfrastructureLevel::Capital => 5,
+    }
+}
+
+/// Generate personality from faction bias + civ ethos + noise.
+fn generate_personality(
+    role: &templates::RoleTemplate,
+    controlling_civ: Option<&Civilization>,
+    species: &Species,
+    rng: &mut StdRng,
+) -> NpcPersonality {
+    let bias = &role.personality_bias;
+
+    // Start with faction category bias range, pick a value within it.
+    let warmth_range = bias.get("warmth").map(|v| (v[0], v[1])).unwrap_or((0.2, 0.8));
+    let boldness_range = bias.get("boldness").map(|v| (v[0], v[1])).unwrap_or((0.2, 0.8));
+    let idealism_range = bias.get("idealism").map(|v| (v[0], v[1])).unwrap_or((0.2, 0.8));
+
+    let mut warmth = rng.gen_range(warmth_range.0..=warmth_range.1);
+    let mut boldness = rng.gen_range(boldness_range.0..=boldness_range.1);
+    let mut idealism = rng.gen_range(idealism_range.0..=idealism_range.1);
+
+    // Civ ethos influence (subtle).
+    if let Some(civ) = controlling_civ {
+        let e = &civ.ethos;
+        boldness += (e.militaristic - 0.5) * 0.1;
+        idealism += (e.theocratic + e.communal - 1.0) * 0.05;
+        warmth += (e.diplomatic - 0.5) * 0.1;
+    }
+
+    // Synthetic modifier: warmth tends lower, boldness and idealism vary.
+    if species.is_synthetic() {
+        warmth = (warmth * 0.6).max(0.05);
+    }
+
+    // Noise.
+    warmth += rng.gen_range(-0.1..=0.1);
+    boldness += rng.gen_range(-0.1..=0.1);
+    idealism += rng.gen_range(-0.1..=0.1);
+
+    NpcPersonality {
+        warmth: warmth.clamp(0.0, 1.0),
+        boldness: boldness.clamp(0.0, 1.0),
+        idealism: idealism.clamp(0.0, 1.0),
+    }
+}
+
+/// Pick a bio template and fill placeholders.
+fn pick_bio(
+    role: &templates::RoleTemplate,
+    species_key: &str,
+    system_name: &str,
+    personality_note: &str,
+    species: &Species,
+    rng: &mut StdRng,
+) -> String {
+    let templates = role.bio_templates
+        .get(species_key)
+        .or_else(|| role.bio_templates.get("human"))
+        .cloned()
+        .unwrap_or_default();
+
+    if templates.is_empty() {
+        return format!("Posted at {}. {}.", system_name, personality_note);
+    }
+
+    let template = &templates[rng.gen_range(0..templates.len())];
+    let pronouns = species.default_pronouns();
+    template
+        .replace("{system}", system_name)
+        .replace("{personality_note}", personality_note)
+        .replace("{pronoun.subject}", &pronouns.subject)
+        .replace("{pronoun.object}", &pronouns.object)
+        .replace("{pronoun.possessive}", &pronouns.possessive)
+        .replace("{pronoun.subject_cap}", &pronouns.subject_cap)
+}
+
+/// Pick a random subset of items from a pool.
+fn pick_items(pool: &[String], min: usize, max: usize, rng: &mut StdRng) -> Vec<String> {
+    if pool.is_empty() {
+        return Vec::new();
+    }
+    let count = rng.gen_range(min..=max).min(pool.len());
+    let mut indices: Vec<usize> = (0..pool.len()).collect();
+    // Fisher-Yates partial shuffle.
+    for i in 0..count {
+        let j = rng.gen_range(i..indices.len());
+        indices.swap(i, j);
+    }
+    indices[..count].iter().map(|&i| pool[i].clone()).collect()
+}
+
+/// Generate connections between NPCs at the same system and across systems.
+fn generate_npc_connections(npcs: &mut Vec<Npc>, rng: &mut StdRng) {
+    let npc_count = npcs.len();
+
+    // Collect NPC info for connection generation (avoid borrow issues).
+    let npc_info: Vec<(Uuid, Uuid, Option<Uuid>, f32, f32)> = npcs.iter()
+        .map(|n| (n.id, n.home_system_id, n.faction_id, n.personality.warmth, n.personality.boldness))
+        .collect();
+
+    for i in 0..npc_count {
+        for j in (i + 1)..npc_count {
+            let (id_a, sys_a, fac_a, warmth_a, bold_a) = npc_info[i];
+            let (id_b, sys_b, fac_b, warmth_b, bold_b) = npc_info[j];
+
+            let same_system = sys_a == sys_b;
+            let same_faction = fac_a.is_some() && fac_a == fac_b;
+
+            // Determine if a connection exists and what type.
+            let connection = if same_system && same_faction {
+                // Always connected. Type depends on personality.
+                let boldness_diff = (bold_a - bold_b).abs();
+                if boldness_diff > 0.4 {
+                    Some(NpcRelationType::Rival)
+                } else if warmth_a > 0.5 && warmth_b > 0.5 {
+                    Some(NpcRelationType::OldFriend)
+                } else {
+                    Some(NpcRelationType::Colleague)
+                }
+            } else if same_system {
+                // Cross-faction, same system. Connection likely.
+                if warmth_a > 0.5 || warmth_b > 0.5 {
+                    Some(NpcRelationType::Acquaintance)
+                } else {
+                    Some(NpcRelationType::KnowsOf)
+                }
+            } else if same_faction {
+                // Same faction, different system. 30% chance.
+                if rng.gen_bool(0.3) {
+                    Some(NpcRelationType::Colleague)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            if let Some(rel_type) = connection {
+                let context = format!("{}", rel_type); // Placeholder — template-driven later.
+                npcs[i].connections.push(NpcConnection {
+                    npc_id: id_b,
+                    relationship: rel_type,
+                    context: context.clone(),
+                });
+                npcs[j].connections.push(NpcConnection {
+                    npc_id: id_a,
+                    relationship: rel_type,
+                    context,
+                });
+            }
+        }
+    }
 }
 
 // ===========================================================================
@@ -2719,6 +3013,76 @@ mod tests {
             "Capital {} should have at least one NPC", capital.name);
         for npc in &capital_npcs {
             println!("  {} — {}", npc.name, npc.title);
+        }
+    }
+
+    #[test]
+    fn npcs_have_personality() {
+        let galaxy = generate_galaxy(42);
+        for npc in &galaxy.npcs {
+            let p = &npc.personality;
+            assert!(p.warmth >= 0.0 && p.warmth <= 1.0,
+                "NPC {} warmth out of range: {}", npc.name, p.warmth);
+            assert!(p.boldness >= 0.0 && p.boldness <= 1.0,
+                "NPC {} boldness out of range: {}", npc.name, p.boldness);
+            assert!(p.idealism >= 0.0 && p.idealism <= 1.0,
+                "NPC {} idealism out of range: {}", npc.name, p.idealism);
+        }
+    }
+
+    #[test]
+    fn npcs_have_species_and_pronouns() {
+        let galaxy = generate_galaxy(42);
+        for npc in &galaxy.npcs {
+            // Pronouns should be non-empty.
+            assert!(!npc.pronouns.subject.is_empty(),
+                "NPC {} should have pronouns", npc.name);
+            // Species display label should work.
+            let label = npc.species.display_label();
+            assert!(!label.is_empty(),
+                "NPC {} species label should be non-empty", npc.name);
+        }
+    }
+
+    #[test]
+    fn npcs_have_motivations_and_knowledge() {
+        let galaxy = generate_galaxy(42);
+        for npc in &galaxy.npcs {
+            assert!(!npc.motivations.is_empty(),
+                "NPC {} should have motivations", npc.name);
+            assert!(!npc.knowledge.is_empty(),
+                "NPC {} should have knowledge", npc.name);
+        }
+    }
+
+    #[test]
+    fn npcs_have_connections() {
+        let galaxy = generate_galaxy(42);
+        // At systems with multiple NPCs, they should have connections.
+        let mut any_connected = false;
+        for npc in &galaxy.npcs {
+            if !npc.connections.is_empty() {
+                any_connected = true;
+                for conn in &npc.connections {
+                    // Connection target should exist.
+                    assert!(galaxy.npcs.iter().any(|n| n.id == conn.npc_id),
+                        "NPC {} has connection to non-existent NPC", npc.name);
+                }
+            }
+        }
+        assert!(any_connected, "At least some NPCs should have connections");
+    }
+
+    #[test]
+    fn npc_bios_contain_no_raw_placeholders() {
+        let galaxy = generate_galaxy(42);
+        for npc in &galaxy.npcs {
+            assert!(!npc.bio.contains("{system}"),
+                "NPC {} bio has unfilled {{system}} placeholder: {}", npc.name, npc.bio);
+            assert!(!npc.bio.contains("{personality_note}"),
+                "NPC {} bio has unfilled {{personality_note}} placeholder", npc.name);
+            assert!(!npc.bio.contains("{pronoun."),
+                "NPC {} bio has unfilled pronoun placeholder: {}", npc.name, npc.bio);
         }
     }
 

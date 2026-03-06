@@ -1,0 +1,1117 @@
+[
+  {
+    "id": "distress_signal",
+    "encounter_type": "novel",
+    "tone": "tense",
+    "context_requirements": {
+      "location_types": [
+        "deep_space",
+        "asteroid_belt"
+      ]
+    },
+    "text": "Your comms officer adjusts her console twice before saying anything.\n\n\"Signal. Automated distress beacon, standard Hegemony format. But the encoding is... old. This protocol was deprecated decades ago.\"\n\nThe signal resolves into coordinates — a point in the outer system, near the gas giant's third moon. No ship appears on sensors. Just the signal, repeating patiently in a language nobody uses anymore.\n\nIt could be a ship that's been drifting since before you left your last port. It could be a lure. It could be someone who's been waiting a very long time for help that was never coming.",
+    "choices": [
+      {
+        "label": "Investigate the coordinates",
+        "tone_note": "Committing. Whatever it is, you'll know.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -5.0
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.1
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Investigated the signal source. Found something — wreckage, or a beacon, or something stranger. The data needs analysis."
+          },
+          {
+            "type": "narrative",
+            "text": "Followed the signal. What you found raises more questions than it answers."
+          }
+        ]
+      },
+      {
+        "label": "Scan from here first",
+        "tone_note": "Cautious. Information before commitment.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -2.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Long-range scan of the signal source reveals metallic mass, no power signature, and an age estimate that doesn't match anything in the records."
+          },
+          {
+            "type": "narrative",
+            "text": "Scanned from a safe distance. The data is strange but useful."
+          }
+        ]
+      },
+      {
+        "label": "Log it and move on",
+        "tone_note": "You can't save everyone. You learned that a long time ago.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "Noted the coordinates. Moved on."
+          }
+        ]
+      }
+    ],
+    "category": "exploration",
+    "priority": 1
+  },
+  {
+    "id": "ancient_structure",
+    "encounter_type": "novel",
+    "tone": "wonder",
+    "context_requirements": {
+      "infrastructure_max": "outpost",
+      "tags": [
+        "ancient"
+      ],
+      "location_types": [
+        "deep_space",
+        "planet_surface"
+      ]
+    },
+    "text": "It doesn't show up on sensors until you're almost on top of it.\n\nA structure, orbiting the outermost planet at a distance that shouldn't be stable. No power readings. No heat signature. But it's there — angular, enormous, made of something your sensors can't identify. The material doesn't reflect light the way anything should. It's like looking at a hole in the shape of architecture.\n\nYour science officer pulls up comparative databases and comes back with nothing. No known civilization has built with this material. No record of this structure in any survey.\n\nIt's been here longer than anyone has been looking.\n\nThe crew is quiet. Everyone finds a reason to be near a viewport.",
+    "choices": [
+      {
+        "label": "Approach and attempt to dock",
+        "tone_note": "Awe overriding caution. This is why you're out here.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": 0.15
+          },
+          {
+            "type": "crew_mood",
+            "mood": "inspired",
+            "all": true
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Docked with an ancient structure of unknown origin. The interior defies easy description. Sensors recorded data that will take weeks to analyze."
+          },
+          {
+            "type": "trust_professional",
+            "delta": 0.05
+          },
+          {
+            "type": "narrative",
+            "text": "You went inside. What you found will take time to understand."
+          }
+        ]
+      },
+      {
+        "label": "Send a probe first",
+        "tone_note": "Fascination with restraint.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Probe returned data from the ancient structure. Partial readings — enough to confirm it's artificial, not enough to explain it."
+          },
+          {
+            "type": "narrative",
+            "text": "The probe came back. Most of the data is incomprehensible."
+          }
+        ]
+      },
+      {
+        "label": "Record everything and keep your distance",
+        "tone_note": "Some things you document. Some things you don't touch.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Recorded external observations of an ancient structure. Detailed but distant."
+          },
+          {
+            "type": "narrative",
+            "text": "Documented everything from a safe distance."
+          }
+        ]
+      },
+      {
+        "label": "Leave immediately",
+        "tone_note": "Fear. The smart kind.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -10.0
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.1
+          },
+          {
+            "type": "narrative",
+            "text": "Burned hard and got clear. Cost fuel, saved everything else."
+          }
+        ]
+      }
+    ],
+    "category": "exploration",
+    "priority": 1
+  },
+  {
+    "id": "derelict_encounter",
+    "encounter_type": "novel",
+    "tone": "melancholy",
+    "context_requirements": {
+      "location_types": [
+        "deep_space",
+        "asteroid_belt"
+      ]
+    },
+    "text": "The ship is dead. No power, no atmosphere, turning slowly end over end in a decaying orbit. Your sensors read the hull markings — a freighter, civilian registration, last port of call unknown.\n\nThe damage isn't weapons fire. It's neglect. Systems failed one by one over what looks like months. The logs, if any survived, might tell the story. Or they might just be a list of things that stopped working, ending mid-sentence.\n\nSomeone lived here once. Flew this ship, ate meals in that galley, slept in those quarters. Chose a heading and opened the throttle and believed they were going somewhere that mattered.\n\nYour engineer says it might have salvageable parts. Your navigator says nothing.",
+    "choices": [
+      {
+        "label": "Board and search for survivors or logs",
+        "tone_note": "Obligation. Or curiosity wearing the mask of obligation.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": 0.1
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Found something on the derelict — a log fragment, a name, a heading. Someone was looking for the same signal."
+          },
+          {
+            "type": "narrative",
+            "text": "The derelict held no survivors, but it held a story."
+          }
+        ]
+      },
+      {
+        "label": "Salvage what you can",
+        "tone_note": "Practical. The dead don't need engine parts.",
+        "effects": [
+          {
+            "type": "hull",
+            "delta": 0.1
+          },
+          {
+            "type": "repair_module",
+            "module": "engine",
+            "amount": 0.1
+          },
+          {
+            "type": "resources",
+            "delta": 50.0
+          },
+          {
+            "type": "crew_mood",
+            "mood": "determined"
+          },
+          {
+            "type": "narrative",
+            "text": "Stripped what was useful. Practical. Necessary."
+          }
+        ]
+      },
+      {
+        "label": "Log the position and leave it",
+        "tone_note": "A grave marker in coordinates.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "Noted the coordinates. Moved on."
+          }
+        ]
+      }
+    ],
+    "category": "exploration",
+    "priority": 1
+  },
+  {
+    "id": "abandoned_colony",
+    "encounter_type": "contextual",
+    "tone": "melancholy",
+    "context_requirements": {
+      "infrastructure_min": "outpost",
+      "infrastructure_max": "colony",
+      "location_types": [
+        "planet_surface",
+        "moon"
+      ]
+    },
+    "text": "The colony is there on sensors — structures, power grid, atmospheric processors — but nobody answers the hail.\n\nFrom orbit, the settlement looks intact. Buildings standing, roads visible, landing pad clear. But there are no lights. No heat signatures. No electromagnetic noise of a living community — no broadcasts, no chatter, no machines running their daily cycles.\n\nThe atmospheric processors are still working, slowly, on automatic. They'll keep going for years without maintenance. The air will be breathable for anyone who arrives. But nobody is arriving and nobody is breathing it.\n\nThe colony logs, if they still exist down there, might explain where everyone went. Or they might just stop, mid-entry, on an ordinary day.",
+    "choices": [
+      {
+        "label": "Land and investigate",
+        "tone_note": "Walking through someone else's abandoned life.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": 0.1
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Explored the abandoned colony. Logs stop mid-entry. No signs of violence, no signs of evacuation. People just... stopped being here."
+          },
+          {
+            "type": "narrative",
+            "text": "Walked through empty streets. The silence had weight."
+          }
+        ]
+      },
+      {
+        "label": "Scan for survivors from orbit",
+        "tone_note": "Hope tempered by distance.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -1.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Orbital scan of the abandoned colony shows intact infrastructure, working atmosphere processors, and no biological signatures. Whatever happened, it wasn't structural failure."
+          },
+          {
+            "type": "narrative",
+            "text": "Scanned from orbit. The colony is intact. Just empty."
+          }
+        ]
+      },
+      {
+        "label": "Mark it on the charts and move on",
+        "tone_note": "You can't help the absent. But you can note they were here.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "Noted the coordinates. Moved on."
+          }
+        ]
+      }
+    ],
+    "category": "exploration",
+    "priority": 1
+  },
+  {
+    "id": "strange_signal_deep",
+    "encounter_type": "novel",
+    "tone": "wonder",
+    "context_requirements": {
+      "infrastructure_max": "outpost",
+      "location_types": [
+        "deep_space"
+      ]
+    },
+    "text": "It's not a distress call and it's not a beacon. Your comms officer can't classify it because it doesn't fit any classification.\n\nThe signal is mathematical — that much is clear. Repeating sequences with internal structure, prime number intervals, nested patterns that resolve and then complicate. It's coming from deep in the outer system, past the last planetary orbit, from a point in space where nothing should be.\n\n\"It's not random,\" your science officer says, unnecessarily. \"And it's not any encoding I recognize.\"\n\nThe signal has been broadcasting for a while. Your sensors can estimate power output, and at this level, whatever is generating it has been running for a long time. Centuries, minimum.\n\nPatient. Unhurried. Waiting for someone to listen.",
+    "choices": [
+      {
+        "label": "Follow the signal to its source",
+        "tone_note": "This is the kind of thing you crossed light-years to find.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -5.0
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.1
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Investigated the signal source. Found something — wreckage, or a beacon, or something stranger. The data needs analysis."
+          },
+          {
+            "type": "narrative",
+            "text": "Followed the signal. What you found raises more questions than it answers."
+          }
+        ]
+      },
+      {
+        "label": "Record and analyze from here",
+        "tone_note": "Understanding before approaching.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -3.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Signal analysis reveals nested mathematical structures — prime sequences, fractal patterns, and something that might be a coordinate system. It's not random. It's not any known encoding."
+          },
+          {
+            "type": "narrative",
+            "text": "Spent hours on the analysis. The signal is deliberate, ancient, and patient."
+          }
+        ],
+        "follows": {
+          "event_id": "signal_echo_arrival",
+          "delay": "next_arrival"
+        }
+      },
+      {
+        "label": "Transmit a response",
+        "tone_note": "Bold. Possibly reckless. Undeniably human.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -2.0
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.15
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Transmitted a response to the unknown signal. The signal paused for three seconds — the first interruption in centuries of repetition — then resumed with a new pattern."
+          },
+          {
+            "type": "narrative",
+            "text": "You spoke into the void. Something heard you."
+          }
+        ],
+        "follows": {
+          "event_id": "signal_echo_arrival",
+          "delay": "next_arrival"
+        }
+      },
+      {
+        "label": "Note the coordinates and continue",
+        "tone_note": "Not everything that calls to you needs answering. Not today.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "Noted the coordinates. Moved on."
+          }
+        ]
+      }
+    ],
+    "category": "exploration",
+    "priority": 1
+  },
+  {
+    "id": "colony_generations",
+    "encounter_type": "contextual",
+    "tone": "wonder",
+    "context_requirements": {
+      "infrastructure_min": "colony",
+      "time_since_last_visit_galactic_years_min": 50.0,
+      "location_types": [
+        "planet_surface",
+        "moon"
+      ]
+    },
+    "text": "The colony at {system.name} has grown.\n\nLast time you were here — your time, months ago; their time, generations — it was a cluster of prefabs and determination. Now there's a city. Not a large city, not by any standard that matters, but a real one. Streets with names. A school. Arguments about zoning.\n\nA delegation meets you at the landing pad. They're formal, a little nervous. You recognize the family resemblance in the lead official — the jaw, the way she stands. Her grandmother stood in this same spot when it was bare soil and hope.\n\nThere's a monument near the landing pad. A plaque with names on it. Founders. You recognize some of them.\n\nThe official follows your gaze. \"We teach about the early days in school,\" she says. \"The children think it's ancient history.\"",
+    "choices": [
+      {
+        "label": "Tell her about the founders you knew",
+        "tone_note": "Living memory offered to people who only have records.",
+        "effects": [
+          {
+            "type": "trust_personal",
+            "delta": 0.1
+          },
+          {
+            "type": "crew_stress",
+            "delta": -0.05
+          },
+          {
+            "type": "narrative",
+            "text": "Told her stories about people she'd only read about. Her eyes were bright. Yours were not."
+          }
+        ]
+      },
+      {
+        "label": "Ask to see how the colony has changed",
+        "tone_note": "Seeing what time builds when you're not watching.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": -0.05
+          },
+          {
+            "type": "crew_mood",
+            "mood": "inspired",
+            "all": true
+          },
+          {
+            "type": "narrative",
+            "text": "They showed you the city. The school, the market, the park they named after someone you once knew."
+          }
+        ]
+      },
+      {
+        "label": "Conduct your business and move on",
+        "tone_note": "You've learned not to linger in places that moved on without you.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": 15.0
+          },
+          {
+            "type": "resources",
+            "delta": -40.0
+          },
+          {
+            "type": "hull",
+            "delta": 0.05
+          },
+          {
+            "type": "narrative",
+            "text": "Resupplied. The ship feels a little more whole."
+          }
+        ]
+      }
+    ],
+    "category": "exploration",
+    "priority": 1
+  },
+  {
+    "id": "intent_investigate_anomaly",
+    "encounter_type": "investigation",
+    "tone": "wonder",
+    "intents": [
+      "investigate"
+    ],
+    "context_requirements": {
+      "time_factor_min": 1.5,
+      "tags": [
+        "anomaly",
+        "mystery",
+        "exploration"
+      ],
+      "location_types": [
+        "deep_space",
+        "asteroid_belt"
+      ]
+    },
+    "text": "Your sensors flag something that shouldn't be here — a pocket of spacetime where the readings fold back on themselves like a page corner. Not dangerous, not yet, but deeply wrong in a way that makes your navigator go quiet.\n\nCloser scans reveal structure within the anomaly. Patterns that look almost deliberate. Your science officer wants to deploy probes. Your engineer wants to leave. Both make good arguments.",
+    "choices": [
+      {
+        "label": "Deploy probes and analyze at safe distance",
+        "tone_note": "Careful, methodical wonder. The awe of the careful mind.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -5.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Anomaly readings suggest deliberate structure — someone or something built this"
+          },
+          {
+            "type": "narrative",
+            "text": "The data streams back slowly, each packet stranger than the last."
+          }
+        ]
+      },
+      {
+        "label": "Move closer for direct sensor readings",
+        "tone_note": "Reckless curiosity. The readings are extraordinary. The cost might be too.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -3.0
+          },
+          {
+            "type": "hull",
+            "delta": -0.05
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Direct exposure to the anomaly revealed something your instruments can barely describe"
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.1
+          }
+        ]
+      },
+      {
+        "label": "Log the coordinates and move on",
+        "tone_note": "Restraint. Not every door needs to be opened.",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "You mark the anomaly on your charts. Some mysteries keep."
+          }
+        ]
+      }
+    ],
+    "category": "exploration",
+    "priority": 1
+  },
+  {
+    "id": "intent_investigate_ruin",
+    "encounter_type": "investigation",
+    "tone": "melancholy",
+    "intents": [
+      "investigate"
+    ],
+    "context_requirements": {
+      "tags": [
+        "ancient",
+        "exploration",
+        "mystery"
+      ],
+      "location_types": [
+        "planet_surface",
+        "moon",
+        "deep_space"
+      ]
+    },
+    "text": "The structure orbits the fourth planet like a second moon, except moons don't have right angles. It's old — your instruments can tell you that much, though they disagree on how old. Centuries? Millennia? The margin of error is embarrassing.\n\nAtmosphere scans show a breathable pocket inside, maintained by systems that still work despite everything. Someone built this to last. Whether they lasted too is the question your crew is carefully not asking.",
+    "choices": [
+      {
+        "label": "Send an away team to explore",
+        "tone_note": "The weight of deep time. Walking through someone else's abandoned home.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": 0.08
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "The ruin contained writing in a language your systems can almost parse"
+          },
+          {
+            "type": "narrative",
+            "text": "The team returns hours later, quiet and carrying samples."
+          }
+        ]
+      },
+      {
+        "label": "Scan remotely — don't risk the crew",
+        "tone_note": "Prudent. But some things can only be understood up close.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -3.0
+          },
+          {
+            "type": "narrative",
+            "text": "Remote scans reveal architectural details but miss whatever the builders left inside."
+          }
+        ]
+      },
+      {
+        "label": "Salvage what you can from the exterior",
+        "tone_note": "Practical. The dead don't need their possessions. Probably.",
+        "effects": [
+          {
+            "type": "resources",
+            "delta": 150.0
+          },
+          {
+            "type": "add_cargo",
+            "item": "ancient_fragment",
+            "quantity": 1
+          }
+        ]
+      }
+    ],
+    "category": "exploration",
+    "priority": 1
+  },
+  {
+    "id": "intent_scan_system",
+    "encounter_type": "scan",
+    "tone": "quiet",
+    "intents": [
+      "scan"
+    ],
+    "context_requirements": {
+      "tags": [
+        "exploration"
+      ]
+    },
+    "text": "Your sensor officer runs a deep sweep of the system — the kind that takes hours, not minutes. The bridge goes quiet as data accumulates, each pass revealing another layer of what this corner of space contains.\n\nMost of it is ordinary. Rocks and radiation and the ancient light of distant stars. But ordinary is relative, and your instruments are patient.",
+    "choices": [
+      {
+        "label": "Focus on astronomical data — star composition, orbital mechanics",
+        "tone_note": "The quiet satisfaction of knowing where you are in the universe.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -2.0
+          },
+          {
+            "type": "narrative",
+            "text": "The scan reveals detailed stellar data. Your navigator updates the charts with new precision."
+          }
+        ]
+      },
+      {
+        "label": "Scan for signals — artificial emissions, distress calls, anything deliberate",
+        "tone_note": "Listening for voices in the dark. Sometimes the dark answers.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -2.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "clue",
+            "description": "Long-range signal scan detected a repeating pattern from the outer system"
+          },
+          {
+            "type": "narrative",
+            "text": "The scan picks up something. Faint, regular, and definitely not natural."
+          }
+        ]
+      },
+      {
+        "label": "Quick sweep — don't waste the fuel",
+        "tone_note": "Impatient, practical. There's somewhere else to be.",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -1.0
+          },
+          {
+            "type": "narrative",
+            "text": "A cursory scan. Nothing obvious. But obvious things are rarely what matter."
+          }
+        ]
+      }
+    ],
+    "category": "exploration",
+    "priority": 1
+  },
+  {
+    "id": "derelict_boarding",
+    "encounter_type": "novel",
+    "tone": "tense",
+    "context_requirements": {
+      "location_types": [
+        "deep_space",
+        "asteroid_belt"
+      ]
+    },
+    "text": "Sensors pick up a hull drifting in the outer reaches of {system.name}. No power signature. No beacon. The design is unfamiliar — not Hegemony, not colonial. Something older.\n\n{crew.random.name} runs a structural scan. \"Intact enough to board. Atmosphere's gone, but the hull geometry suggests cargo bays amidships. Could be worth a look.\"\n\nThe {ship.name} pulls alongside. Through the viewport, the derelict's surface is pitted but unbreached. Whatever killed this ship, it wasn't weapons fire.",
+    "choices": [
+      {
+        "label": "Suit up and board",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -3.0
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.05
+          },
+          {
+            "type": "narrative",
+            "text": "Crossed the gap. The airlock opened easier than it should have."
+          }
+        ],
+        "tone_note": "Commitment. Whatever's in there, you'll see it firsthand.",
+        "follows": {
+          "event_id": "derelict_boarding_interior",
+          "delay": "immediate"
+        }
+      },
+      {
+        "label": "Send a remote probe instead",
+        "effects": [
+          {
+            "type": "fuel",
+            "delta": -1.0
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Probe footage from an unidentified derelict near {system.name}. The interior was dark. The probe lost signal after four minutes."
+          },
+          {
+            "type": "narrative",
+            "text": "The probe's feed cut out deep inside the ship. The last frame showed an open door that shouldn't have been open."
+          }
+        ],
+        "tone_note": "Cautious. You'll know less, but you'll be safe."
+      },
+      {
+        "label": "Mark the coordinates and move on",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Unidentified derelict catalogued near {system.name}. Never boarded."
+          },
+          {
+            "type": "narrative",
+            "text": "Filed the location. Someone else's mystery."
+          }
+        ],
+        "tone_note": "Pragmatic. Not every door needs to be opened."
+      }
+    ],
+    "category": "exploration",
+    "priority": 1
+  },
+  {
+    "id": "derelict_boarding_interior",
+    "encounter_type": "contextual",
+    "tone": "wonder",
+    "context_requirements": {
+      "location_types": [
+        "deep_space",
+        "asteroid_belt"
+      ]
+    },
+    "text": "The interior is wrong in ways that take a moment to register.\n\nThe corridors are the right shape for a ship — functional, braced, designed for people to move through. But the proportions are off. Ceilings too high. Doorways too wide. The handholds along the walls are spaced for someone with longer arms.\n\nDeeper in, you find what might be a bridge. The consoles are dark but intact. There's writing on the bulkheads — dense, layered script in a language your translator doesn't recognize. Not because it's corrupted. Because it was never in the database.\n\n{crew.random.name} finds something on what might be the captain's station. A small object, dense and warm to the touch even through suit gloves. It pulses faintly when held.",
+    "choices": [
+      {
+        "label": "Take the object back to the ship",
+        "effects": [
+          {
+            "type": "add_cargo",
+            "item": "Unknown artifact (derelict)",
+            "quantity": 1
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Recovered a pulsing artifact from an alien derelict. It responds to proximity. It might be responding to us."
+          },
+          {
+            "type": "crew_mood",
+            "mood": "anxious",
+            "all": true
+          },
+          {
+            "type": "narrative",
+            "text": "Brought it aboard. It's in the cargo bay now, pulsing steadily. No one sleeps well that first night."
+          }
+        ],
+        "tone_note": "Acquisitive. Curious. Maybe unwise."
+      },
+      {
+        "label": "Document everything but leave it",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Thorough scans of an alien derelict's interior. Script samples. Architectural measurements. Left the artifact in place."
+          },
+          {
+            "type": "trust_professional",
+            "delta": 0.05
+          },
+          {
+            "type": "narrative",
+            "text": "Recorded everything. Touched nothing. The professional choice, and the crew respects it."
+          }
+        ],
+        "tone_note": "Disciplined. The data matters more than the trophy."
+      },
+      {
+        "label": "Try to activate the consoles",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": 0.1
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Attempted to activate alien bridge consoles. Something responded. Brief burst of power through the derelict — lights, sounds in frequencies that hurt. Then silence. The ship's orientation shifted three degrees toward the galactic core."
+          },
+          {
+            "type": "damage_module",
+            "module": "sensors",
+            "amount": 0.15
+          },
+          {
+            "type": "narrative",
+            "text": "For two seconds, the ship was alive. Whatever it showed you in that moment, you can't quite remember. But you know it was pointing somewhere."
+          }
+        ],
+        "tone_note": "Bold. Reckless. The kind of thing that changes trajectories."
+      }
+    ],
+    "category": "exploration",
+    "priority": 1
+  },
+  {
+    "id": "signal_echo_arrival",
+    "encounter_type": "contextual",
+    "tone": "quiet",
+    "context_requirements": {
+      "location_types": [
+        "deep_space",
+        "asteroid_belt"
+      ]
+    },
+    "text": "As the {ship.name} drops out of FTL at {system.name}, {crew.random.name} looks up from the comms console with an expression you can't read.\n\n\"That signal. The one we recorded. It's here too.\"\n\nNot the same signal — the same structure. The same mathematical backbone, the same nested prime sequences. But the content is different. As if the signal at the last system was a question, and this one is part of the answer.\n\nIt's been waiting here. It might have been waiting everywhere.",
+    "choices": [
+      {
+        "label": "Cross-reference the two signals",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Two instances of the same signal structure at different systems. Cross-referencing reveals a spatial pattern — the signals form a bearing. Something is triangulating."
+          },
+          {
+            "type": "crew_mood",
+            "mood": "determined",
+            "all": false
+          },
+          {
+            "type": "narrative",
+            "text": "The math resolves into a direction. Not a location yet. But a direction."
+          }
+        ],
+        "tone_note": "Analytical. The pieces are connecting."
+      },
+      {
+        "label": "Record it and stay focused on the mission",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Second instance of the unknown signal recorded at {system.name}. Pattern is spreading. Not investigating further."
+          },
+          {
+            "type": "narrative",
+            "text": "Added to the file. The file is getting thick."
+          }
+        ],
+        "tone_note": "Disciplined. But it's getting harder to ignore."
+      }
+    ],
+    "category": "exploration",
+    "priority": 1
+  },
+  {
+    "id": "belt_salvage_find",
+    "encounter_type": "contextual",
+    "tone": "tense",
+    "context_requirements": {
+      "location_types": [
+        "asteroid_belt"
+      ]
+    },
+    "text": "Your sensors pick up a metallic signature among the asteroids — too regular to be natural. As you close in, the shape resolves: a cargo pod, still sealed, tumbling slowly between two house-sized rocks.\n\nThe markings have been scrubbed, but the pod is intact. Someone went to a lot of trouble to hide this here. Or lost it.",
+    "choices": [
+      {
+        "label": "Retrieve the pod",
+        "effects": [
+          {
+            "type": "add_cargo",
+            "item": "Salvaged cargo pod",
+            "quantity": 4
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Found a hidden cargo pod in the asteroid belt. No markings, no transponder. Someone hid this deliberately."
+          },
+          {
+            "type": "narrative",
+            "text": "Your crew hauls the pod aboard. It's heavier than it looks."
+          }
+        ],
+        "tone_note": "Curiosity and caution in equal measure."
+      },
+      {
+        "label": "Scan it from a distance and log the coordinates",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Located a hidden cargo pod in the belt. Coordinates logged but cargo left undisturbed."
+          },
+          {
+            "type": "narrative",
+            "text": "Safer this way. You note the coordinates and move on."
+          }
+        ],
+        "tone_note": "Prudent. Whatever's in there isn't worth the risk."
+      },
+      {
+        "label": "Leave it — could be bait",
+        "effects": [
+          {
+            "type": "narrative",
+            "text": "Could be salvage. Could be a trap. You don't need to find out which."
+          }
+        ],
+        "tone_note": "Hard-won wisdom."
+      }
+    ],
+    "category": "exploration",
+    "priority": 1
+  },
+  {
+    "id": "planet_surface_ruins",
+    "encounter_type": "contextual",
+    "tone": "wonder",
+    "intents": [
+      "investigate"
+    ],
+    "context_requirements": {
+      "location_types": [
+        "planet_surface",
+        "moon"
+      ]
+    },
+    "text": "The surface survey picks up geometric patterns beneath the topsoil — too precise for geology, too old for any known civilization. Your crew member calls you over:\n\n\"Captain, you'll want to see this.\"\n\nExcavation reveals carved stone, not native to this world. The symbols don't match anything in your database. They've been here for a very long time.",
+    "choices": [
+      {
+        "label": "Document everything and take samples",
+        "effects": [
+          {
+            "type": "add_cargo",
+            "item": "Xenoarchaeological samples",
+            "quantity": 2
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Found ancient alien ruins on a planetary surface. Carved symbols in non-native stone. Predates all known civilizations."
+          },
+          {
+            "type": "narrative",
+            "text": "Hours of careful work. Your science officer is practically vibrating with excitement."
+          }
+        ],
+        "tone_note": "The wonder of discovery. Arrival-like reverence."
+      },
+      {
+        "label": "Quick scan and move on — we're not archaeologists",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Detected ancient ruins on the surface. Basic scan logged but no detailed investigation conducted."
+          },
+          {
+            "type": "narrative",
+            "text": "The sensors capture what they can. Somewhere, a researcher would weep at your haste."
+          }
+        ],
+        "tone_note": "Pragmatic. You have a mission."
+      },
+      {
+        "label": "Mark the coordinates and report to the nearest faction",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "secret",
+            "description": "Reported alien ruins to local faction authorities. Coordinates shared. They seemed very interested."
+          },
+          {
+            "type": "trust_professional",
+            "delta": 0.05
+          },
+          {
+            "type": "narrative",
+            "text": "You file the report. The response comes back almost too quickly. They were already looking for something like this."
+          }
+        ],
+        "tone_note": "Responsible. But who benefits from this knowledge?"
+      }
+    ],
+    "category": "exploration",
+    "priority": 1
+  },
+  {
+    "id": "deep_space_anomaly_encounter",
+    "encounter_type": "novel",
+    "tone": "dread",
+    "context_requirements": {
+      "location_types": [
+        "deep_space"
+      ]
+    },
+    "text": "The anomaly doesn't look like anything. That's the problem.\n\nYour sensors insist something is here — mass, energy, a gravitational signature that bends light just enough to notice. But the viewport shows nothing. Empty space, stars behind it, everything normal.\n\nExcept the stars behind it are wrong. The constellations don't match your charts. As if whatever is here is showing you a different sky.\n\n{crew.random.name} says, very quietly: \"Captain, our chronometer just lost six minutes.\"",
+    "choices": [
+      {
+        "label": "Hold position. Record everything.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Encountered a spatial anomaly in deep space — invisible to visual sensors but present on instruments. Chronometer lost six minutes during observation. Stars visible through the anomaly don't match known charts."
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.08
+          },
+          {
+            "type": "crew_mood",
+            "mood": "anxious",
+            "all": true
+          },
+          {
+            "type": "narrative",
+            "text": "The recording equipment runs. Your crew watches the nothing that shouldn't be there. Nobody speaks for a very long time."
+          }
+        ],
+        "tone_note": "Solaris. The unknowable, observed."
+      },
+      {
+        "label": "Move closer. Carefully.",
+        "effects": [
+          {
+            "type": "spawn_thread",
+            "thread_type": "anomaly",
+            "description": "Approached the deep space anomaly. At closer range, instruments detected a pattern in the gravitational signature — mathematical, recursive, intentional."
+          },
+          {
+            "type": "crew_stress",
+            "delta": 0.12
+          },
+          {
+            "type": "damage_module",
+            "module": "sensors",
+            "amount": 0.1
+          },
+          {
+            "type": "narrative",
+            "text": "The closer you get, the more your instruments disagree with each other. But something in the data looks almost like a pattern. Almost like a message."
+          }
+        ],
+        "tone_note": "Courage or recklessness. The mystery deepens."
+      },
+      {
+        "label": "Full reverse. Now.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": 0.03
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "mystery",
+            "description": "Detected and retreated from a deep space anomaly. Brief contact. Something is out here."
+          },
+          {
+            "type": "narrative",
+            "text": "The engines fire. The anomaly recedes. The lost six minutes never come back."
+          }
+        ],
+        "tone_note": "Discretion. Some things you're not ready for."
+      }
+    ],
+    "category": "exploration",
+    "priority": 1
+  }
+]

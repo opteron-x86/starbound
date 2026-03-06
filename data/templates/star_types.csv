@@ -1,0 +1,15 @@
+Star Type,Class,Resources,Habitability,Notes,Special Effects
+O Star,Class O,"Energy, Physics",5%,"Blue supergiants — the hottest, most massive main-sequence stars. Lifespans of only 1–10 million years. Intense ionizing radiation sterilizes surrounding space.",—
+B Star,Class B,"Energy, Physics",15%,"Large, bright, blue main-sequence stars. Rare but highly visible. Short lifespans (10–100 Myr) and intense UV leave little time for life to develop.",—
+A Star,Class A,"Energy, Physics",30%,"White/bluish-white main-sequence stars. Fast-rotating with lifespans of ~1–2 billion years. High UV output limits habitability despite wide habitable zones.",—
+F Star,Class F,"Energy, Physics",100%,"Yellow-white dwarves with wide habitable zones. Emit significant UV but good candidates for life-bearing worlds.",—
+G Star,Class G,"Energy, Physics",100%,"Yellow dwarves fusing hydrogen for ~10 billion years. Optimal conditions for life development.",—
+K Star,Class K,"Energy, Physics",100%,"Orange dwarves, stable for up to 30 billion years. Longer window for life to evolve than G-type stars.",—
+M Star,Class M,"Energy, Physics",40%,"Red dwarves — the most common stars in the universe. Extremely long lifespan but planets face tidal locking, intense stellar flares, and minimal UV.",—
+M Red Giant,Class M Red Giant,"Energy, Physics",10%,"Moderate-mass stars in late stellar evolution. High luminosity pushes habitable zone very far out.",—
+T Star,Class T Brown Dwarf,"Energy, Physics",10%,"Substellar objects lacking mass for hydrogen fusion. Extremely dim and cool (~500–1400K). Habitable zones are negligibly small if they exist at all.",—
+White Dwarf,White Dwarf,"Engineering, Physics",5%,"Burnt-out cores of low/medium-mass stars. Earth-sized but extremely dense. Narrow habitable zones exist but are unstable.",—
+Wolf-Rayet Star,Wolf-Rayet,"Energy, Physics, Exotic Matter",0%,"Massive evolved stars violently shedding their outer layers via intense stellar winds. Extremely hot and luminous. Rich in heavy elements.",—
+Pulsar,Pulsar,"Engineering, Physics",0%,"Magnetized neutron stars emitting precise radiation pulses. Useful as timekeepers.","Shield Nullification; can build Quantum Catapult"
+Black Hole,Black Hole,"Engineering, Physics, Dark Matter",0%,"Collapsed massive stars with gravity so strong even light cannot escape.","-50% Disengagement Chance; +50% Emergency FTL Cooldown; can build Black Hole Observatory and Matter Decompressor"
+Neutron Star,Neutron Star,"Engineering, Physics",0%,"Ultra-dense supernova remnants. Only ~10km across but more massive than a G-type star.","-50% Sublight Speed; can build Quantum Catapult"

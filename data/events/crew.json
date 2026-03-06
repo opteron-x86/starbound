@@ -1,0 +1,79 @@
+[
+  {
+    "id": "crew_quiet_moment",
+    "encounter_type": "crew_dynamic",
+    "tone": "quiet",
+    "context_requirements": {
+      "crew_min": 2,
+      "location_types": [
+        "deep_space",
+        "planet_surface",
+        "moon",
+        "asteroid_belt"
+      ]
+    },
+    "text": "You find two of your crew in the observation lounge during the night watch. They've turned the lights down and are sitting in the glow of the starfield. One of them has a cup of something that stopped being hot a while ago. The other is just looking out.\n\nThey don't stop talking when you enter, which means either they trust you or they've stopped caring about rank. One of them is telling a story about a place they used to live. Details you haven't heard before — a street, a neighbor, the sound rain made on a particular roof.\n\nThe story doesn't have an ending. It just trails off into the hum of the ship.",
+    "choices": [
+      {
+        "label": "Sit down and listen",
+        "tone_note": "Being present. Not as the captain, just as someone who's here.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": -0.1
+          },
+          {
+            "type": "trust_personal",
+            "delta": 0.05
+          },
+          {
+            "type": "crew_mood",
+            "mood": "content"
+          },
+          {
+            "type": "narrative",
+            "text": "Sat with the crew. Listened. Was present."
+          }
+        ]
+      },
+      {
+        "label": "Share something of your own",
+        "tone_note": "Vulnerability. Rare from the person who makes the decisions.",
+        "effects": [
+          {
+            "type": "crew_stress",
+            "delta": -0.1
+          },
+          {
+            "type": "trust_personal",
+            "delta": 0.1
+          },
+          {
+            "type": "trust_ideological",
+            "delta": 0.03
+          },
+          {
+            "type": "spawn_thread",
+            "thread_type": "relationship",
+            "description": "Shared something personal with the crew. The walls are a little thinner now."
+          },
+          {
+            "type": "narrative",
+            "text": "You told them something true. It cost you nothing and everything."
+          }
+        ]
+      },
+      {
+        "label": "Leave them to it",
+        "tone_note": "Some moments aren't for you.",
+        "effects": [
+          {
+            "type": "pass"
+          }
+        ]
+      }
+    ],
+    "category": "crew",
+    "priority": 1
+  }
+]

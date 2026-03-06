@@ -134,6 +134,9 @@ const FACTION_TEMPLATES_JSON: &str =
 const SYSTEM_TEMPLATES_JSON: &str =
     include_str!("../../../data/templates/star_systems.json");
 
+const PEOPLE_TEMPLATES_JSON: &str =
+    include_str!("../../../data/templates/people.json");
+
 /// Load and deserialize civilization templates from the embedded JSON.
 pub fn load_civ_templates() -> CivTemplates {
     serde_json::from_str(CIV_TEMPLATES_JSON)
@@ -150,6 +153,12 @@ pub fn load_faction_templates() -> FactionTemplates {
 pub fn load_system_templates() -> SystemTemplates {
     serde_json::from_str(SYSTEM_TEMPLATES_JSON)
         .expect("star_systems.json should be valid — this is a compile-time embed")
+}
+
+/// Load and deserialize people templates from the embedded JSON.
+pub fn load_people_templates() -> PeopleTemplates {
+    serde_json::from_str(PEOPLE_TEMPLATES_JSON)
+        .expect("people.json should be valid — this is a compile-time embed")
 }
 
 // ===========================================================================
@@ -220,6 +229,64 @@ impl CivCompatibility {
 // ===========================================================================
 // Tests
 // ===========================================================================
+
+// ===========================================================================
+// People templates
+// ===========================================================================
+
+/// Top-level structure for `people.json`.
+#[derive(Debug, Deserialize)]
+pub struct PeopleTemplates {
+    pub name_pools: NamePools,
+    pub species_distribution: HashMap<String, HashMap<String, f64>>,
+    pub roles: HashMap<String, RoleTemplate>,
+    pub personality_expressions: HashMap<String, Vec<String>>,
+    pub connection_templates: HashMap<String, Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NamePools {
+    pub human: HumanNamePools,
+    pub synthetic: SyntheticNamePools,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HumanNamePools {
+    pub default: HumanNameSet,
+    #[serde(default)]
+    pub by_culture_tag: HashMap<String, HumanNameSet>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HumanNameSet {
+    pub given_male: Vec<String>,
+    pub given_female: Vec<String>,
+    pub family: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SyntheticNamePools {
+    pub designations: Vec<String>,
+    pub adopted_names: Vec<String>,
+    pub chassis_types: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RoleTemplate {
+    pub titles: Vec<TitleEntry>,
+    pub bio_templates: HashMap<String, Vec<String>>,
+    pub motivation_pool: Vec<String>,
+    pub knowledge_pool: Vec<String>,
+    pub personality_bias: HashMap<String, Vec<f32>>,
+    pub background_tags: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TitleEntry {
+    pub title: String,
+    pub weight: f64,
+    pub min_infra: String,
+}
 
 #[cfg(test)]
 mod tests {
@@ -556,5 +623,19 @@ mod tests {
                 "Expected faction category '{}' not found", name,
             );
         }
+    }
+
+    #[test]
+    fn people_templates_load() {
+        let t = load_people_templates();
+        assert!(!t.name_pools.human.default.given_male.is_empty());
+        assert!(!t.name_pools.human.default.given_female.is_empty());
+        assert!(!t.name_pools.human.default.family.is_empty());
+        assert!(!t.name_pools.synthetic.designations.is_empty());
+        assert!(t.roles.contains_key("military"));
+        assert!(t.roles.contains_key("guild"));
+        assert!(t.roles.contains_key("criminal"));
+        assert!(!t.personality_expressions.is_empty());
+        assert!(!t.connection_templates.is_empty());
     }
 }

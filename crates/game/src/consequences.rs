@@ -7,11 +7,19 @@
 //!
 //! Design principle: effects are deterministic given the same game state.
 //! Randomness belongs in the encounter pipeline, not in consequences.
+//!
+//! ## Redesign additions
+//!
+//! Some new effects modify world state beyond the Journey (e.g. revealing
+//! locations on the system map, changing NPC disposition). These are
+//! collected as `DeferredEffect` values in the consequence report for
+//! the game loop to process with full world access.
 
 use uuid::Uuid;
 
 use starbound_core::crew::Mood;
 use starbound_core::journey::Journey;
+use starbound_core::mission::{DiscoveryState, KnowledgeNode, KnowledgeNodeType, Relevance};
 use starbound_core::narrative::{
     EventCategory, GameEvent, ResolutionState, Thread, ThreadType,
 };
@@ -26,6 +34,8 @@ use starbound_encounters::seed_event::EffectDef;
 /// Effects are composed — one choice can produce several.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Effect {
+    // --- Existing effects (unchanged) ---
+
     /// Add or remove fuel. Clamped to [0, capacity].
     Fuel(f32),
     /// Add or remove supplies. Clamped to [0, capacity].
@@ -63,6 +73,36 @@ pub enum Effect {
     Narrative(String),
     /// No mechanical effect — the choice was about tone, not state.
     Pass,
+
+    // --- New effects (encounter system redesign) ---
+
+    /// Close or transform an existing thread.
+    ResolveThread {
+        thread_type: ThreadType,
+        keyword: String,
+        to_state: ResolutionState,
+    },
+    /// Advance the main quest by adding a knowledge node.
+    AddKnowledgeNode { content: String },
+    /// Cost personal (and galactic) time.
+    TimeCost { hours: f64 },
+    /// Change standing with a faction category.
+    /// Deferred to the game loop (needs faction registry access).
+    FactionStanding {
+        faction_category: String,
+        delta: f32,
+    },
+    /// Reveal a hidden location in the current system.
+    /// Deferred to the game loop (needs system access).
+    DiscoverLocation {
+        name: String,
+        description: Option<String>,
+    },
+    /// Shift the player's behavioral profile.
+    ReputationShift { label: String, delta: f32 },
+    /// Change an NPC's disposition.
+    /// Deferred to the game loop (needs NPC registry access).
+    NpcDisposition { npc_name: String, delta: f32 },
 }
 
 /// Which ship module an effect targets.
@@ -73,6 +113,28 @@ pub enum ModuleTarget {
     Comms,
     Weapons,
     LifeSupport,
+}
+
+// ---------------------------------------------------------------------------
+// Deferred effects — require world state beyond Journey
+// ---------------------------------------------------------------------------
+
+/// An effect that needs to be processed by the game loop with full
+/// world state access. Collected in the consequence report.
+#[derive(Debug, Clone)]
+pub enum DeferredEffect {
+    /// Change standing with a faction category.
+    FactionStanding {
+        faction_category: String,
+        delta: f32,
+    },
+    /// Reveal a hidden location in the current system.
+    DiscoverLocation {
+        name: String,
+        description: Option<String>,
+    },
+    /// Change an NPC's disposition toward the player.
+    NpcDisposition { npc_name: String, delta: f32 },
 }
 
 // ---------------------------------------------------------------------------
@@ -88,6 +150,9 @@ pub struct ConsequenceReport {
     pub log_entry: String,
     /// Whether any threads were spawned.
     pub threads_spawned: usize,
+    /// Effects that require world state beyond Journey.
+    /// The game loop should process these after applying the report.
+    pub deferred: Vec<DeferredEffect>,
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +201,40 @@ pub fn effect_def_to_effect(def: &EffectDef) -> Effect {
         EffectDef::AddConcern { text } => Effect::AddConcern(text.clone()),
         EffectDef::Narrative { text } => Effect::Narrative(text.clone()),
         EffectDef::Pass {} => Effect::Pass,
+
+        // --- New effects ---
+        EffectDef::FactionStanding {
+            faction_category,
+            delta,
+        } => Effect::FactionStanding {
+            faction_category: faction_category.clone(),
+            delta: *delta,
+        },
+        EffectDef::DiscoverLocation { name, description } => Effect::DiscoverLocation {
+            name: name.clone(),
+            description: description.clone(),
+        },
+        EffectDef::ResolveThread {
+            thread_type,
+            keyword,
+            to_state,
+        } => Effect::ResolveThread {
+            thread_type: parse_thread_type(thread_type),
+            keyword: keyword.clone(),
+            to_state: parse_resolution_state(to_state),
+        },
+        EffectDef::AddKnowledgeNode { content } => Effect::AddKnowledgeNode {
+            content: content.clone(),
+        },
+        EffectDef::TimeCost { hours } => Effect::TimeCost { hours: *hours },
+        EffectDef::ReputationShift { label, delta } => Effect::ReputationShift {
+            label: label.clone(),
+            delta: *delta,
+        },
+        EffectDef::NpcDisposition { npc_name, delta } => Effect::NpcDisposition {
+            npc_name: npc_name.clone(),
+            delta: *delta,
+        },
     }
 }
 
@@ -183,12 +282,25 @@ fn parse_module_target(s: &str) -> ModuleTarget {
     }
 }
 
+fn parse_resolution_state(s: &str) -> ResolutionState {
+    match s {
+        "resolved" => ResolutionState::Resolved,
+        "transformed" => ResolutionState::Transformed,
+        "partial" => ResolutionState::Partial,
+        _ => ResolutionState::Resolved,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Effect application
 // ---------------------------------------------------------------------------
 
 /// Apply a list of effects to the journey state. Returns a report
 /// describing what changed, suitable for the event log and display.
+///
+/// Effects that need world state beyond Journey (DiscoverLocation,
+/// FactionStanding, NpcDisposition) are collected in
+/// `ConsequenceReport.deferred` for the caller to process.
 pub fn apply_effects(
     effects: &[Effect],
     journey: &mut Journey,
@@ -197,6 +309,7 @@ pub fn apply_effects(
     let mut changes: Vec<String> = Vec::new();
     let mut threads_spawned: usize = 0;
     let mut narrative_notes: Vec<String> = Vec::new();
+    let mut deferred: Vec<DeferredEffect> = Vec::new();
 
     for effect in effects {
         match effect {
@@ -245,9 +358,8 @@ pub fn apply_effects(
 
             Effect::Hull(delta) => {
                 let before = journey.ship.hull_condition;
-                journey.ship.hull_condition = (journey.ship.hull_condition + delta)
-                    .max(0.0)
-                    .min(1.0);
+                journey.ship.hull_condition =
+                    (journey.ship.hull_condition + delta).max(0.0).min(1.0);
                 let actual = journey.ship.hull_condition - before;
                 if actual.abs() > 0.001 {
                     let pct = actual * 100.0;
@@ -282,19 +394,20 @@ pub fn apply_effects(
                         member.state.mood = *mood;
                     }
                     changes.push(format!("Crew mood -> {}", mood));
-                } else {
-                    if let Some(member) = journey.crew.iter_mut()
-                        .max_by(|a, b| a.state.stress.partial_cmp(&b.state.stress).unwrap())
-                    {
-                        member.state.mood = *mood;
-                        changes.push(format!("{} mood -> {}", member.name, mood));
-                    }
+                } else if let Some(member) = journey
+                    .crew
+                    .iter_mut()
+                    .max_by(|a, b| a.state.stress.partial_cmp(&b.state.stress).unwrap())
+                {
+                    member.state.mood = *mood;
+                    changes.push(format!("{} mood -> {}", member.name, mood));
                 }
             }
 
             Effect::TrustProfessional(delta) => {
                 for member in &mut journey.crew {
-                    member.trust.professional = (member.trust.professional + delta).clamp(-1.0, 1.0);
+                    member.trust.professional =
+                        (member.trust.professional + delta).clamp(-1.0, 1.0);
                 }
                 if delta.abs() > 0.001 {
                     let direction = if *delta > 0.0 { "gained" } else { "lost" };
@@ -314,7 +427,8 @@ pub fn apply_effects(
 
             Effect::TrustIdeological(delta) => {
                 for member in &mut journey.crew {
-                    member.trust.ideological = (member.trust.ideological + delta).clamp(-1.0, 1.0);
+                    member.trust.ideological =
+                        (member.trust.ideological + delta).clamp(-1.0, 1.0);
                 }
                 if delta.abs() > 0.001 {
                     let direction = if *delta > 0.0 { "gained" } else { "lost" };
@@ -322,7 +436,10 @@ pub fn apply_effects(
                 }
             }
 
-            Effect::SpawnThread { thread_type, description } => {
+            Effect::SpawnThread {
+                thread_type,
+                description,
+            } => {
                 let thread = Thread {
                     id: Uuid::new_v4(),
                     thread_type: *thread_type,
@@ -335,7 +452,11 @@ pub fn apply_effects(
                 };
                 journey.threads.push(thread);
                 threads_spawned += 1;
-                changes.push(format!("New thread: {} -- {}", thread_type, short_desc(description)));
+                changes.push(format!(
+                    "New thread: {} -- {}",
+                    thread_type,
+                    short_desc(description)
+                ));
             }
 
             Effect::AddCargo { item, quantity } => {
@@ -355,17 +476,27 @@ pub fn apply_effects(
             Effect::DamageModule { module, amount } => {
                 let m = get_module_mut(&mut journey.ship.modules, *module);
                 m.condition = (m.condition - amount).max(0.0);
-                changes.push(format!("{} damaged ({:.0}%)", module_name(*module), m.condition * 100.0));
+                changes.push(format!(
+                    "{} damaged ({:.0}%)",
+                    module_name(*module),
+                    m.condition * 100.0
+                ));
             }
 
             Effect::RepairModule { module, amount } => {
                 let m = get_module_mut(&mut journey.ship.modules, *module);
                 m.condition = (m.condition + amount).min(1.0);
-                changes.push(format!("{} repaired ({:.0}%)", module_name(*module), m.condition * 100.0));
+                changes.push(format!(
+                    "{} repaired ({:.0}%)",
+                    module_name(*module),
+                    m.condition * 100.0
+                ));
             }
 
             Effect::AddConcern(concern) => {
-                if let Some(member) = journey.crew.iter_mut()
+                if let Some(member) = journey
+                    .crew
+                    .iter_mut()
                     .min_by(|a, b| a.state.stress.partial_cmp(&b.state.stress).unwrap())
                 {
                     member.state.active_concerns.push(concern.clone());
@@ -380,6 +511,96 @@ pub fn apply_effects(
             }
 
             Effect::Pass => {}
+
+            // --- New effects (encounter system redesign) ---
+
+            Effect::ResolveThread {
+                thread_type,
+                keyword,
+                to_state,
+            } => {
+                let keyword_lower = keyword.to_lowercase();
+                let resolved = journey.threads.iter_mut().find(|t| {
+                    t.thread_type == *thread_type
+                        && (t.resolution == ResolutionState::Open
+                            || t.resolution == ResolutionState::Partial)
+                        && t.description.to_lowercase().contains(&keyword_lower)
+                });
+                if let Some(thread) = resolved {
+                    thread.resolution = *to_state;
+                    thread.last_touched = journey.time;
+                    changes.push(format!(
+                        "Thread {} → {}",
+                        short_desc(&thread.description),
+                        to_state
+                    ));
+                }
+            }
+
+            Effect::AddKnowledgeNode { content } => {
+                let node = KnowledgeNode {
+                    id: Uuid::new_v4(),
+                    node_type: KnowledgeNodeType::Concrete,
+                    description: content.clone(),
+                    discovery_state: DiscoveryState::Discovered,
+                    dependencies: vec![],
+                    access_points: vec!["Encounter discovery".into()],
+                    relevance: Relevance::Supporting,
+                };
+                journey.mission.knowledge_nodes.push(node);
+                changes.push(format!("Discovery: {}", short_desc(content)));
+            }
+
+            Effect::TimeCost { hours } => {
+                let days = hours / 24.0;
+                journey.time.personal_days += days;
+                // Galactic time is NOT multiplied here — the caller should
+                // apply the system's time_factor if appropriate.
+                changes.push(format!("Time: {:.1} hours", hours));
+            }
+
+            Effect::FactionStanding {
+                faction_category,
+                delta,
+            } => {
+                // Deferred — needs faction registry to find matching factions.
+                deferred.push(DeferredEffect::FactionStanding {
+                    faction_category: faction_category.clone(),
+                    delta: *delta,
+                });
+                let direction = if *delta > 0.0 { "improved" } else { "worsened" };
+                changes.push(format!("{} faction standing {}", faction_category, direction));
+            }
+
+            Effect::DiscoverLocation { name, description } => {
+                // Deferred — needs system map access.
+                deferred.push(DeferredEffect::DiscoverLocation {
+                    name: name.clone(),
+                    description: description.clone(),
+                });
+                changes.push(format!("Location discovered: {}", name));
+            }
+
+            Effect::ReputationShift { label, delta } => {
+                // Apply to player profile if the label matches.
+                journey.profile.shift_label(label, *delta);
+                let direction = if *delta > 0.0 { "grows" } else { "fades" };
+                changes.push(format!("Reputation: {} {}", label, direction));
+            }
+
+            Effect::NpcDisposition { npc_name, delta } => {
+                // Deferred — needs NPC registry access.
+                deferred.push(DeferredEffect::NpcDisposition {
+                    npc_name: npc_name.clone(),
+                    delta: *delta,
+                });
+                let direction = if *delta > 0.0 {
+                    "thinks better of you"
+                } else {
+                    "thinks less of you"
+                };
+                changes.push(format!("{} {}", npc_name, direction));
+            }
         }
     }
 
@@ -403,6 +624,7 @@ pub fn apply_effects(
         changes,
         log_entry,
         threads_spawned,
+        deferred,
     }
 }
 
@@ -461,12 +683,12 @@ fn short_desc(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use starbound_core::crew::*;
     use starbound_core::mission::*;
     use starbound_core::reputation::PlayerProfile;
     use starbound_core::ship::*;
     use starbound_core::time::Timestamp;
+    use std::collections::HashMap;
 
     fn test_journey_with_crew() -> Journey {
         let crew = vec![
@@ -475,8 +697,12 @@ mod tests {
                 name: "Test Crew A".into(),
                 role: CrewRole::Navigator,
                 drives: PersonalityDrives {
-                    security: 0.5, freedom: 0.5, purpose: 0.5,
-                    connection: 0.5, knowledge: 0.5, justice: 0.5,
+                    security: 0.5,
+                    freedom: 0.5,
+                    purpose: 0.5,
+                    connection: 0.5,
+                    knowledge: 0.5,
+                    justice: 0.5,
                 },
                 trust: Trust::starting_crew(),
                 relationships: HashMap::new(),
@@ -493,8 +719,12 @@ mod tests {
                 name: "Test Crew B".into(),
                 role: CrewRole::Engineer,
                 drives: PersonalityDrives {
-                    security: 0.5, freedom: 0.5, purpose: 0.5,
-                    connection: 0.5, knowledge: 0.5, justice: 0.5,
+                    security: 0.5,
+                    freedom: 0.5,
+                    purpose: 0.5,
+                    connection: 0.5,
+                    knowledge: 0.5,
+                    justice: 0.5,
                 },
                 trust: Trust::starting_crew(),
                 relationships: HashMap::new(),
@@ -527,7 +757,10 @@ mod tests {
                 },
             },
             current_system: Uuid::new_v4(),
-            time: Timestamp { personal_days: 30.0, galactic_days: 1000.0 },
+            time: Timestamp {
+                personal_days: 30.0,
+                galactic_days: 1000.0,
+            },
             resources: 500.0,
             mission: MissionState {
                 mission_type: MissionType::Search,
@@ -544,7 +777,7 @@ mod tests {
         }
     }
 
-    // --- EffectDef -> Effect conversion ---
+    // --- EffectDef -> Effect conversion (existing) ---
 
     #[test]
     fn effect_def_fuel_converts() {
@@ -561,7 +794,10 @@ mod tests {
         };
         let effect = effect_def_to_effect(&def);
         match effect {
-            Effect::SpawnThread { thread_type, description } => {
+            Effect::SpawnThread {
+                thread_type,
+                description,
+            } => {
                 assert_eq!(thread_type, ThreadType::Mystery);
                 assert_eq!(description, "Something strange.");
             }
@@ -571,16 +807,34 @@ mod tests {
 
     #[test]
     fn effect_def_crew_mood_converts() {
-        let def = EffectDef::CrewMood { mood: "inspired".into(), all: true };
+        let def = EffectDef::CrewMood {
+            mood: "inspired".into(),
+            all: true,
+        };
         let effect = effect_def_to_effect(&def);
-        assert_eq!(effect, Effect::CrewMood { mood: Mood::Inspired, all: true });
+        assert_eq!(
+            effect,
+            Effect::CrewMood {
+                mood: Mood::Inspired,
+                all: true
+            }
+        );
     }
 
     #[test]
     fn effect_def_module_repair_converts() {
-        let def = EffectDef::RepairModule { module: "engine".into(), amount: 0.3 };
+        let def = EffectDef::RepairModule {
+            module: "engine".into(),
+            amount: 0.3,
+        };
         let effect = effect_def_to_effect(&def);
-        assert_eq!(effect, Effect::RepairModule { module: ModuleTarget::Engine, amount: 0.3 });
+        assert_eq!(
+            effect,
+            Effect::RepairModule {
+                module: ModuleTarget::Engine,
+                amount: 0.3
+            }
+        );
     }
 
     #[test]
@@ -588,7 +842,9 @@ mod tests {
         let defs = vec![
             EffectDef::Fuel { delta: 20.0 },
             EffectDef::Resources { delta: -30.0 },
-            EffectDef::Narrative { text: "Refueled.".into() },
+            EffectDef::Narrative {
+                text: "Refueled.".into(),
+            },
         ];
         let effects = convert_effects(&defs);
         assert_eq!(effects.len(), 3);
@@ -597,7 +853,50 @@ mod tests {
         assert!(matches!(&effects[2], Effect::Narrative(t) if t == "Refueled."));
     }
 
-    // --- Effect application ---
+    // --- New effect conversions ---
+
+    #[test]
+    fn effect_def_resolve_thread_converts() {
+        let def = EffectDef::ResolveThread {
+            thread_type: "mystery".into(),
+            keyword: "signal".into(),
+            to_state: "resolved".into(),
+        };
+        let effect = effect_def_to_effect(&def);
+        assert_eq!(
+            effect,
+            Effect::ResolveThread {
+                thread_type: ThreadType::Mystery,
+                keyword: "signal".into(),
+                to_state: ResolutionState::Resolved,
+            }
+        );
+    }
+
+    #[test]
+    fn effect_def_faction_standing_converts() {
+        let def = EffectDef::FactionStanding {
+            faction_category: "guild".into(),
+            delta: 0.1,
+        };
+        let effect = effect_def_to_effect(&def);
+        assert_eq!(
+            effect,
+            Effect::FactionStanding {
+                faction_category: "guild".into(),
+                delta: 0.1,
+            }
+        );
+    }
+
+    #[test]
+    fn effect_def_time_cost_converts() {
+        let def = EffectDef::TimeCost { hours: 6.0 };
+        let effect = effect_def_to_effect(&def);
+        assert_eq!(effect, Effect::TimeCost { hours: 6.0 });
+    }
+
+    // --- Effect application (existing) ---
 
     #[test]
     fn fuel_added_and_clamped() {
@@ -651,15 +950,17 @@ mod tests {
     #[test]
     fn module_damage_and_repair() {
         let mut journey = test_journey_with_crew();
-        let effects = vec![
-            Effect::DamageModule { module: ModuleTarget::Engine, amount: 0.3 },
-        ];
+        let effects = vec![Effect::DamageModule {
+            module: ModuleTarget::Engine,
+            amount: 0.3,
+        }];
         apply_effects(&effects, &mut journey, "Damaged");
         assert!((journey.ship.modules.engine.condition - 0.7).abs() < 0.01);
 
-        let effects = vec![
-            Effect::RepairModule { module: ModuleTarget::Engine, amount: 0.2 },
-        ];
+        let effects = vec![Effect::RepairModule {
+            module: ModuleTarget::Engine,
+            amount: 0.2,
+        }];
         apply_effects(&effects, &mut journey, "Repaired");
         assert!((journey.ship.modules.engine.condition - 0.9).abs() < 0.01);
     }
@@ -667,7 +968,10 @@ mod tests {
     #[test]
     fn crew_mood_targets_most_stressed() {
         let mut journey = test_journey_with_crew();
-        let effects = vec![Effect::CrewMood { mood: Mood::Anxious, all: false }];
+        let effects = vec![Effect::CrewMood {
+            mood: Mood::Anxious,
+            all: false,
+        }];
         apply_effects(&effects, &mut journey, "Mood shift");
         assert_eq!(journey.crew[1].state.mood, Mood::Anxious);
         assert_eq!(journey.crew[0].state.mood, Mood::Content);
@@ -693,7 +997,83 @@ mod tests {
         assert_eq!(journey.event_log.len(), 2);
     }
 
-    // --- Full pipeline: EffectDef -> convert -> apply ---
+    // --- New effect application ---
+
+    #[test]
+    fn resolve_thread_closes_matching_thread() {
+        let mut journey = test_journey_with_crew();
+        journey.threads.push(Thread {
+            id: Uuid::new_v4(),
+            thread_type: ThreadType::Mystery,
+            associated_entities: vec![],
+            tension: 0.6,
+            created_at: Timestamp::zero(),
+            last_touched: Timestamp::zero(),
+            resolution: ResolutionState::Open,
+            description: "A strange signal in the dark.".into(),
+        });
+
+        let effects = vec![Effect::ResolveThread {
+            thread_type: ThreadType::Mystery,
+            keyword: "signal".into(),
+            to_state: ResolutionState::Resolved,
+        }];
+        apply_effects(&effects, &mut journey, "Signal resolved");
+        assert_eq!(journey.threads[0].resolution, ResolutionState::Resolved);
+    }
+
+    #[test]
+    fn add_knowledge_node_adds_to_mission() {
+        let mut journey = test_journey_with_crew();
+        assert!(journey.mission.knowledge_nodes.is_empty());
+        let effects = vec![Effect::AddKnowledgeNode {
+            content: "The signal originates from a structure.".into(),
+        }];
+        apply_effects(&effects, &mut journey, "Discovery");
+        assert_eq!(journey.mission.knowledge_nodes.len(), 1);
+    }
+
+    #[test]
+    fn time_cost_advances_personal_time() {
+        let mut journey = test_journey_with_crew();
+        let before = journey.time.personal_days;
+        let effects = vec![Effect::TimeCost { hours: 12.0 }];
+        apply_effects(&effects, &mut journey, "Investigation");
+        assert!((journey.time.personal_days - (before + 0.5)).abs() < 0.01);
+    }
+
+    #[test]
+    fn faction_standing_produces_deferred_effect() {
+        let mut journey = test_journey_with_crew();
+        let effects = vec![Effect::FactionStanding {
+            faction_category: "guild".into(),
+            delta: 0.1,
+        }];
+        let report = apply_effects(&effects, &mut journey, "Guild favor");
+        assert_eq!(report.deferred.len(), 1);
+        assert!(matches!(
+            &report.deferred[0],
+            DeferredEffect::FactionStanding { faction_category, delta }
+                if faction_category == "guild" && (*delta - 0.1).abs() < 0.001
+        ));
+    }
+
+    #[test]
+    fn discover_location_produces_deferred_effect() {
+        let mut journey = test_journey_with_crew();
+        let effects = vec![Effect::DiscoverLocation {
+            name: "Hidden Signal Source".into(),
+            description: Some("A faint signal among the asteroids.".into()),
+        }];
+        let report = apply_effects(&effects, &mut journey, "Discovery");
+        assert_eq!(report.deferred.len(), 1);
+        assert!(matches!(
+            &report.deferred[0],
+            DeferredEffect::DiscoverLocation { name, .. } if name == "Hidden Signal Source"
+        ));
+    }
+
+    // --- Full pipeline ---
 
     #[test]
     fn full_pipeline_def_to_application() {
@@ -705,7 +1085,9 @@ mod tests {
             EffectDef::Fuel { delta: 20.0 },
             EffectDef::Resources { delta: -30.0 },
             EffectDef::CrewStress { delta: -0.05 },
-            EffectDef::Narrative { text: "A small kindness at a quiet refueling stop.".into() },
+            EffectDef::Narrative {
+                text: "A small kindness at a quiet refueling stop.".into(),
+            },
         ];
         let effects = convert_effects(&defs);
         let report = apply_effects(&effects, &mut journey, "buy_fuel_and_talk");
@@ -721,8 +1103,14 @@ mod tests {
         let defs = vec![
             EffectDef::Resources { delta: -300.0 },
             EffectDef::Hull { delta: 0.3 },
-            EffectDef::RepairModule { module: "engine".into(), amount: 0.3 },
-            EffectDef::RepairModule { module: "sensors".into(), amount: 0.2 },
+            EffectDef::RepairModule {
+                module: "engine".into(),
+                amount: 0.3,
+            },
+            EffectDef::RepairModule {
+                module: "sensors".into(),
+                amount: 0.2,
+            },
         ];
         let effects = convert_effects(&defs);
         apply_effects(&effects, &mut journey, "Full repair");
@@ -740,12 +1128,45 @@ mod tests {
                 thread_type: "mystery".into(),
                 description: "Something found.".into(),
             },
-            EffectDef::CrewMood { mood: "hopeful".into(), all: true },
+            EffectDef::CrewMood {
+                mood: "hopeful".into(),
+                all: true,
+            },
             EffectDef::Pass {},
         ];
         let json = serde_json::to_string_pretty(&defs).unwrap();
         let parsed: Vec<EffectDef> = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.len(), 4);
         assert_eq!(parsed[0], EffectDef::Fuel { delta: 20.0 });
+    }
+
+    #[test]
+    fn new_effect_def_json_round_trip() {
+        let defs = vec![
+            EffectDef::FactionStanding {
+                faction_category: "guild".into(),
+                delta: 0.1,
+            },
+            EffectDef::ResolveThread {
+                thread_type: "mystery".into(),
+                keyword: "signal".into(),
+                to_state: "resolved".into(),
+            },
+            EffectDef::TimeCost { hours: 6.0 },
+            EffectDef::DiscoverLocation {
+                name: "Hidden Outpost".into(),
+                description: Some("Beneath the ice.".into()),
+            },
+        ];
+        let json = serde_json::to_string_pretty(&defs).unwrap();
+        let parsed: Vec<EffectDef> = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.len(), 4);
+        assert_eq!(
+            parsed[0],
+            EffectDef::FactionStanding {
+                faction_category: "guild".into(),
+                delta: 0.1
+            }
+        );
     }
 }
