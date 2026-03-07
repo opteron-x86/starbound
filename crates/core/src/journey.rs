@@ -9,6 +9,7 @@ use crate::galaxy::CivStanding;
 use crate::mission::MissionState;
 use crate::narrative::{GameEvent, Thread};
 use crate::reputation::PlayerProfile;
+use crate::rumor::Rumor;
 use crate::ship::Ship;
 use crate::time::Timestamp;
 
@@ -44,4 +45,7 @@ pub struct Journey {
     /// Active contracts the player has accepted.
     #[serde(default)]
     pub active_contracts: Vec<Contract>,
+    /// Rumors the player has discovered across the journey.
+    #[serde(default)]
+    pub discovered_rumors: Vec<Rumor>,
 }

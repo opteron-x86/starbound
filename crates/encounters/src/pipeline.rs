@@ -64,6 +64,8 @@ pub enum PlayerIntent {
     Smuggle,
     /// Open negotiations with a faction or entity.
     Negotiate,
+    /// Listen for rumors and gather information.
+    GatherRumors,
 }
 
 impl PlayerIntent {
@@ -79,6 +81,7 @@ impl PlayerIntent {
             PlayerIntent::Rest => "rest",
             PlayerIntent::Smuggle => "smuggle",
             PlayerIntent::Negotiate => "negotiate",
+            PlayerIntent::GatherRumors => "gather_rumors",
         }
     }
 
@@ -94,6 +97,7 @@ impl PlayerIntent {
             PlayerIntent::Rest => "Rest",
             PlayerIntent::Smuggle => "Smuggle",
             PlayerIntent::Negotiate => "Negotiate",
+            PlayerIntent::GatherRumors => "Gather rumors",
         }
     }
 }

@@ -21,6 +21,7 @@ use starbound_core::mission::*;
 use starbound_core::npc::{Npc, NpcRelationType, DispositionTier};
 use starbound_core::ship::*;
 use starbound_core::reputation::PlayerProfile;
+use starbound_core::rumor::RumorContent;
 use starbound_core::time::Timestamp;
 
 use starbound_encounters::library::all_seed_events;
@@ -33,10 +34,11 @@ use starbound_encounters::templates::{resolve_template, TemplateContext};
 use starbound_simulation::generate::{generate_galaxy, GeneratedGalaxy};
 use starbound_simulation::templates::load_people_templates;
 use starbound_simulation::travel::{describe_plan, plan_all_routes, TravelPlan};
-use starbound_simulation::tick::{tick_galaxy, TickResult, TickEventCategory};
+use starbound_simulation::tick::{tick_galaxy, TickResult, TickEvent, TickEventCategory};
 
 use starbound_game::travel::execute_travel;
 use starbound_game::consequences::{convert_effects, apply_effects};
+use starbound_game::rumors::{generate_rumors, RumorContext};
 use starbound_game::crew_conversation::{
     generate_topics, conversation_effects_to_game_effects, apply_concern_removals,
     describe_crew_state, ConversationTopic, ConversationEffect,
@@ -135,6 +137,9 @@ struct GameState {
     /// Recent scene summaries for LLM context continuity.
     /// Prevents re-introductions and contradictions. Capped at 5.
     scene_history: Vec<String>,
+    /// Recent galactic tick events — used by the rumor system's faction scanner.
+    /// Populated after each tick, capped at the most recent ~20 events.
+    recent_tick_events: Vec<TickEvent>,
 }
 
 impl GameState {
@@ -552,6 +557,7 @@ fn new_game(seed: u64) -> GameState {
         civ_standings: HashMap::new(),
         profile: PlayerProfile::new(),
         active_contracts: vec![],
+        discovered_rumors: vec![],
     };
 
     let mut visit_log = HashMap::new();
@@ -577,6 +583,7 @@ fn new_game(seed: u64) -> GameState {
         llm_config: LlmConfig::default(), // Disabled by default — enabled at startup.
         llm_event_counter: 0,
         scene_history: Vec::new(),
+        recent_tick_events: Vec::new(),
     }
 }
 
@@ -1947,6 +1954,9 @@ fn available_actions(gs: &GameState) -> Vec<PlayerIntent> {
         if loc.services.contains(&LocationService::Refuel) || loc.services.contains(&LocationService::Trade) {
             actions.push(PlayerIntent::Resupply);
         }
+        if loc.services.contains(&LocationService::Rumors) {
+            actions.push(PlayerIntent::GatherRumors);
+        }
     }
 
     actions
@@ -1983,6 +1993,7 @@ fn action_menu(gs: &mut GameState) {
         PlayerIntent::Trade => trade_screen(gs),
         PlayerIntent::Resupply => resupply_screen(gs),
         PlayerIntent::Repair => repair_screen(gs),
+        PlayerIntent::GatherRumors => rumors_screen(gs),
         _ => run_intent_encounter(gs, intent),
     }
 }
@@ -2506,6 +2517,124 @@ fn repair_screen(gs: &mut GameState) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Rumors screen — gather actionable information
+// ---------------------------------------------------------------------------
+
+fn rumors_screen(gs: &mut GameState) {
+    let (location, system) = match (gs.current_location().cloned(), gs.current_system().clone()) {
+        (Some(loc), sys) => (loc, sys),
+        _ => {
+            println!("\n  You need to be docked to gather rumors.");
+            pause();
+            return;
+        }
+    };
+
+    if !location.services.contains(&LocationService::Rumors) {
+        println!("\n  No one here to listen to.");
+        pause();
+        return;
+    }
+
+    // Time cost: 2-4 hours depending on infrastructure.
+    let hours = match location.infrastructure {
+        InfrastructureLevel::Capital | InfrastructureLevel::Hub => 2.0,
+        InfrastructureLevel::Established => 3.0,
+        _ => 4.0,
+    };
+
+    clear_screen();
+
+    display_header(&format!("Rumors — {}", location.name));
+    println!();
+    println!("  You spend some time listening around the station.");
+    println!("  ({:.0} hours)", hours);
+    println!();
+
+    // Build rumor context.
+    let ctx = RumorContext {
+        galaxy: &gs.galaxy,
+        journey: &gs.journey,
+        recent_tick_events: &gs.recent_tick_events,
+        location: &location,
+        system: &system,
+    };
+
+    let rumors = generate_rumors(&ctx, &mut gs.rng);
+
+    if rumors.is_empty() {
+        println!("  Nothing interesting. The station is quiet.");
+        pause();
+
+        // Advance time even on empty results.
+        let galactic_hours = hours * system.time_factor;
+        gs.journey.time.personal_days += hours / 24.0;
+        gs.journey.time.galactic_days += galactic_hours / 24.0;
+        return;
+    }
+
+    // Display each rumor.
+    for (i, rumor) in rumors.iter().enumerate() {
+        let reliability_str = if rumor.reliability >= 0.8 {
+            "high"
+        } else if rumor.reliability >= 0.6 {
+            "moderate"
+        } else {
+            "low"
+        };
+
+        println!("  {}) {}", i + 1, rumor.display_text);
+        println!("     [{}  —  reliability: {}]", rumor.category, reliability_str);
+        println!();
+    }
+
+    println!("  Select a rumor to note it (or 0 to continue):");
+    println!();
+
+    let input = prompt("  > ");
+
+    // Handle selection — noting a rumor adds it to the journal.
+    match input.parse::<usize>() {
+        Ok(n) if n >= 1 && n <= rumors.len() => {
+            let chosen = &rumors[n - 1];
+            println!();
+            println!("  Noted. {} logged.", chosen.category);
+
+            // Show mechanical detail for trade tips.
+            if let RumorContent::TradeTip {
+                good, estimated_spread, ..
+            } = &chosen.content {
+                println!("  (Estimated profit: ~{:.0} credits/unit for {})", estimated_spread, good);
+            }
+
+            // Add all rumors to the journal (the selected one marked as "noted").
+            for rumor in rumors {
+                gs.journey.discovered_rumors.push(rumor);
+            }
+        }
+        _ => {
+            // Still add rumors even if none selected — player heard them.
+            for rumor in rumors {
+                gs.journey.discovered_rumors.push(rumor);
+            }
+        }
+    }
+
+    // Advance time.
+    let galactic_hours = hours * system.time_factor;
+    gs.journey.time.personal_days += hours / 24.0;
+    gs.journey.time.galactic_days += galactic_hours / 24.0;
+
+    // Prune old rumors (keep last 30).
+    if gs.journey.discovered_rumors.len() > 30 {
+        let drain = gs.journey.discovered_rumors.len() - 30;
+        gs.journey.discovered_rumors.drain(..drain);
+    }
+
+    pause();
+}
+
 fn run_intent_encounter(gs: &mut GameState, intent: PlayerIntent) {
     let fired = try_encounter(gs, intent.into(), None, None);
 
@@ -2525,6 +2654,7 @@ fn run_intent_encounter(gs: &mut GameState, intent: PlayerIntent) {
             PlayerIntent::Rest => "The crew takes a moment to breathe.",
             PlayerIntent::Smuggle => "No opportunity for that kind of work here.",
             PlayerIntent::Negotiate => "There's no one to negotiate with.",
+            PlayerIntent::GatherRumors => "No one here to listen to.",
         };
 
         for line in wrap_text(msg, 60) {
@@ -3531,6 +3661,12 @@ fn execute_travel_and_arrive(gs: &mut GameState, plan: &TravelPlan, dest_name: &
         if !tick_result.events.is_empty() {
             display_galactic_news(&tick_result, gs);
             pause();
+            // Store for the rumor system's faction scanner (cap at 20).
+            gs.recent_tick_events.extend(tick_result.events.iter().cloned());
+            if gs.recent_tick_events.len() > 20 {
+                let drain_count = gs.recent_tick_events.len() - 20;
+                gs.recent_tick_events.drain(..drain_count);
+            }
         }
     } else {
         gs.last_ticked_day = gs.journey.time.galactic_days;

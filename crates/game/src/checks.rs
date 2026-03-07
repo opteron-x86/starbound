@@ -630,6 +630,7 @@ mod tests {
             civ_standings: HashMap::new(),
             profile: PlayerProfile::new(),
             active_contracts: vec![],
+            discovered_rumors: vec![],
             current_location: None,
         }
     }

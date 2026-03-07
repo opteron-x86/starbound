@@ -13,6 +13,7 @@ pub mod mission;
 pub mod narrative;
 pub mod npc;
 pub mod reputation;
+pub mod rumor;
 pub mod ship;
 pub mod time;
 
@@ -25,5 +26,6 @@ pub use mission::{KnowledgeNode, MissionState};
 pub use narrative::{EncounterBrief, GameEvent, Thread};
 pub use npc::Npc;
 pub use reputation::PlayerProfile;
+pub use rumor::Rumor;
 pub use ship::Ship;
 pub use time::Timestamp;
