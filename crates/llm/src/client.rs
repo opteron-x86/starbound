@@ -122,7 +122,7 @@ pub fn chat_completion(
     ];
 
     let request_body = CompletionRequest {
-        model: config.model.clone(),
+        model: config.resolve_model(),
         messages,
         max_tokens: config.max_tokens,
         temperature: config.temperature,

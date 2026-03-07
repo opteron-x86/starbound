@@ -77,6 +77,12 @@ pub struct Npc {
     /// Capped at 5 entries — oldest pruned.
     #[serde(default)]
     pub interaction_history: Vec<InteractionRecord>,
+    /// Whether the player has met this NPC (introduced themselves).
+    /// Unmet NPCs show as title-only in the People menu.
+    /// Set to true on first conversation, or pre-set by recognition
+    /// when the player has high renown.
+    #[serde(default)]
+    pub met_player: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -168,6 +174,7 @@ impl Npc {
             connections: Vec::new(),
             knowledge: Vec::new(),
             interaction_history: Vec::new(),
+            met_player: false,
         }
     }
 
@@ -192,6 +199,16 @@ impl Npc {
     /// Current disposition tier — gates available actions and dialogue.
     pub fn disposition_tier(&self) -> DispositionTier {
         DispositionTier::from_score(self.disposition)
+    }
+
+    /// How this NPC is identified to the player.
+    /// Met NPCs show their full name. Unmet NPCs show only their title.
+    pub fn display_name(&self) -> &str {
+        if self.met_player {
+            &self.name
+        } else {
+            &self.title
+        }
     }
 
     /// Whether the NPC will talk to the player at all.

@@ -292,11 +292,13 @@ pub fn ask_about_area(
         let connected_npc = all_npcs.iter().find(|n| n.id == conn.npc_id);
 
         connected_npc.map(|cn| {
+            // Use the NPC's display name — title-only if the player hasn't met them.
+            let cn_display = cn.display_name();
             pick_template(
                 dt.knowledge_delivery.get("connection_mention").map(|v| v.as_slice()).unwrap_or(&[]),
                 rng,
             ).map(|t| {
-                t.replace("{connection_name}", &cn.name)
+                t.replace("{connection_name}", cn_display)
                  .replace("{connection_title}", &cn.title)
                  .replace("{connection_location}", system_name) // Simplified for now.
                  .replace("{connection_object}", &cn.pronouns.object)
@@ -305,7 +307,7 @@ pub fn ask_about_area(
                  .replace("{pronoun.subject_cap}", &npc.pronouns.subject_cap)
                  .replace("{pronoun.possessive}", &npc.pronouns.possessive)
             })
-            .unwrap_or_else(|| format!("\"Talk to {} — {} might know more.\"", cn.name, cn.pronouns.subject))
+            .unwrap_or_else(|| format!("\"Talk to the {} — {} might know more.\"", cn.title, cn.pronouns.subject))
         })
     } else {
         None

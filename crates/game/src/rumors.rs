@@ -313,16 +313,27 @@ fn scan_contracts(ctx: &RumorContext, reliability: f64) -> Vec<ScoredCandidate> 
             }
         };
 
-        let display = format!(
-            "\"{} — {} — is looking for someone to {}. \
-             Talk to {} if you're interested.\"",
-            npc.name, npc.title, verb,
-            npc.pronouns.object,
-        );
+        let npc_display = npc.display_name();
+
+        let display = if npc.met_player {
+            format!(
+                "\"{} — {} — is looking for someone to {}. \
+                 Talk to {} if you're interested.\"",
+                npc.name, npc.title, verb,
+                npc.pronouns.object,
+            )
+        } else {
+            format!(
+                "\"The {} is looking for someone to {}. \
+                 Talk to {} if you're interested.\"",
+                npc.title, verb,
+                npc.pronouns.object,
+            )
+        };
 
         let summary = format!(
             "{} ({}) wants a {} job done (~{:.0} cr)",
-            npc.name, faction_name, contract_type, reward_estimate,
+            npc_display, faction_name, contract_type, reward_estimate,
         );
 
         // Score: contract leads are generally valuable. Boost slightly
@@ -339,7 +350,7 @@ fn scan_contracts(ctx: &RumorContext, reliability: f64) -> Vec<ScoredCandidate> 
                 destination_system: None, // Specific destination determined at offer time.
                 estimated_reward: reward_estimate,
                 npc_id: Some(npc.id),
-                npc_name: Some(npc.name.clone()),
+                npc_name: if npc.met_player { Some(npc.name.clone()) } else { None },
             },
             display_text: display,
             summary,
@@ -1489,10 +1500,29 @@ mod tests {
         assert!(!candidates.is_empty(), "Should find contract leads from NPCs");
         assert_eq!(candidates[0].category, RumorCategory::ContractLead);
 
-        // Verify the NPC name is in the display text.
+        // Unmet NPC — display text should use title, not name.
         assert!(
-            candidates[0].display_text.contains("Maren Vasquez"),
-            "Contract lead should reference the NPC by name"
+            candidates[0].display_text.contains("Guild Factor"),
+            "Contract lead should reference unmet NPC by title"
+        );
+        assert!(
+            !candidates[0].display_text.contains("Maren Vasquez"),
+            "Contract lead should NOT reveal unmet NPC's name"
+        );
+
+        // Now mark the NPC as met and regenerate.
+        galaxy.npcs[0].met_player = true;
+        let ctx2 = RumorContext {
+            galaxy: &galaxy,
+            journey: &journey,
+            recent_tick_events: &[],
+            location: &loc,
+            system: &sys,
+        };
+        let candidates2 = scan_contracts(&ctx2, 0.8);
+        assert!(
+            candidates2[0].display_text.contains("Maren Vasquez"),
+            "Contract lead should show met NPC's name"
         );
     }
 

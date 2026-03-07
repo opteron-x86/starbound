@@ -288,12 +288,20 @@ pub fn build_user_message(ctx: &EncounterContext) -> String {
     if !ctx.npcs_here.is_empty() {
         msg.push_str(&format!("\nNPCs HERE ({}):\n", ctx.npcs_here.len()));
         for npc in &ctx.npcs_here {
-            msg.push_str(&format!(
-                "  {} — {} (disposition: {}, personality: {})\n",
-                npc.name, npc.title,
-                npc.disposition_tier(),
-                npc.personality.dominant_description(),
-            ));
+            if npc.met_player {
+                msg.push_str(&format!(
+                    "  {} — {} (disposition: {}, personality: {})\n",
+                    npc.name, npc.title,
+                    npc.disposition_tier(),
+                    npc.personality.dominant_description(),
+                ));
+            } else {
+                // Unmet NPC — title only. Do not reveal their name.
+                msg.push_str(&format!(
+                    "  a {} (unmet — do NOT name them, use title or description only)\n",
+                    npc.title,
+                ));
+            }
             // Include last interaction if any.
             if let Some(last) = npc.last_interaction() {
                 msg.push_str(&format!(

@@ -47,6 +47,9 @@ use starbound_game::npc_interaction::{
     build_npc_presentation, ask_about_area, ask_about_connection,
     contract_refusal_text, farewell_text, NpcAction,
 };
+use starbound_game::reputation::{
+    first_meeting_disposition, would_recognize_player,
+};
 
 use starbound_llm::config::LlmConfig;
 use starbound_llm::generate::generate_encounter;
@@ -239,6 +242,13 @@ impl GameState {
             .and_then(|fid| self.galaxy.factions.iter().find(|f| f.id == fid))
             .map(|f| f.name.clone())
             .unwrap_or_else(|| "Independent".into())
+    }
+
+    /// Get the NPC's faction category, if affiliated.
+    fn npc_faction_category(&self, npc: &Npc) -> Option<FactionCategory> {
+        npc.faction_id
+            .and_then(|fid| self.galaxy.factions.iter().find(|f| f.id == fid))
+            .map(|f| f.category)
     }
 
     /// Get the system name where an NPC lives.
@@ -2763,6 +2773,29 @@ fn run_intent_encounter(gs: &mut GameState, intent: PlayerIntent) {
 // ---------------------------------------------------------------------------
 
 fn people_menu(gs: &mut GameState) {
+    // --- Recognition pass ---
+    // Before showing the menu, check if the player's renown causes any
+    // unmet NPCs to recognize them. This happens once when you "look
+    // around" — it's the moment where your reputation precedes you.
+    let npc_ids: Vec<Uuid> = gs.npcs_here().iter().map(|n| n.id).collect();
+
+    for &npc_id in &npc_ids {
+        let (already_met, faction_cat) = {
+            let npc = gs.galaxy.npcs.iter().find(|n| n.id == npc_id).unwrap();
+            (npc.met_player, gs.npc_faction_category(npc))
+        };
+
+        if !already_met && would_recognize_player(&gs.journey.profile, faction_cat) {
+            // They've heard of you. Apply first-meeting disposition.
+            let shift = first_meeting_disposition(&gs.journey.profile, faction_cat);
+            if let Some(npc) = gs.galaxy.npcs.iter_mut().find(|n| n.id == npc_id) {
+                npc.met_player = true;
+                npc.disposition = (npc.disposition + shift).clamp(-1.0, 1.0);
+            }
+        }
+    }
+
+    // --- Display ---
     let npcs = gs.npcs_here();
 
     if npcs.is_empty() {
@@ -2779,16 +2812,19 @@ fn people_menu(gs: &mut GameState) {
 
     for (i, npc) in npcs.iter().enumerate() {
         let faction_str = gs.npc_faction_name(npc);
-        let tier = npc.disposition_tier();
 
-        // Disposition hint — subtle, not a number.
-        let disposition_hint = match tier {
-            DispositionTier::Hostile => " — hostile",
-            DispositionTier::Cold => " — cold",
-            DispositionTier::Neutral => "",
-            DispositionTier::Warm => " — seems friendly",
-            DispositionTier::Friendly => " — warmly disposed",
-            DispositionTier::Trusted => " — trusts you",
+        // Disposition hint — only shown for met NPCs.
+        let disposition_hint = if npc.met_player {
+            match npc.disposition_tier() {
+                DispositionTier::Hostile => " — hostile",
+                DispositionTier::Cold => " — cold",
+                DispositionTier::Neutral => "",
+                DispositionTier::Warm => " — seems friendly",
+                DispositionTier::Friendly => " — warmly disposed",
+                DispositionTier::Trusted => " — trusts you",
+            }
+        } else {
+            ""
         };
 
         // Species hint for synthetics.
@@ -2798,8 +2834,14 @@ fn people_menu(gs: &mut GameState) {
             String::new()
         };
 
-        println!("  {}) {} — {} ({}){}{}", 
-            i + 1, npc.name, npc.title, faction_str, species_hint, disposition_hint);
+        if npc.met_player {
+            println!("  {}) {} — {} ({}){}{}", 
+                i + 1, npc.name, npc.title, faction_str, species_hint, disposition_hint);
+        } else {
+            // Unmet NPC — show title and faction only.
+            println!("  {}) {} ({}){}", 
+                i + 1, npc.title, faction_str, species_hint);
+        }
     }
     println!("  0) Back");
     println!();
@@ -2819,6 +2861,17 @@ fn talk_to_npc(gs: &mut GameState, npc_id: Uuid) {
         Some(i) => i,
         None => return,
     };
+
+    // --- First meeting: flip met_player and apply reputation-based disposition ---
+    if !gs.galaxy.npcs[npc_idx].met_player {
+        let faction_cat = gs.npc_faction_category(&gs.galaxy.npcs[npc_idx]);
+        let shift = first_meeting_disposition(&gs.journey.profile, faction_cat);
+        let npc = &mut gs.galaxy.npcs[npc_idx];
+        npc.met_player = true;
+        if shift.abs() > 0.001 {
+            npc.disposition = (npc.disposition + shift).clamp(-1.0, 1.0);
+        }
+    }
 
     // Track whether this is the first screen in this conversation.
     // After the player takes an action (ask about work, area, etc.) and

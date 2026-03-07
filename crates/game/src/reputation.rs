@@ -13,6 +13,7 @@
 //! matter — just like in real life.
 
 use starbound_core::journey::Journey;
+use starbound_core::galaxy::FactionCategory;
 use starbound_core::reputation::{
     ActionContext, ActionRecord, ActionType, LabelKind, PlayerProfile, ReputationLabel,
 };
@@ -66,6 +67,7 @@ pub fn record_action(
     // Recalculate everything.
     recalculate_axes(&mut journey.profile);
     evaluate_labels(&mut journey.profile);
+    recalculate_renown(&mut journey.profile);
 }
 
 /// Record an action with just a type and note (convenience).
@@ -368,6 +370,137 @@ fn evaluate_drifter(p: &PlayerProfile) -> (LabelKind, f32) {
             + (p.discretion - 0.5).abs())
             / 3.0; // Normalize to 0–1 range.
     (LabelKind::Drifter, centrality.max(0.0))
+}
+
+// ---------------------------------------------------------------------------
+// Renown — how widely known the player is
+// ---------------------------------------------------------------------------
+
+/// Recalculate renown from action history length and label strength.
+///
+/// Renown grows from two sources:
+/// - **Activity**: more actions = more stories about you in port.
+///   Saturates around 100 actions → 0.4 contribution.
+/// - **Reputation**: stronger labels = more memorable identity.
+///   Strongest label strength × 0.6 contribution.
+///
+/// A fresh captain is 0.0. After 50+ actions with a strong label, ~0.7.
+fn recalculate_renown(profile: &mut PlayerProfile) {
+    let action_component = (profile.action_history.len() as f32 / 100.0).min(1.0) * 0.4;
+
+    let label_component = profile.labels.iter()
+        .map(|l| l.strength)
+        .fold(0.0_f32, f32::max)
+        * 0.6;
+
+    profile.renown = (action_component + label_component).clamp(0.0, 1.0);
+}
+
+// ---------------------------------------------------------------------------
+// NPC recognition — how player reputation affects first meetings
+// ---------------------------------------------------------------------------
+
+/// How well a player's reputation label aligns with an NPC's faction category.
+/// Positive = favorable impression, negative = hostile recognition.
+/// Returns a value in -1.0 to 1.0.
+pub fn label_faction_alignment(label: LabelKind, category: FactionCategory) -> f32 {
+    match (label, category) {
+        // Traders are welcome among economic factions.
+        (LabelKind::Trader, FactionCategory::Economic) => 0.8,
+        (LabelKind::Trader, FactionCategory::Guild) => 0.5,
+        (LabelKind::Trader, FactionCategory::Criminal) => -0.2,
+
+        // Pirates are hated by military, welcomed by criminals.
+        (LabelKind::Pirate, FactionCategory::Criminal) => 0.7,
+        (LabelKind::Pirate, FactionCategory::Military) => -0.8,
+        (LabelKind::Pirate, FactionCategory::Economic) => -0.5,
+        (LabelKind::Pirate, FactionCategory::Guild) => -0.3,
+
+        // Privateers are respected by military, distrusted by criminals.
+        (LabelKind::Privateer, FactionCategory::Military) => 0.7,
+        (LabelKind::Privateer, FactionCategory::Political) => 0.3,
+        (LabelKind::Privateer, FactionCategory::Criminal) => -0.6,
+
+        // Seekers intrigue academics and religious orders.
+        (LabelKind::Seeker, FactionCategory::Academic) => 0.6,
+        (LabelKind::Seeker, FactionCategory::Religious) => 0.5,
+
+        // Mercenaries are tolerated by military, useful to everyone.
+        (LabelKind::Mercenary, FactionCategory::Military) => 0.3,
+        (LabelKind::Mercenary, FactionCategory::Criminal) => 0.2,
+
+        // Operatives are valued by political factions, distrusted by open ones.
+        (LabelKind::Operative, FactionCategory::Political) => 0.5,
+        (LabelKind::Operative, FactionCategory::Criminal) => 0.4,
+        (LabelKind::Operative, FactionCategory::Military) => 0.2,
+
+        // Drifters — no strong reactions.
+        (LabelKind::Drifter, _) => 0.0,
+
+        // Everything else — mild or no reaction.
+        _ => 0.0,
+    }
+}
+
+/// Calculate the disposition shift for a first meeting based on player
+/// renown and reputation alignment with the NPC's faction.
+///
+/// Returns the disposition delta to apply when `met_player` flips true.
+/// Zero renown = zero shift (nobody's heard of you).
+/// High renown + aligned label = warm welcome.
+/// High renown + opposed label = hostile recognition.
+pub fn first_meeting_disposition(
+    profile: &PlayerProfile,
+    faction_category: Option<FactionCategory>,
+) -> f32 {
+    if profile.renown < 0.1 {
+        return 0.0; // Nobody's heard of you yet.
+    }
+
+    let alignment = match (profile.primary_label(), faction_category) {
+        (Some(label), Some(category)) => label_faction_alignment(label.kind, category),
+        (Some(_), None) => {
+            // Unaffiliated civilian — mild positive from fame alone.
+            0.15
+        }
+        (None, _) => 0.0, // No label = no strong reaction.
+    };
+
+    // Scale by renown: even a perfect alignment doesn't help if nobody
+    // knows you. Even a terrible alignment doesn't hurt if you're unknown.
+    let shift = alignment * profile.renown * 0.3;
+
+    // Clamp — first meetings shouldn't swing disposition too wildly.
+    shift.clamp(-0.25, 0.25)
+}
+
+/// Whether an NPC would recognize the player on sight (before conversation).
+/// Requires high renown AND a non-zero alignment with the NPC's faction.
+/// Recognition means: the NPC's name is visible in the People menu,
+/// and `met_player` is pre-set to true.
+pub fn would_recognize_player(
+    profile: &PlayerProfile,
+    faction_category: Option<FactionCategory>,
+) -> bool {
+    if profile.renown < 0.4 {
+        return false; // Not famous enough to be recognized.
+    }
+
+    match profile.primary_label() {
+        Some(label) => {
+            let alignment = match faction_category {
+                Some(cat) => label_faction_alignment(label.kind, cat).abs(),
+                None => {
+                    // Civilians recognize very famous people.
+                    if profile.renown >= 0.7 { 0.3 } else { 0.0 }
+                }
+            };
+            // Need some non-trivial alignment — they recognize you
+            // because your reputation specifically matters to their world.
+            alignment >= 0.2
+        }
+        None => false,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -771,5 +904,113 @@ mod tests {
             "Pure service should give high loyalty, got {:.2}",
             loyalty
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Renown and recognition tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn fresh_player_has_zero_renown() {
+        let profile = PlayerProfile::new();
+        assert_eq!(profile.renown, 0.0, "New player should have zero renown");
+    }
+
+    #[test]
+    fn renown_grows_with_actions_and_labels() {
+        let mut profile = PlayerProfile::new();
+
+        // Add 50 actions.
+        for i in 0..50 {
+            profile.action_history.push(ActionRecord {
+                action_type: ActionType::Trade,
+                timestamp: Timestamp { personal_days: i as f64, galactic_days: i as f64 },
+                context: ActionContext::empty(),
+            });
+        }
+        profile.labels.push(ReputationLabel {
+            kind: LabelKind::Trader,
+            strength: 0.6,
+            recognized_by: vec![],
+        });
+
+        recalculate_renown(&mut profile);
+
+        assert!(
+            profile.renown > 0.4,
+            "50 actions + strong label should give meaningful renown, got {:.2}",
+            profile.renown,
+        );
+        assert!(
+            profile.renown < 0.9,
+            "50 actions shouldn't max renown, got {:.2}",
+            profile.renown,
+        );
+    }
+
+    #[test]
+    fn label_faction_alignment_positive() {
+        let alignment = label_faction_alignment(LabelKind::Trader, FactionCategory::Economic);
+        assert!(alignment > 0.5, "Trader + Economic should be strongly positive");
+    }
+
+    #[test]
+    fn label_faction_alignment_negative() {
+        let alignment = label_faction_alignment(LabelKind::Pirate, FactionCategory::Military);
+        assert!(alignment < -0.5, "Pirate + Military should be strongly negative");
+    }
+
+    #[test]
+    fn first_meeting_zero_renown_no_shift() {
+        let profile = PlayerProfile::new();
+        let shift = first_meeting_disposition(&profile, Some(FactionCategory::Economic));
+        assert_eq!(shift, 0.0, "Zero renown should produce zero shift");
+    }
+
+    #[test]
+    fn first_meeting_high_renown_positive_alignment() {
+        let mut profile = PlayerProfile::new();
+        profile.renown = 0.8;
+        profile.labels.push(ReputationLabel {
+            kind: LabelKind::Trader,
+            strength: 0.7,
+            recognized_by: vec![],
+        });
+
+        let shift = first_meeting_disposition(&profile, Some(FactionCategory::Economic));
+        assert!(shift > 0.0, "Famous trader + economic faction should produce positive shift");
+        assert!(shift <= 0.25, "Shift should be clamped, got {:.2}", shift);
+    }
+
+    #[test]
+    fn first_meeting_high_renown_negative_alignment() {
+        let mut profile = PlayerProfile::new();
+        profile.renown = 0.8;
+        profile.labels.push(ReputationLabel {
+            kind: LabelKind::Pirate,
+            strength: 0.7,
+            recognized_by: vec![],
+        });
+
+        let shift = first_meeting_disposition(&profile, Some(FactionCategory::Military));
+        assert!(shift < 0.0, "Famous pirate + military faction should produce negative shift");
+    }
+
+    #[test]
+    fn unknown_player_not_recognized() {
+        let profile = PlayerProfile::new();
+        assert!(!would_recognize_player(&profile, Some(FactionCategory::Economic)));
+    }
+
+    #[test]
+    fn famous_trader_recognized_by_economic() {
+        let mut profile = PlayerProfile::new();
+        profile.renown = 0.6;
+        profile.labels.push(ReputationLabel {
+            kind: LabelKind::Trader,
+            strength: 0.7,
+            recognized_by: vec![],
+        });
+        assert!(would_recognize_player(&profile, Some(FactionCategory::Economic)));
     }
 }

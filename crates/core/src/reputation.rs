@@ -53,6 +53,13 @@ pub struct PlayerProfile {
 
     /// Currently active reputation labels — assigned by the world.
     pub labels: Vec<ReputationLabel>,
+
+    /// How widely known the player is across the galaxy.
+    /// 0.0 = nobody, 1.0 = legendary. Derived from action count
+    /// and the strength of active labels. Affects NPC recognition
+    /// on first meeting and initial disposition shifts.
+    #[serde(default)]
+    pub renown: f32,
 }
 
 impl PlayerProfile {
@@ -68,6 +75,7 @@ impl PlayerProfile {
             faction_loyalty: HashMap::new(),
             action_history: Vec::new(),
             labels: Vec::new(),
+            renown: 0.0,
         }
     }
 

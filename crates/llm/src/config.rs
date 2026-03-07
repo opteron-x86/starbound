@@ -34,7 +34,7 @@ impl Default for LlmConfig {
         Self {
             endpoint: "https://openrouter.ai/api/v1/chat/completions".into(),
             api_key: String::new(),
-            model: "minimax/minimax-m2.5".into(),
+            model: "xiaomi/mimo-v2-flash".into(),
             max_tokens: 2000,
             temperature: 0.8,
             enabled: false,
@@ -52,6 +52,17 @@ impl LlmConfig {
         } else {
             std::env::var("OPENROUTER_API_KEY").ok()
         }
+    }
+
+    /// Resolve the model — uses the configured model if non-empty,
+    /// otherwise reads from `OPENROUTER_MODEL` env var, then falls
+    /// back to the compiled-in default.
+    pub fn resolve_model(&self) -> String {
+        if !self.model.is_empty() {
+            return self.model.clone();
+        }
+        std::env::var("OPENROUTER_MODEL")
+            .unwrap_or_else(|_| Self::default().model)
     }
 
     /// Whether the LLM is available (enabled + has API key).
