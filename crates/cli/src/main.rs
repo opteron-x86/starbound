@@ -51,6 +51,7 @@ use starbound_game::npc_interaction::{
 use starbound_llm::config::LlmConfig;
 use starbound_llm::generate::generate_encounter;
 use starbound_llm::rumor_flavor::{flavor_rumor, RumorSource};
+use starbound_llm::npc_dialogue::{flavor_npc_greeting, flavor_npc_knowledge, describe_personality, NpcContext};
 use starbound_llm::prompt::DestinationInfo;
 
 // ---------------------------------------------------------------------------
@@ -260,6 +261,30 @@ impl GameState {
     /// Find an NPC by ID.
     fn find_npc(&self, npc_id: Uuid) -> Option<&Npc> {
         self.galaxy.npcs.iter().find(|n| n.id == npc_id)
+    }
+
+    /// Build an NpcContext for the LLM from a given NPC index.
+    fn build_npc_llm_context(&self, npc_idx: usize) -> NpcContext {
+        let npc = &self.galaxy.npcs[npc_idx];
+        let system_name = self.current_system().name.clone();
+        let location_name = self.npc_location_name(npc).to_string();
+        let faction_name = self.npc_faction_name(npc);
+        let p = &npc.personality;
+
+        NpcContext {
+            name: npc.name.clone(),
+            title: npc.title.clone(),
+            pronouns_subject: npc.pronouns.subject.clone(),
+            pronouns_object: npc.pronouns.object.clone(),
+            pronouns_possessive: npc.pronouns.possessive.clone(),
+            personality_desc: describe_personality(p.warmth, p.boldness, p.idealism),
+            disposition_label: npc.disposition_tier().label().to_string(),
+            bio: npc.bio.clone(),
+            location_name,
+            system_name,
+            faction_name,
+            ship_name: self.journey.ship.name.clone(),
+        }
     }
 
     /// Generate a unique ID for an LLM-generated event.
@@ -2801,7 +2826,7 @@ fn talk_to_npc(gs: &mut GameState, npc_id: Uuid) {
         let faction_name = gs.npc_faction_name(npc);
 
         // Build the full NPC presentation.
-        let pres = build_npc_presentation(
+        let mut pres = build_npc_presentation(
             npc,
             has_turnable,
             &ship_name,
@@ -2810,6 +2835,21 @@ fn talk_to_npc(gs: &mut GameState, npc_id: Uuid) {
             &gs.personality_expressions,
             &mut gs.rng,
         );
+
+        // --- Optional LLM greeting flavor ---
+        if gs.llm_config.is_available() {
+            let npc_ctx = gs.build_npc_llm_context(npc_idx);
+            let memory = npc.last_interaction().map(|r| r.summary.clone());
+            if let Some(flavored) = flavor_npc_greeting(
+                &gs.llm_config,
+                &npc_ctx,
+                memory.as_deref(),
+            ) {
+                pres.greeting = flavored;
+                // LLM greeting integrates the memory, so clear the separate line.
+                pres.memory_line = None;
+            }
+        }
 
         clear_screen();
         display_header(&format!("{} — {}", npc.name, npc.title));
@@ -2942,15 +2982,15 @@ fn npc_ask_about_area(gs: &mut GameState, npc_idx: usize) {
     display_header("Local Intel");
     println!();
 
-    // Framing line.
-    if !area.framing.is_empty() {
-        for line in wrap_text(&area.framing, 60) {
-            println!("  {}", line);
-        }
-        println!();
-    }
-
     if area.items.is_empty() {
+        // Show framing even for empty results — the NPC tried.
+        if !area.framing.is_empty() {
+            for line in wrap_text(&area.framing, 60) {
+                println!("  {}", line);
+            }
+            println!();
+        }
+
         let npc = &gs.galaxy.npcs[npc_idx];
         if npc.disposition_tier() <= DispositionTier::Cold {
             println!("  {} doesn't seem inclined to share anything.", npc.name);
@@ -2958,14 +2998,45 @@ fn npc_ask_about_area(gs: &mut GameState, npc_idx: usize) {
             println!("  {} has nothing new to tell you.", npc.name);
         }
     } else {
-        // Display each knowledge item.
-        let mut newly_shared = Vec::new();
-        for item in &area.items {
-            for line in wrap_text(&item.delivered, 60) {
-                println!("  {}", line);
+        // Collect raw items for tracking regardless of display method.
+        let newly_shared: Vec<String> = area.items.iter().map(|i| i.raw.clone()).collect();
+
+        // --- Optional LLM knowledge flavor ---
+        let used_llm = if gs.llm_config.is_available() {
+            let npc_ctx = gs.build_npc_llm_context(npc_idx);
+            if let Some(flavored) = flavor_npc_knowledge(
+                &gs.llm_config,
+                &npc_ctx,
+                &newly_shared,
+            ) {
+                for line in wrap_text(&flavored, 60) {
+                    println!("  {}", line);
+                }
+                println!();
+                true
+            } else {
+                false
             }
-            println!();
-            newly_shared.push(item.raw.clone());
+        } else {
+            false
+        };
+
+        // Template fallback.
+        if !used_llm {
+            // Framing line.
+            if !area.framing.is_empty() {
+                for line in wrap_text(&area.framing, 60) {
+                    println!("  {}", line);
+                }
+                println!();
+            }
+
+            for item in &area.items {
+                for line in wrap_text(&item.delivered, 60) {
+                    println!("  {}", line);
+                }
+                println!();
+            }
         }
 
         // Record what was shared.
