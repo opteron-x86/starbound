@@ -1,81 +1,253 @@
 {
   "_schema": "starbound.entity_template.people.v1",
-
   "name_pools": {
     "human": {
       "default": {
         "given_male": [
-          "Kael", "Joss", "Dav", "Orin", "Cade", "Tomas", "Vek", "Idris",
-          "Leong", "Harlan", "Tam", "Nik", "Jace", "Renn", "Callum",
-          "Arlo", "Fenn", "Matteo", "Zev", "Ronan", "Elias", "Soren",
-          "Kian", "Milo", "Theron", "Cassian", "Lucien", "Dorian"
+          "Kael",
+          "Joss",
+          "Dav",
+          "Orin",
+          "Cade",
+          "Tomas",
+          "Vek",
+          "Idris",
+          "Leong",
+          "Harlan",
+          "Tam",
+          "Nik",
+          "Jace",
+          "Renn",
+          "Callum",
+          "Arlo",
+          "Fenn",
+          "Matteo",
+          "Zev",
+          "Ronan",
+          "Elias",
+          "Soren",
+          "Kian",
+          "Milo",
+          "Theron",
+          "Cassian",
+          "Lucien",
+          "Dorian"
         ],
         "given_female": [
-          "Maren", "Suri", "Thea", "Lys", "Nessa", "Asha", "Petra",
-          "Yara", "Sienna", "Kira", "Elara", "Sable", "Lena", "Zara",
-          "Ren", "Dex", "Orla", "Wren", "Isolde", "Talia", "Vesper",
-          "Naia", "Cleo", "Rhea", "Iris", "Dahlia", "Freya", "Linnea"
+          "Maren",
+          "Suri",
+          "Thea",
+          "Lys",
+          "Nessa",
+          "Asha",
+          "Petra",
+          "Yara",
+          "Sienna",
+          "Kira",
+          "Elara",
+          "Sable",
+          "Lena",
+          "Zara",
+          "Ren",
+          "Dex",
+          "Orla",
+          "Wren",
+          "Isolde",
+          "Talia",
+          "Vesper",
+          "Naia",
+          "Cleo",
+          "Rhea",
+          "Iris",
+          "Dahlia",
+          "Freya",
+          "Linnea"
         ],
         "family": [
-          "Vasquez", "Achebe", "Tark", "Okonkwo", "Chen", "Volkov", "Reeves",
-          "Koskinen", "Nair", "Oduya", "Cortez", "Strand", "Halloran", "Voss",
-          "Kaur", "Okoro", "Tanaka", "Dubois", "Rashid", "Brennan",
-          "Solari", "Kessler", "Okafor", "Tannen", "Haig", "Reyes",
-          "Vasil", "Torren", "Ashcroft", "Nazari", "Loh", "Duval",
-          "Mikkelsen", "Cross", "Sato", "Morales", "Ivarsson", "Adeyemi"
+          "Vasquez",
+          "Achebe",
+          "Tark",
+          "Okonkwo",
+          "Chen",
+          "Volkov",
+          "Reeves",
+          "Koskinen",
+          "Nair",
+          "Oduya",
+          "Cortez",
+          "Strand",
+          "Halloran",
+          "Voss",
+          "Kaur",
+          "Okoro",
+          "Tanaka",
+          "Dubois",
+          "Rashid",
+          "Brennan",
+          "Solari",
+          "Kessler",
+          "Okafor",
+          "Tannen",
+          "Haig",
+          "Reyes",
+          "Vasil",
+          "Torren",
+          "Ashcroft",
+          "Nazari",
+          "Loh",
+          "Duval",
+          "Mikkelsen",
+          "Cross",
+          "Sato",
+          "Morales",
+          "Ivarsson",
+          "Adeyemi"
         ]
       },
       "by_culture_tag": {
         "earth_origin": {
           "given_male": [
-            "Thomas", "James", "Marcus", "David", "Wei", "Aleksandr",
-            "Henrik", "Kenji", "Daniel", "Rafael"
+            "Thomas",
+            "James",
+            "Marcus",
+            "David",
+            "Wei",
+            "Aleksandr",
+            "Henrik",
+            "Kenji",
+            "Daniel",
+            "Rafael"
           ],
           "given_female": [
-            "Elena", "Sarah", "Mei", "Katarina", "Amara", "Ingrid",
-            "Yuki", "Clara", "Sofia", "Priya"
+            "Elena",
+            "Sarah",
+            "Mei",
+            "Katarina",
+            "Amara",
+            "Ingrid",
+            "Yuki",
+            "Clara",
+            "Sofia",
+            "Priya"
           ],
           "family": [
-            "Chen", "Okafor", "Reeves", "Petrov", "Johansson", "Nakamura",
-            "Brennan", "Silva", "Morales", "Nair", "Adeyemi", "Larsson"
+            "Chen",
+            "Okafor",
+            "Reeves",
+            "Petrov",
+            "Johansson",
+            "Nakamura",
+            "Brennan",
+            "Silva",
+            "Morales",
+            "Nair",
+            "Adeyemi",
+            "Larsson"
           ]
         },
         "nomadic_heritage": {
           "given_male": [
-            "Ren", "Tam", "Vek", "Arlo", "Fenn", "Kian", "Soren", "Zev"
+            "Ren",
+            "Tam",
+            "Vek",
+            "Arlo",
+            "Fenn",
+            "Kian",
+            "Soren",
+            "Zev"
           ],
           "given_female": [
-            "Suri", "Asha", "Wren", "Naia", "Dex", "Lys", "Orla", "Vesper"
+            "Suri",
+            "Asha",
+            "Wren",
+            "Naia",
+            "Dex",
+            "Lys",
+            "Orla",
+            "Vesper"
           ],
           "family": [
-            "Solari", "Strand", "Kaur", "Torren", "Voss", "Haig", "Cross"
+            "Solari",
+            "Strand",
+            "Kaur",
+            "Torren",
+            "Voss",
+            "Haig",
+            "Cross"
           ]
         },
         "forged_in_conflict": {
           "given_male": [
-            "Harlan", "Dorian", "Cassian", "Theron", "Ronan", "Idris"
+            "Harlan",
+            "Dorian",
+            "Cassian",
+            "Theron",
+            "Ronan",
+            "Idris"
           ],
           "given_female": [
-            "Petra", "Isolde", "Sable", "Freya", "Sienna", "Maren"
+            "Petra",
+            "Isolde",
+            "Sable",
+            "Freya",
+            "Sienna",
+            "Maren"
           ],
           "family": [
-            "Ashcroft", "Kessler", "Tannen", "Ivarsson", "Halloran", "Reyes"
+            "Ashcroft",
+            "Kessler",
+            "Tannen",
+            "Ivarsson",
+            "Halloran",
+            "Reyes"
           ]
         }
       }
     },
     "synthetic": {
       "designations": [
-        "Unit KV-7", "Index", "Compass", "Relay-3", "Arbiter",
-        "Strand-9", "Meridian", "Archive", "Axiom", "Lattice",
-        "Beacon-4", "Sentinel", "Crucible", "Vector", "Prism-2",
-        "Fulcrum", "Sextant", "Ledger", "Quorum", "Sigil"
+        "Unit KV-7",
+        "Index",
+        "Compass",
+        "Relay-3",
+        "Arbiter",
+        "Strand-9",
+        "Meridian",
+        "Archive",
+        "Axiom",
+        "Lattice",
+        "Beacon-4",
+        "Sentinel",
+        "Crucible",
+        "Vector",
+        "Prism-2",
+        "Fulcrum",
+        "Sextant",
+        "Ledger",
+        "Quorum",
+        "Sigil"
       ],
       "adopted_names": [
-        "Seven", "Patience", "Clarity", "Dusk", "Margin",
-        "Constance", "Vale", "Threshold", "Bridge", "Quiet",
-        "Ember", "Cairn", "Solace", "Thorn", "Lantern",
-        "Vigil", "Ashen", "Parcel", "Respite", "Notion"
+        "Seven",
+        "Patience",
+        "Clarity",
+        "Dusk",
+        "Margin",
+        "Constance",
+        "Vale",
+        "Threshold",
+        "Bridge",
+        "Quiet",
+        "Ember",
+        "Cairn",
+        "Solace",
+        "Thorn",
+        "Lantern",
+        "Vigil",
+        "Ashen",
+        "Parcel",
+        "Respite",
+        "Notion"
       ],
       "chassis_types": [
         "humanoid frame",
@@ -89,25 +261,68 @@
       ]
     }
   },
-
   "species_distribution": {
-    "military":  { "human": 0.95, "synthetic": 0.05 },
-    "economic":  { "human": 0.85, "synthetic": 0.15 },
-    "guild":     { "human": 0.85, "synthetic": 0.15 },
-    "criminal":  { "human": 0.90, "synthetic": 0.10 },
-    "religious": { "human": 0.95, "synthetic": 0.05 },
-    "academic":  { "human": 0.80, "synthetic": 0.20 },
-    "political": { "human": 0.95, "synthetic": 0.05 }
+    "military": {
+      "human": 0.95,
+      "synthetic": 0.05
+    },
+    "economic": {
+      "human": 0.85,
+      "synthetic": 0.15
+    },
+    "guild": {
+      "human": 0.85,
+      "synthetic": 0.15
+    },
+    "criminal": {
+      "human": 0.9,
+      "synthetic": 0.1
+    },
+    "religious": {
+      "human": 0.95,
+      "synthetic": 0.05
+    },
+    "academic": {
+      "human": 0.8,
+      "synthetic": 0.2
+    },
+    "political": {
+      "human": 0.95,
+      "synthetic": 0.05
+    },
+    "civilian": {
+      "human": 0.92,
+      "synthetic": 0.08
+    }
   },
-
   "roles": {
     "military": {
       "titles": [
-        { "title": "Garrison Commander", "weight": 1.0, "min_infra": "colony" },
-        { "title": "Watch Officer", "weight": 1.0, "min_infra": "outpost" },
-        { "title": "Security Chief", "weight": 0.8, "min_infra": "established" },
-        { "title": "Intelligence Liaison", "weight": 0.5, "min_infra": "hub" },
-        { "title": "Port Authority Captain", "weight": 0.7, "min_infra": "colony" }
+        {
+          "title": "Garrison Commander",
+          "weight": 1.0,
+          "min_infra": "colony"
+        },
+        {
+          "title": "Watch Officer",
+          "weight": 1.0,
+          "min_infra": "outpost"
+        },
+        {
+          "title": "Security Chief",
+          "weight": 0.8,
+          "min_infra": "established"
+        },
+        {
+          "title": "Intelligence Liaison",
+          "weight": 0.5,
+          "min_infra": "hub"
+        },
+        {
+          "title": "Port Authority Captain",
+          "weight": 0.7,
+          "min_infra": "colony"
+        }
       ],
       "bio_templates": {
         "human": [
@@ -140,20 +355,53 @@
         "smuggling routes the patrols haven't caught yet"
       ],
       "personality_bias": {
-        "boldness": [0.4, 0.9],
-        "idealism": [0.2, 0.8],
-        "warmth": [0.1, 0.6]
+        "boldness": [
+          0.4,
+          0.9
+        ],
+        "idealism": [
+          0.2,
+          0.8
+        ],
+        "warmth": [
+          0.1,
+          0.6
+        ]
       },
-      "background_tags": ["career_military", "veteran", "security_specialist", "border_patrol"]
+      "background_tags": [
+        "career_military",
+        "veteran",
+        "security_specialist",
+        "border_patrol"
+      ]
     },
-
     "economic": {
       "titles": [
-        { "title": "Trade Liaison", "weight": 1.0, "min_infra": "colony" },
-        { "title": "Commerce Director", "weight": 0.7, "min_infra": "hub" },
-        { "title": "Market Analyst", "weight": 0.8, "min_infra": "established" },
-        { "title": "Trade Representative", "weight": 1.0, "min_infra": "outpost" },
-        { "title": "Commodities Broker", "weight": 0.6, "min_infra": "colony" }
+        {
+          "title": "Trade Liaison",
+          "weight": 1.0,
+          "min_infra": "colony"
+        },
+        {
+          "title": "Commerce Director",
+          "weight": 0.7,
+          "min_infra": "hub"
+        },
+        {
+          "title": "Market Analyst",
+          "weight": 0.8,
+          "min_infra": "established"
+        },
+        {
+          "title": "Trade Representative",
+          "weight": 1.0,
+          "min_infra": "outpost"
+        },
+        {
+          "title": "Commodities Broker",
+          "weight": 0.6,
+          "min_infra": "colony"
+        }
       ],
       "bio_templates": {
         "human": [
@@ -184,20 +432,53 @@
         "supply chain bottlenecks at frontier stations"
       ],
       "personality_bias": {
-        "boldness": [0.3, 0.7],
-        "idealism": [0.1, 0.5],
-        "warmth": [0.3, 0.8]
+        "boldness": [
+          0.3,
+          0.7
+        ],
+        "idealism": [
+          0.1,
+          0.5
+        ],
+        "warmth": [
+          0.3,
+          0.8
+        ]
       },
-      "background_tags": ["merchant", "trader", "financial", "logistics"]
+      "background_tags": [
+        "merchant",
+        "trader",
+        "financial",
+        "logistics"
+      ]
     },
-
     "guild": {
       "titles": [
-        { "title": "Guild Factor", "weight": 1.0, "min_infra": "colony" },
-        { "title": "Dock Supervisor", "weight": 0.9, "min_infra": "outpost" },
-        { "title": "Chief Mechanic", "weight": 0.8, "min_infra": "colony" },
-        { "title": "Guild Arbiter", "weight": 0.5, "min_infra": "hub" },
-        { "title": "Contracts Manager", "weight": 0.7, "min_infra": "established" }
+        {
+          "title": "Guild Factor",
+          "weight": 1.0,
+          "min_infra": "colony"
+        },
+        {
+          "title": "Dock Supervisor",
+          "weight": 0.9,
+          "min_infra": "outpost"
+        },
+        {
+          "title": "Chief Mechanic",
+          "weight": 0.8,
+          "min_infra": "colony"
+        },
+        {
+          "title": "Guild Arbiter",
+          "weight": 0.5,
+          "min_infra": "hub"
+        },
+        {
+          "title": "Contracts Manager",
+          "weight": 0.7,
+          "min_infra": "established"
+        }
       ],
       "bio_templates": {
         "human": [
@@ -228,20 +509,53 @@
         "new routes being opened by independent captains"
       ],
       "personality_bias": {
-        "boldness": [0.3, 0.7],
-        "idealism": [0.3, 0.8],
-        "warmth": [0.3, 0.8]
+        "boldness": [
+          0.3,
+          0.7
+        ],
+        "idealism": [
+          0.3,
+          0.8
+        ],
+        "warmth": [
+          0.3,
+          0.8
+        ]
       },
-      "background_tags": ["spacer", "mechanic", "guild_trained", "dock_worker"]
+      "background_tags": [
+        "spacer",
+        "mechanic",
+        "guild_trained",
+        "dock_worker"
+      ]
     },
-
     "criminal": {
       "titles": [
-        { "title": "Fixer", "weight": 1.0, "min_infra": "outpost" },
-        { "title": "Broker", "weight": 0.8, "min_infra": "colony" },
-        { "title": "Information Dealer", "weight": 0.6, "min_infra": "established" },
-        { "title": "Procurement Specialist", "weight": 0.7, "min_infra": "colony" },
-        { "title": "Facilitator", "weight": 0.5, "min_infra": "outpost" }
+        {
+          "title": "Fixer",
+          "weight": 1.0,
+          "min_infra": "outpost"
+        },
+        {
+          "title": "Broker",
+          "weight": 0.8,
+          "min_infra": "colony"
+        },
+        {
+          "title": "Information Dealer",
+          "weight": 0.6,
+          "min_infra": "established"
+        },
+        {
+          "title": "Procurement Specialist",
+          "weight": 0.7,
+          "min_infra": "colony"
+        },
+        {
+          "title": "Facilitator",
+          "weight": 0.5,
+          "min_infra": "outpost"
+        }
       ],
       "bio_templates": {
         "human": [
@@ -272,20 +586,53 @@
         "who's talking to the authorities"
       ],
       "personality_bias": {
-        "boldness": [0.3, 0.9],
-        "idealism": [0.0, 0.4],
-        "warmth": [0.1, 0.6]
+        "boldness": [
+          0.3,
+          0.9
+        ],
+        "idealism": [
+          0.0,
+          0.4
+        ],
+        "warmth": [
+          0.1,
+          0.6
+        ]
       },
-      "background_tags": ["underworld", "smuggler", "ex_convict", "street_smart"]
+      "background_tags": [
+        "underworld",
+        "smuggler",
+        "ex_convict",
+        "street_smart"
+      ]
     },
-
     "religious": {
       "titles": [
-        { "title": "Prior", "weight": 1.0, "min_infra": "outpost" },
-        { "title": "Keeper of the Silence", "weight": 0.6, "min_infra": "colony" },
-        { "title": "Temple Warden", "weight": 0.7, "min_infra": "established" },
-        { "title": "Pilgrim Guide", "weight": 0.8, "min_infra": "outpost" },
-        { "title": "Distortion Scholar", "weight": 0.5, "min_infra": "hub" }
+        {
+          "title": "Prior",
+          "weight": 1.0,
+          "min_infra": "outpost"
+        },
+        {
+          "title": "Keeper of the Silence",
+          "weight": 0.6,
+          "min_infra": "colony"
+        },
+        {
+          "title": "Temple Warden",
+          "weight": 0.7,
+          "min_infra": "established"
+        },
+        {
+          "title": "Pilgrim Guide",
+          "weight": 0.8,
+          "min_infra": "outpost"
+        },
+        {
+          "title": "Distortion Scholar",
+          "weight": 0.5,
+          "min_infra": "hub"
+        }
       ],
       "bio_templates": {
         "human": [
@@ -316,20 +663,53 @@
         "places where time behaves strangely"
       ],
       "personality_bias": {
-        "boldness": [0.2, 0.6],
-        "idealism": [0.5, 1.0],
-        "warmth": [0.4, 0.9]
+        "boldness": [
+          0.2,
+          0.6
+        ],
+        "idealism": [
+          0.5,
+          1.0
+        ],
+        "warmth": [
+          0.4,
+          0.9
+        ]
       },
-      "background_tags": ["faithful", "pilgrim", "contemplative", "mystic"]
+      "background_tags": [
+        "faithful",
+        "pilgrim",
+        "contemplative",
+        "mystic"
+      ]
     },
-
     "academic": {
       "titles": [
-        { "title": "Research Coordinator", "weight": 1.0, "min_infra": "colony" },
-        { "title": "Field Scientist", "weight": 0.9, "min_infra": "outpost" },
-        { "title": "Data Analyst", "weight": 0.8, "min_infra": "established" },
-        { "title": "Survey Lead", "weight": 0.7, "min_infra": "colony" },
-        { "title": "Xenoarchaeologist", "weight": 0.4, "min_infra": "hub" }
+        {
+          "title": "Research Coordinator",
+          "weight": 1.0,
+          "min_infra": "colony"
+        },
+        {
+          "title": "Field Scientist",
+          "weight": 0.9,
+          "min_infra": "outpost"
+        },
+        {
+          "title": "Data Analyst",
+          "weight": 0.8,
+          "min_infra": "established"
+        },
+        {
+          "title": "Survey Lead",
+          "weight": 0.7,
+          "min_infra": "colony"
+        },
+        {
+          "title": "Xenoarchaeologist",
+          "weight": 0.4,
+          "min_infra": "hub"
+        }
       ],
       "bio_templates": {
         "human": [
@@ -360,20 +740,53 @@
         "classified findings about the distortions"
       ],
       "personality_bias": {
-        "boldness": [0.2, 0.6],
-        "idealism": [0.4, 0.9],
-        "warmth": [0.3, 0.8]
+        "boldness": [
+          0.2,
+          0.6
+        ],
+        "idealism": [
+          0.4,
+          0.9
+        ],
+        "warmth": [
+          0.3,
+          0.8
+        ]
       },
-      "background_tags": ["researcher", "academic", "field_scientist", "ex_university"]
+      "background_tags": [
+        "researcher",
+        "academic",
+        "field_scientist",
+        "ex_university"
+      ]
     },
-
     "political": {
       "titles": [
-        { "title": "Administrator", "weight": 1.0, "min_infra": "colony" },
-        { "title": "Governor's Attaché", "weight": 0.6, "min_infra": "hub" },
-        { "title": "Diplomatic Envoy", "weight": 0.5, "min_infra": "established" },
-        { "title": "Colonial Magistrate", "weight": 0.7, "min_infra": "colony" },
-        { "title": "Civil Affairs Officer", "weight": 0.8, "min_infra": "colony" }
+        {
+          "title": "Administrator",
+          "weight": 1.0,
+          "min_infra": "colony"
+        },
+        {
+          "title": "Governor's Attaché",
+          "weight": 0.6,
+          "min_infra": "hub"
+        },
+        {
+          "title": "Diplomatic Envoy",
+          "weight": 0.5,
+          "min_infra": "established"
+        },
+        {
+          "title": "Colonial Magistrate",
+          "weight": 0.7,
+          "min_infra": "colony"
+        },
+        {
+          "title": "Civil Affairs Officer",
+          "weight": 0.8,
+          "min_infra": "colony"
+        }
       ],
       "bio_templates": {
         "human": [
@@ -404,14 +817,147 @@
         "colonial development plans"
       ],
       "personality_bias": {
-        "boldness": [0.2, 0.7],
-        "idealism": [0.2, 0.8],
-        "warmth": [0.3, 0.8]
+        "boldness": [
+          0.2,
+          0.7
+        ],
+        "idealism": [
+          0.2,
+          0.8
+        ],
+        "warmth": [
+          0.3,
+          0.8
+        ]
       },
-      "background_tags": ["politician", "bureaucrat", "diplomat", "administrator"]
+      "background_tags": [
+        "politician",
+        "bureaucrat",
+        "diplomat",
+        "administrator"
+      ]
+    },
+    "civilian": {
+      "titles": [
+        {
+          "title": "Dockhand",
+          "weight": 1.0,
+          "min_infra": "outpost"
+        },
+        {
+          "title": "Bartender",
+          "weight": 0.9,
+          "min_infra": "colony"
+        },
+        {
+          "title": "Station Resident",
+          "weight": 0.8,
+          "min_infra": "colony"
+        },
+        {
+          "title": "Retired Pilot",
+          "weight": 0.6,
+          "min_infra": "outpost"
+        },
+        {
+          "title": "Merchant",
+          "weight": 0.9,
+          "min_infra": "colony"
+        },
+        {
+          "title": "Mechanic",
+          "weight": 0.8,
+          "min_infra": "outpost"
+        },
+        {
+          "title": "Cargo Handler",
+          "weight": 0.7,
+          "min_infra": "outpost"
+        },
+        {
+          "title": "Medic",
+          "weight": 0.5,
+          "min_infra": "colony"
+        },
+        {
+          "title": "Prospector",
+          "weight": 0.4,
+          "min_infra": "outpost"
+        },
+        {
+          "title": "Hauler Captain",
+          "weight": 0.5,
+          "min_infra": "colony"
+        },
+        {
+          "title": "Station Cook",
+          "weight": 0.6,
+          "min_infra": "colony"
+        },
+        {
+          "title": "Salvage Operator",
+          "weight": 0.4,
+          "min_infra": "outpost"
+        }
+      ],
+      "bio_templates": {
+        "human": [
+          "Lives and works at {system}. One of the faces you see every time you dock. {personality_note}.",
+          "Been here longer than most. Knows the station better than anyone in uniform. {personality_note}.",
+          "Came out here for work and stayed because leaving costs more than staying. {personality_note}.",
+          "Not affiliated with any faction — just trying to make a living. {personality_note}.",
+          "A fixture of the docks. {personality_note}."
+        ],
+        "synthetic": [
+          "Autonomous unit operating independently at {system}. No faction affiliation. {personality_note}.",
+          "Self-owned synthetic working the docks. {personality_note}."
+        ]
+      },
+      "motivation_pool": [
+        "make enough to keep the lights on",
+        "save up for a berth offworld",
+        "keep their head down and stay out of trouble",
+        "look after the people around them",
+        "find a crew that needs an extra hand",
+        "hear news from the core systems",
+        "trade favors for information",
+        "get their ship running again someday"
+      ],
+      "knowledge_pool": [
+        "who's been docking here recently",
+        "which ships left in a hurry",
+        "local station gossip",
+        "supply shortages and what's hard to find",
+        "rumors about the frontier",
+        "which factions are hiring",
+        "who to avoid on the concourse",
+        "where to find cheap repairs",
+        "what the food situation is like"
+      ],
+      "personality_bias": {
+        "boldness": [
+          0.1,
+          0.7
+        ],
+        "idealism": [
+          0.1,
+          0.6
+        ],
+        "warmth": [
+          0.2,
+          0.9
+        ]
+      },
+      "background_tags": [
+        "local",
+        "spacer",
+        "frontier_born",
+        "ex_crew",
+        "drifter",
+        "settler"
+      ]
     }
   },
-
   "personality_expressions": {
     "warmth_high": [
       "greets you like an old friend",
@@ -456,7 +1002,6 @@
       "measures every interaction by what it costs and what it pays"
     ]
   },
-
   "connection_templates": {
     "same_faction": [
       "{npc_a} and {npc_b} serve the same faction, though their approaches differ.",

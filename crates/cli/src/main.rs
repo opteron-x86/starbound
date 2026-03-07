@@ -142,6 +142,9 @@ struct GameState {
     /// Recent galactic tick events — used by the rumor system's faction scanner.
     /// Populated after each tick, capped at the most recent ~20 events.
     recent_tick_events: Vec<TickEvent>,
+    /// Cached LLM greetings per NPC — prevents regeneration within a docking
+    /// session. Cleared when the player changes location or system.
+    npc_greeting_cache: HashMap<Uuid, String>,
 }
 
 impl GameState {
@@ -610,6 +613,7 @@ fn new_game(seed: u64) -> GameState {
         llm_event_counter: 0,
         scene_history: Vec::new(),
         recent_tick_events: Vec::new(),
+        npc_greeting_cache: HashMap::new(),
     }
 }
 
@@ -1870,7 +1874,8 @@ fn navigate_to_location(gs: &mut GameState, target_id: Uuid, from_dist: f32) {
     // ~22% chance of a small moment during sublight travel.
     try_encounter(gs, EventTrigger::Transit, None, Some(dest_info.clone()));
 
-    // Set location.
+    // Set location. Clear NPC greeting cache — new location, fresh greetings.
+    gs.npc_greeting_cache.clear();
     gs.journey.current_location = Some(target_id);
 
     if can_dock {
@@ -2815,6 +2820,12 @@ fn talk_to_npc(gs: &mut GameState, npc_id: Uuid) {
         None => return,
     };
 
+    // Track whether this is the first screen in this conversation.
+    // After the player takes an action (ask about work, area, etc.) and
+    // returns, we show a short return line instead of regenerating the
+    // full LLM greeting.
+    let mut first_screen = true;
+
     loop {
         let npc = &gs.galaxy.npcs[npc_idx];
 
@@ -2836,19 +2847,31 @@ fn talk_to_npc(gs: &mut GameState, npc_id: Uuid) {
             &mut gs.rng,
         );
 
-        // --- Optional LLM greeting flavor ---
-        if gs.llm_config.is_available() {
-            let npc_ctx = gs.build_npc_llm_context(npc_idx);
-            let memory = npc.last_interaction().map(|r| r.summary.clone());
-            if let Some(flavored) = flavor_npc_greeting(
-                &gs.llm_config,
-                &npc_ctx,
-                memory.as_deref(),
-            ) {
-                pres.greeting = flavored;
-                // LLM greeting integrates the memory, so clear the separate line.
+        // --- Greeting: cached LLM on first screen, short return line after ---
+        if first_screen {
+            // Check the per-visit cache first (covers re-entering from people menu).
+            if let Some(cached) = gs.npc_greeting_cache.get(&npc_id) {
+                pres.greeting = cached.clone();
                 pres.memory_line = None;
+            } else if gs.llm_config.is_available() {
+                let npc_ctx = gs.build_npc_llm_context(npc_idx);
+                let npc = &gs.galaxy.npcs[npc_idx];
+                let memory = npc.last_interaction().map(|r| r.summary.clone());
+                if let Some(flavored) = flavor_npc_greeting(
+                    &gs.llm_config,
+                    &npc_ctx,
+                    memory.as_deref(),
+                ) {
+                    pres.greeting = flavored.clone();
+                    pres.memory_line = None;
+                    gs.npc_greeting_cache.insert(npc_id, flavored);
+                }
             }
+            first_screen = false;
+        } else {
+            // Returning from a sub-screen — short, no LLM call.
+            pres.greeting = pick_return_greeting(npc, &mut gs.rng);
+            pres.memory_line = None;
         }
 
         clear_screen();
@@ -2952,6 +2975,26 @@ fn talk_to_npc(gs: &mut GameState, npc_id: Uuid) {
             }
         }
     }
+}
+
+/// Short return greeting when the player comes back to the conversation
+/// screen after taking an action (asked about work, area, etc.).
+/// No LLM call — just a quick acknowledgment that we're back.
+fn pick_return_greeting(npc: &Npc, rng: &mut StdRng) -> String {
+    let seeds = [
+        "{name} looks up as you return.",
+        "\"What else?\" {name} asks.",
+        "{name} nods, waiting.",
+        "\"Something else on your mind?\"",
+        "{name} is still here.",
+        "\"Back again. Go ahead.\"",
+        "\"Need something else?\" {name} asks.",
+        "{name} sets aside what {pronoun.subject} was doing.",
+    ];
+    let template = seeds[rng.gen_range(0..seeds.len())];
+    template
+        .replace("{name}", &npc.name)
+        .replace("{pronoun.subject}", &npc.pronouns.subject)
 }
 
 /// NPC "Ask about the area" — knowledge-driven, personality-shaped.
@@ -4035,6 +4078,9 @@ fn execute_travel_and_arrive(gs: &mut GameState, plan: &TravelPlan, dest_name: &
 
     // Reset scene history — new system, fresh context for LLM.
     gs.scene_history.clear();
+
+    // Reset NPC greeting cache — new system, fresh greetings.
+    gs.npc_greeting_cache.clear();
 
     // Player arrives at system edge — not yet docked.
     gs.journey.current_location = None;

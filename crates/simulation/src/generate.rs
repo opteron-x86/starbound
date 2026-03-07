@@ -2049,19 +2049,30 @@ fn generate_npcs(
     let mut used_names: Vec<String> = Vec::new();
 
     for system in systems {
-        // Only systems with real infrastructure get NPCs.
-        let max_npcs = match system.infrastructure_level {
-            InfrastructureLevel::None | InfrastructureLevel::Outpost => continue,
+        // Faction NPC budget — how many faction-affiliated contacts this system gets.
+        let faction_npc_budget = match system.infrastructure_level {
+            InfrastructureLevel::None => continue,
+            InfrastructureLevel::Outpost => 1,
+            InfrastructureLevel::Colony => 2,
+            InfrastructureLevel::Established => 3,
+            InfrastructureLevel::Hub => 4,
+            InfrastructureLevel::Capital => 5,
+        };
+
+        // Civilian NPC budget — unaffiliated locals.
+        let civilian_budget = match system.infrastructure_level {
+            InfrastructureLevel::None => 0,
+            InfrastructureLevel::Outpost => 1,
             InfrastructureLevel::Colony => 1,
             InfrastructureLevel::Established => 2,
-            InfrastructureLevel::Hub => 3,
-            InfrastructureLevel::Capital => 4,
+            InfrastructureLevel::Hub => 2,
+            InfrastructureLevel::Capital => 3,
         };
 
         // Find dockable locations sorted by infrastructure (best first).
         let mut dockable_locs: Vec<&Location> = system.locations.iter()
             .filter(|l| l.services.contains(&LocationService::Docking)
-                && l.infrastructure >= InfrastructureLevel::Colony)
+                && l.infrastructure >= InfrastructureLevel::Outpost)
             .collect();
         dockable_locs.sort_by(|a, b| b.infrastructure.cmp(&a.infrastructure));
 
@@ -2069,66 +2080,50 @@ fn generate_npcs(
             continue;
         }
 
-        // Pick top faction presences by strength.
-        let mut presences: Vec<&FactionPresence> = system.faction_presence.iter()
-            .filter(|fp| fp.strength >= 0.3)
-            .collect();
-        presences.sort_by(|a, b| b.strength.partial_cmp(&a.strength).unwrap());
-        presences.truncate(max_npcs);
-
         // Look up the controlling civ for culture-tagged names.
         let controlling_civ = system.controlling_civ
             .and_then(|cid| civs.iter().find(|c| c.id == cid));
 
-        for (fi, presence) in presences.iter().enumerate() {
+        // --- Faction-affiliated NPCs ---
+
+        let mut presences: Vec<&FactionPresence> = system.faction_presence.iter()
+            .filter(|fp| fp.strength >= 0.3)
+            .collect();
+        presences.sort_by(|a, b| b.strength.partial_cmp(&a.strength).unwrap());
+        presences.truncate(faction_npc_budget);
+
+        let mut npc_count = 0;
+
+        for presence in &presences {
             let faction = match factions.iter().find(|f| f.id == presence.faction_id) {
                 Some(f) => f,
                 None => continue,
             };
 
             let category_key = faction_category_key(faction.category);
-
-            // --- Species ---
             let species = pick_species(&pt, &category_key, rng);
-
-            // --- Name ---
             let name = pick_npc_name(&pt, &species, controlling_civ, &used_names, rng);
             used_names.push(name.clone());
 
-            // --- Title ---
             let role = match pt.roles.get(&category_key) {
                 Some(r) => r,
                 None => continue,
             };
             let title = pick_title(role, system.infrastructure_level, rng);
-
-            // --- Personality ---
             let personality = generate_personality(role, controlling_civ, &species, rng);
-
-            // --- Bio ---
             let personality_note = personality.dominant_description();
             let species_key = if species.is_human() { "human" } else { "synthetic" };
             let bio = pick_bio(role, species_key, &system.name, personality_note, &species, rng);
-
-            // --- Motivations ---
             let motivations = pick_items(&role.motivation_pool, 2, 3, rng);
-
-            // --- Knowledge ---
             let knowledge = pick_items(&role.knowledge_pool, 2, 4, rng);
-
-            // --- Background tags ---
             let background_tags = pick_items(&role.background_tags, 1, 2, rng);
 
-            // --- Assemble ---
-            let loc = dockable_locs[fi % dockable_locs.len()];
+            let loc = dockable_locs[npc_count % dockable_locs.len()];
 
             let mut npc = Npc::new(
-                name,
-                title,
-                species,
+                name, title, species,
                 Some(faction.id),
-                system.id,
-                bio,
+                system.id, bio,
             );
             npc.home_location_id = Some(loc.id);
             npc.origin_civ_id = system.controlling_civ;
@@ -2138,6 +2133,43 @@ fn generate_npcs(
             npc.background_tags = background_tags;
 
             npcs.push(npc);
+            npc_count += 1;
+        }
+
+        // --- Civilian (unaffiliated) NPCs ---
+
+        if let Some(civilian_role) = pt.roles.get("civilian") {
+            for _ in 0..civilian_budget {
+                let species = pick_species(&pt, "civilian", rng);
+                let name = pick_npc_name(&pt, &species, controlling_civ, &used_names, rng);
+                used_names.push(name.clone());
+
+                let title = pick_title(civilian_role, system.infrastructure_level, rng);
+                let personality = generate_personality(civilian_role, controlling_civ, &species, rng);
+                let personality_note = personality.dominant_description();
+                let species_key = if species.is_human() { "human" } else { "synthetic" };
+                let bio = pick_bio(civilian_role, species_key, &system.name, personality_note, &species, rng);
+                let motivations = pick_items(&civilian_role.motivation_pool, 2, 3, rng);
+                let knowledge = pick_items(&civilian_role.knowledge_pool, 2, 4, rng);
+                let background_tags = pick_items(&civilian_role.background_tags, 1, 2, rng);
+
+                let loc = dockable_locs[npc_count % dockable_locs.len()];
+
+                let mut npc = Npc::new(
+                    name, title, species,
+                    None, // No faction affiliation.
+                    system.id, bio,
+                );
+                npc.home_location_id = Some(loc.id);
+                npc.origin_civ_id = system.controlling_civ;
+                npc.personality = personality;
+                npc.motivations = motivations;
+                npc.knowledge = knowledge;
+                npc.background_tags = background_tags;
+
+                npcs.push(npc);
+                npc_count += 1;
+            }
         }
     }
 
