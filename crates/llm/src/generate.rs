@@ -16,7 +16,7 @@ use starbound_encounters::seed_event::{EventTrigger, SeedEvent};
 
 use crate::client::{self, ApiError};
 use crate::config::LlmConfig;
-use crate::prompt::{self, EncounterContext};
+use crate::prompt::{self, EncounterContext, DestinationInfo};
 use crate::response;
 
 /// Result of an LLM generation attempt.
@@ -49,6 +49,7 @@ pub fn generate_encounter(
     civ_name: Option<String>,
     recent_scenes: Vec<String>,
     established_facts: Vec<String>,
+    destination: Option<DestinationInfo>,
     example_event: Option<&SeedEvent>,
     event_id: &str,
 ) -> Option<GenerationResult> {
@@ -70,6 +71,7 @@ pub fn generate_encounter(
         civ_name,
         recent_scenes,
         established_facts,
+        destination,
     };
     let user_msg = prompt::build_user_message(&ctx);
 

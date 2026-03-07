@@ -123,11 +123,21 @@ pub struct EncounterContext<'a> {
     pub faction_name: Option<String>,
     pub civ_name: Option<String>,
     /// Recent scene summaries — what happened in the last 2-3 encounters.
-    /// Most recent last. Prevents re-introductions and contradictions.
     pub recent_scenes: Vec<String>,
     /// Established facts about this location that must not be contradicted.
-    /// NPCs met, physical details, faction presence, what's NOT here.
     pub established_facts: Vec<String>,
+    /// Travel destination info (for Transit/Docked/Arrival triggers).
+    pub destination: Option<DestinationInfo>,
+}
+
+/// Info about where the player is heading or just arrived.
+#[derive(Clone)]
+pub struct DestinationInfo {
+    pub name: String,
+    pub location_type: String,
+    pub description: String,
+    pub can_dock: bool,
+    pub travel_context: String, // e.g. "sublight transit within Mintaka system"
 }
 
 /// Build the user message — game context for this specific encounter.
@@ -156,22 +166,45 @@ pub fn build_user_message(ctx: &EncounterContext) -> String {
         msg.push_str("Build on what happened, don't restart it.\n\n");
     }
 
-    // Trigger type
+    // Trigger type — with destination awareness
     msg.push_str(&format!("TRIGGER: {}\n", ctx.trigger.label()));
+    let dest = &ctx.destination;
     match ctx.trigger {
         EventTrigger::Transit => {
-            msg.push_str("This is an ambient moment during sublight travel between locations. ");
+            msg.push_str("This is an ambient moment during sublight travel between locations IN THE SAME SYSTEM. ");
+            msg.push_str("The player is NOT leaving the system. NOT using FTL. Just coasting between local points. ");
             msg.push_str("Keep it small — a crew observation, environmental detail, or quiet moment. ");
             msg.push_str("Low stakes. No major plot developments.\n");
+            if let Some(d) = dest {
+                msg.push_str(&format!("Traveling to: {} ({}). {}\n", d.name, d.location_type, d.travel_context));
+                if !d.can_dock {
+                    msg.push_str("NOTE: Destination has NO docking. The ship will ORBIT, not land or dock.\n");
+                }
+            }
         }
         EventTrigger::Docked => {
-            msg.push_str("The player just docked at a station or landed at a colony. ");
-            msg.push_str("An atmospheric moment — station life, colony culture, sensory transition. ");
+            if dest.as_ref().map_or(true, |d| d.can_dock) {
+                msg.push_str("The player just docked at a station or landed at a colony. ");
+                msg.push_str("An atmospheric moment — station life, colony culture, sensory transition.\n");
+            } else {
+                msg.push_str("The player just entered orbit (NO docking available here). ");
+                msg.push_str("They are observing from their ship, not walking on the surface.\n");
+            }
             msg.push_str("Low stakes. Environmental texture.\n");
+            if let Some(d) = dest {
+                msg.push_str(&format!("Location: {} — {}\n", d.name, d.description));
+            }
         }
         EventTrigger::Arrival => {
-            msg.push_str("The player has arrived at a location. ");
+            if dest.as_ref().map_or(true, |d| d.can_dock) {
+                msg.push_str("The player has arrived and docked/landed at a location.\n");
+            } else {
+                msg.push_str("The player has arrived in ORBIT (no docking). They observe from the ship.\n");
+            }
             msg.push_str("This could be atmospheric or consequential. Match the tone to the context.\n");
+            if let Some(d) = dest {
+                msg.push_str(&format!("Location: {} — {}\n", d.name, d.description));
+            }
         }
         EventTrigger::Linger => {
             msg.push_str("The player is spending time at a location. ");

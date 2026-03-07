@@ -48,6 +48,7 @@ use starbound_game::npc_interaction::{
 
 use starbound_llm::config::LlmConfig;
 use starbound_llm::generate::generate_encounter;
+use starbound_llm::prompt::DestinationInfo;
 
 // ---------------------------------------------------------------------------
 // Display helpers
@@ -959,7 +960,18 @@ fn try_encounter(
     gs: &mut GameState,
     trigger: EventTrigger,
     years_since: Option<f64>,
+    destination: Option<DestinationInfo>,
 ) -> bool {
+    // --- Silence check (applies to both LLM and seed pipeline) ---
+    // Player actions always fire. Ambient triggers roll for silence first.
+    if !trigger.is_player_action() {
+        let silence_rate = trigger.base_silence_rate();
+        if gs.rng.gen::<f64>() < silence_rate {
+            gs.pipeline_state.record_silence();
+            return false;
+        }
+    }
+
     // Gather context needed by both LLM and pipeline.
     let system = gs.current_system().clone();
     let loc_type = gs.current_location_type_str();
@@ -977,15 +989,19 @@ fn try_encounter(
     let location_name = gs.current_location().map(|l| l.name.clone());
     let location_description = gs.current_location().map(|l| l.description.clone());
 
-    // --- Try LLM generation first ---
+    // --- Try LLM generation ---
     if gs.llm_config.is_available() {
-        // Build context that requires &mut self first.
         let event_id = gs.next_llm_id();
-        let established_facts = gs.build_established_facts();
-        let recent_scenes = gs.scene_history.clone();
 
-        // Now gather immutable references.
-        let npcs_here: Vec<&Npc> = gs.npcs_here();
+        // Build context filtered by trigger type.
+        let (established_facts, recent_scenes) = build_filtered_context(gs, &trigger);
+
+        let npcs_here: Vec<&Npc> = if trigger_needs_npcs(&trigger) {
+            gs.npcs_here()
+        } else {
+            vec![]
+        };
+
         let example = gs.events.iter()
             .find(|e| e.matches_trigger(&trigger))
             .or_else(|| gs.events.first());
@@ -1003,6 +1019,7 @@ fn try_encounter(
             civ_name,
             recent_scenes,
             established_facts,
+            destination,
             example,
             &event_id,
         );
@@ -1012,8 +1029,6 @@ fn try_encounter(
                 eprintln!("  [LLM] Generated {} ({} tokens)", event_id, tokens);
             }
 
-            // Record scene summary before running the encounter.
-            // Use the first ~150 chars of the generated text + choice labels.
             let text_preview: String = gen.event.text.chars().take(150).collect();
             let choice_labels: Vec<&str> = gen.event.choices.iter()
                 .map(|c| c.label.as_str())
@@ -1046,7 +1061,6 @@ fn try_encounter(
         PipelineResult::Event { event, .. } => {
             let event = event.clone();
 
-            // Record seed event scene too.
             let text_preview: String = event.text.chars().take(150).collect();
             let scene_summary = format!(
                 "At {}: {}...",
@@ -1061,6 +1075,75 @@ fn try_encounter(
         PipelineResult::Silence { .. } => {
             gs.pipeline_state.record_silence();
             false
+        }
+    }
+}
+
+/// Whether this trigger type needs NPC context.
+fn trigger_needs_npcs(trigger: &EventTrigger) -> bool {
+    match trigger {
+        EventTrigger::Transit => false,  // Crew only, no NPCs.
+        _ => true,
+    }
+}
+
+/// Build context filtered by trigger type — transit events get minimal context,
+/// action events get everything.
+fn build_filtered_context(gs: &GameState, trigger: &EventTrigger) -> (Vec<String>, Vec<String>) {
+    match trigger {
+        EventTrigger::Transit => {
+            // Transit = crew moment. Only needs: star type, crew names, destination.
+            // No cargo, no contracts, no threads, no NPCs, no faction details.
+            let system = gs.current_system();
+            let facts = vec![
+                format!("Star type: {} — {}", system.star_type, system.star_type.star_descriptor()),
+                format!("Ship: {}", gs.journey.ship.name),
+                format!("This is a quiet moment during sublight travel. Focus on the crew and the ship."),
+            ];
+            // Only last 1 scene for transit (prevent over-referencing).
+            let scenes = gs.scene_history.last().cloned().into_iter().collect();
+            (facts, scenes)
+        }
+        EventTrigger::Docked => {
+            // Docked = first impression of a place. Location description, NPCs, atmosphere.
+            // No cargo, no contracts unless at destination.
+            let mut facts = Vec::new();
+            let system = gs.current_system();
+
+            if let Some(loc) = gs.current_location() {
+                facts.push(format!("You are at {}, a {}", loc.name, loc.location_type.category_str()));
+                if !loc.description.is_empty() {
+                    facts.push(format!("Location: {}", loc.description));
+                }
+            }
+            facts.push(format!("Star: {} — {}", system.star_type, system.star_type.light_description()));
+
+            // NPCs present.
+            let npcs = gs.npcs_here();
+            for npc in &npcs {
+                let mut npc_fact = format!("NPC here: {} — {}", npc.name, npc.title);
+                if let Some(last) = npc.last_interaction() {
+                    npc_fact.push_str(&format!(". Previously: {}", last.summary));
+                }
+                facts.push(npc_fact);
+            }
+
+            let scenes: Vec<String> = gs.scene_history.iter().rev().take(2).rev().cloned().collect();
+            (facts, scenes)
+        }
+        EventTrigger::Arrival => {
+            // Arrival = fuller context but still focused on location.
+            let mut facts = gs.build_established_facts();
+            // Strip cargo/contract details from arrival — player hasn't acted yet.
+            facts.retain(|f| !f.starts_with("Active contract:") && !f.starts_with("Cargo hold:"));
+            let scenes: Vec<String> = gs.scene_history.iter().rev().take(2).rev().cloned().collect();
+            (facts, scenes)
+        }
+        _ => {
+            // Action/Linger = full context. This is where everything matters.
+            let facts = gs.build_established_facts();
+            let scenes = gs.scene_history.clone();
+            (facts, scenes)
         }
     }
 }
@@ -1684,7 +1767,7 @@ fn system_map(gs: &mut GameState) {
 /// during the journey and an arrival encounter at the destination.
 fn navigate_to_location(gs: &mut GameState, target_id: Uuid, from_dist: f32) {
     // Snapshot target info before borrowing gs mutably.
-    let (target_name, target_desc, target_dist, can_dock) = {
+    let (target_name, target_desc, target_dist, can_dock, target_type_str) = {
         let sys = gs.current_system();
         let target = sys.locations.iter().find(|l| l.id == target_id)
             .expect("Target location should exist");
@@ -1693,12 +1776,33 @@ fn navigate_to_location(gs: &mut GameState, target_id: Uuid, from_dist: f32) {
             target.description.clone(),
             target.orbital_distance,
             target.services.contains(&LocationService::Docking),
+            target.location_type.category_str().to_string(),
         )
     };
 
     let dist = (target_dist - from_dist).abs();
     let travel_hours = dist * 12.0;
     let travel_days = travel_hours / 24.0;
+
+    // Build travel context string.
+    let travel_time_str = if travel_hours < 1.0 {
+        "short burn".into()
+    } else if travel_hours < 24.0 {
+        format!("{:.0} hours", travel_hours)
+    } else {
+        format!("{:.1} days", travel_days)
+    };
+    let system_name = gs.current_system().name.clone();
+    let dest_info = DestinationInfo {
+        name: target_name.clone(),
+        location_type: target_type_str.clone(),
+        description: target_desc.clone(),
+        can_dock,
+        travel_context: format!(
+            "{} sublight transit within {} system",
+            travel_time_str, system_name,
+        ),
+    };
 
     // Apply time costs.
     gs.journey.time.personal_days += travel_days as f64;
@@ -1730,7 +1834,7 @@ fn navigate_to_location(gs: &mut GameState, target_id: Uuid, from_dist: f32) {
 
     // --- Transit ambient event (fires during the journey) ---
     // ~22% chance of a small moment during sublight travel.
-    try_encounter(gs, EventTrigger::Transit, None);
+    try_encounter(gs, EventTrigger::Transit, None, Some(dest_info.clone()));
 
     // Set location.
     gs.journey.current_location = Some(target_id);
@@ -1749,12 +1853,12 @@ fn navigate_to_location(gs: &mut GameState, target_id: Uuid, from_dist: f32) {
     // --- Docked/orbit ambient event ---
     // ~27% chance of a small atmosphere moment on arrival.
     if can_dock {
-        try_encounter(gs, EventTrigger::Docked, None);
+        try_encounter(gs, EventTrigger::Docked, None, Some(dest_info.clone()));
     }
 
     // --- Fire encounter on location arrival ---
     let years_since = gs.galactic_years_since_last_visit();
-    try_encounter(gs, EventTrigger::Arrival, years_since);
+    try_encounter(gs, EventTrigger::Arrival, years_since, Some(dest_info));
 }
 
 /// Scan the system to reveal hidden locations.
@@ -1816,7 +1920,7 @@ fn run_system_scan(gs: &mut GameState) {
     }
 
     // Fire a scan encounter (for events like "your scan attracts attention").
-    try_encounter(gs, PlayerIntent::Scan.into(), None);
+    try_encounter(gs, PlayerIntent::Scan.into(), None, None);
 
     pause();
 }
@@ -2403,7 +2507,7 @@ fn repair_screen(gs: &mut GameState) {
 }
 
 fn run_intent_encounter(gs: &mut GameState, intent: PlayerIntent) {
-    let fired = try_encounter(gs, intent.into(), None);
+    let fired = try_encounter(gs, intent.into(), None, None);
 
     if !fired {
         // Custom silence messages per intent.
@@ -3469,7 +3573,32 @@ fn execute_travel_and_arrive(gs: &mut GameState, plan: &TravelPlan, dest_name: &
 // Main
 // ---------------------------------------------------------------------------
 
+/// Load environment variables from a .env file if it exists.
+/// Supports lines like `KEY=value` and `KEY="value"`. Skips comments and blanks.
+fn load_dotenv() {
+    let paths = [".env", "../.env"];
+    for path in &paths {
+        if let Ok(contents) = std::fs::read_to_string(path) {
+            for line in contents.lines() {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                if let Some((key, value)) = line.split_once('=') {
+                    let key = key.trim();
+                    let value = value.trim().trim_matches('"').trim_matches('\'');
+                    if !key.is_empty() && std::env::var(key).is_err() {
+                        std::env::set_var(key, value);
+                    }
+                }
+            }
+            return; // Use the first .env found.
+        }
+    }
+}
+
 fn main() {
+    load_dotenv();
     display_title();
 
     let choice = prompt("  > ");

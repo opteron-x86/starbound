@@ -128,9 +128,9 @@ impl EventTrigger {
     /// produce silence (no event). Action triggers never silence.
     pub fn base_silence_rate(&self) -> f64 {
         match self {
-            EventTrigger::Arrival => 0.15,  // Most arrivals should have something.
-            EventTrigger::Transit => 0.78,  // ~22% fire rate. Most transits are quiet.
-            EventTrigger::Docked => 0.73,   // ~27% fire rate. Most docks are routine.
+            EventTrigger::Arrival => 0.50,  // Half of arrivals are just arrivals.
+            EventTrigger::Transit => 0.85,  // ~15% fire rate. Most transits are quiet.
+            EventTrigger::Docked => 0.80,   // ~20% fire rate. Most docks go straight to menu.
             EventTrigger::Linger => 0.60,   // ~40% fire rate. Player chose to linger.
             EventTrigger::Action(_) => 0.0, // Player chose to act. Always respond.
         }
