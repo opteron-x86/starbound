@@ -100,4 +100,63 @@ impl Contract {
             state: ContractState::Offered,
         }
     }
+
+    /// Create a retrieval contract — go to destination, find something, bring it back.
+    /// No cargo given up front; the player must acquire it at the destination.
+    pub fn retrieval(
+        issuer_npc_id: Uuid,
+        issuer_faction_id: Option<Uuid>,
+        title: impl Into<String>,
+        description: impl Into<String>,
+        origin_system_id: Uuid,
+        destination_system_id: Uuid,
+        cargo_name: impl Into<String>,
+        cargo_quantity: u32,
+        reward_credits: f64,
+    ) -> Self {
+        let cargo = cargo_name.into();
+        Self {
+            id: Uuid::new_v4(),
+            issuer_npc_id,
+            issuer_faction_id,
+            title: title.into(),
+            description: description.into(),
+            contract_type: ContractType::Retrieval,
+            destination_system_id,
+            destination_location_id: None,
+            origin_system_id,
+            reward_credits,
+            cargo_given: None,
+            cargo_required: Some((cargo, cargo_quantity)),
+            state: ContractState::Offered,
+        }
+    }
+
+    /// Create an investigation contract — go to destination, learn something,
+    /// return with the information. No cargo involved.
+    pub fn investigation(
+        issuer_npc_id: Uuid,
+        issuer_faction_id: Option<Uuid>,
+        title: impl Into<String>,
+        description: impl Into<String>,
+        origin_system_id: Uuid,
+        destination_system_id: Uuid,
+        reward_credits: f64,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            issuer_npc_id,
+            issuer_faction_id,
+            title: title.into(),
+            description: description.into(),
+            contract_type: ContractType::Investigation,
+            destination_system_id,
+            destination_location_id: None,
+            origin_system_id,
+            reward_credits,
+            cargo_given: None,
+            cargo_required: None,
+            state: ContractState::Offered,
+        }
+    }
 }

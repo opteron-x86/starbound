@@ -2608,6 +2608,13 @@ fn rumors_screen(gs: &mut GameState) {
                 println!("  (Estimated profit: ~{:.0} credits/unit for {})", estimated_spread, good);
             }
 
+            // Show NPC reference for contract leads.
+            if let RumorContent::ContractLead {
+                npc_name: Some(ref name), estimated_reward, ..
+            } = &chosen.content {
+                println!("  (Talk to {} — estimated reward: ~{:.0} credits)", name, estimated_reward);
+            }
+
             // Add all rumors to the journal (the selected one marked as "noted").
             for rumor in rumors {
                 gs.journey.discovered_rumors.push(rumor);
@@ -3150,13 +3157,24 @@ fn offer_contracts(gs: &mut GameState, npc_idx: usize) {
     } else {
         dest_sys_name
     };
+    let type_label = match contract.contract_type {
+        ContractType::Delivery => "Delivery",
+        ContractType::Retrieval => "Retrieval",
+        ContractType::Investigation => "Investigation",
+    };
     println!("  Destination: {}", dest_display);
+    println!("  Type: {}", type_label);
     println!("  Reward: {:.0} credits", contract.reward_credits);
     if reward_multiplier > 1.0 {
         println!("  (Better terms — {} regards you well.)", npc_name);
     }
     if let Some((ref cargo, qty)) = contract.cargo_given {
         println!("  Cargo provided: {} x{}", cargo, qty);
+    }
+    if contract.cargo_given.is_none() {
+        if let Some((ref cargo, qty)) = contract.cargo_required {
+            println!("  Must retrieve: {} x{}", cargo, qty);
+        }
     }
     println!();
     println!("  1) Accept");
@@ -3243,9 +3261,9 @@ fn generate_contract_for_npc(gs: &GameState, npc_idx: usize) -> Option<Contract>
     let conn_idx = (npc.id.as_u128() as usize) % connections.len();
     let conn = &connections[conn_idx];
     let dest_sys_id = if conn.system_a == home_id { conn.system_b } else { conn.system_a };
-    let dest_sys_name = gs.system_name(dest_sys_id);
+    let dest_sys_name = gs.system_name(dest_sys_id).to_string();
 
-    // Find the primary dockable location at the destination for delivery.
+    // Find the primary dockable location at the destination.
     let dest_system = gs.galaxy.systems.iter().find(|s| s.id == dest_sys_id);
     let dest_location = dest_system.and_then(|sys| {
         sys.locations.iter()
@@ -3255,101 +3273,249 @@ fn generate_contract_for_npc(gs: &GameState, npc_idx: usize) -> Option<Contract>
     let dest_loc_id = dest_location.map(|l| l.id);
     let dest_loc_name = dest_location
         .map(|l| l.name.as_str())
-        .unwrap_or(dest_sys_name);
+        .unwrap_or(&dest_sys_name)
+        .to_string();
 
-    // Generate based on faction category.
+    // Determine faction category.
     let category = npc.faction_id
         .and_then(|fid| gs.galaxy.factions.iter().find(|f| f.id == fid))
         .map(|f| f.category);
 
-    let (title, desc, cargo_name, cargo_qty, reward) = match category {
-        Some(FactionCategory::Guild) => (
-            format!("Deliver repair components to {}", dest_loc_name),
-            format!(
-                "\"We've got a maintenance backlog at {}. \
-                 Standard repair components — nothing exotic, but they \
-                 need them yesterday. Deliver, get the dock master to sign off, \
-                 and come back for your pay.\"",
-                dest_loc_name
-            ),
-            "Repair components",
-            8,
-            200.0,
-        ),
-        Some(FactionCategory::Military) => (
-            format!("Transport sealed cargo to {}", dest_loc_name),
-            format!(
-                "\"Military business. Sealed containers, don't ask what's inside. \
-                 Take them to {} garrison, hand them over, bring back the receipt. \
-                 Standard courier rate.\"",
-                dest_loc_name
-            ),
-            "Sealed military cargo",
-            5,
-            250.0,
-        ),
-        Some(FactionCategory::Economic) => (
-            format!("Supply run to {}", dest_loc_name),
-            format!(
-                "\"The market at {} is running short on manufactured goods. \
-                 We've got a shipment ready to go. Deliver it, collect payment \
-                 on delivery, and bring back our cut.\"",
-                dest_loc_name
-            ),
-            "Manufactured goods",
-            12,
-            180.0,
-        ),
-        Some(FactionCategory::Criminal) => (
-            format!("Discreet delivery to {}", dest_sys_name),
-            format!(
-                "\"I've got a package. It needs to get to {} without anyone \
-                 asking questions. No manifests, no declarations. \
-                 You handle it clean, I make it worth your while.\"",
-                dest_sys_name
-            ),
-            "Unmarked cargo",
-            3,
-            300.0,
-        ),
-        Some(FactionCategory::Religious) => (
-            format!("Deliver relics to {}", dest_loc_name),
-            format!(
-                "\"These artifacts need to reach the monastery at {}. \
-                 They're delicate — not physically, but... spiritually. \
-                 Handle them with respect. The Order will remember your service.\"",
-                dest_loc_name
-            ),
-            "Religious artifacts",
-            4,
-            150.0,
-        ),
-        _ => (
-            format!("Courier run to {}", dest_loc_name),
-            format!(
-                "\"Standard job. Take this cargo to {}, hand it off, \
-                 come back with confirmation. Simple work, fair pay.\"",
-                dest_loc_name
-            ),
-            "General cargo",
-            6,
-            175.0,
-        ),
+    // Deterministic type selection: hash NPC ID + galactic day (30-day window)
+    // so the same NPC offers different types over time.
+    let day_window = (gs.journey.time.galactic_days / 30.0) as u128;
+    let type_seed = npc.id.as_u128().wrapping_add(day_window);
+
+    // Each faction category has weighted type options.
+    // (contract_type_index: 0=delivery, 1=retrieval, 2=investigation)
+    let type_options: &[usize] = match category {
+        Some(FactionCategory::Guild)     => &[0, 0, 1, 1, 2],    // delivery/retrieval heavy
+        Some(FactionCategory::Military)  => &[0, 2, 2, 2],       // investigation heavy
+        Some(FactionCategory::Economic)  => &[0, 0, 0, 1],       // delivery heavy
+        Some(FactionCategory::Criminal)  => &[0, 0, 2],          // delivery + investigation
+        Some(FactionCategory::Religious) => &[1, 1, 2],          // retrieval + investigation
+        Some(FactionCategory::Academic)  => &[2, 2, 1],          // investigation heavy
+        Some(FactionCategory::Political) => &[2, 2, 0],          // investigation heavy
+        None                             => &[0, 0, 1],          // delivery + retrieval
     };
 
-    let mut contract = Contract::delivery(
-        npc.id,
-        npc.faction_id,
-        title,
-        desc,
-        home_id,
-        dest_sys_id,
-        cargo_name,
-        cargo_qty,
-        reward,
-    );
-    contract.destination_location_id = dest_loc_id;
+    let chosen_type = type_options[(type_seed as usize) % type_options.len()];
 
+    let mut contract = match (chosen_type, category) {
+        // ---- DELIVERY contracts ----
+        (0, Some(FactionCategory::Guild)) => {
+            Contract::delivery(
+                npc.id, npc.faction_id,
+                format!("Deliver repair components to {}", dest_loc_name),
+                format!(
+                    "\"We've got a maintenance backlog at {}. \
+                     Standard repair components — nothing exotic, but they \
+                     need them yesterday. Deliver, get the dock master to sign off, \
+                     and come back for your pay.\"",
+                    dest_loc_name
+                ),
+                home_id, dest_sys_id, "Repair components", 8, 200.0,
+            )
+        }
+        (0, Some(FactionCategory::Military)) => {
+            Contract::delivery(
+                npc.id, npc.faction_id,
+                format!("Transport sealed cargo to {}", dest_loc_name),
+                format!(
+                    "\"Military business. Sealed containers, don't ask what's inside. \
+                     Take them to {} garrison, hand them over, bring back the receipt. \
+                     Standard courier rate.\"",
+                    dest_loc_name
+                ),
+                home_id, dest_sys_id, "Sealed military cargo", 5, 250.0,
+            )
+        }
+        (0, Some(FactionCategory::Economic)) => {
+            Contract::delivery(
+                npc.id, npc.faction_id,
+                format!("Supply run to {}", dest_loc_name),
+                format!(
+                    "\"The market at {} is running short on manufactured goods. \
+                     We've got a shipment ready to go. Deliver it, collect payment \
+                     on delivery, and bring back our cut.\"",
+                    dest_loc_name
+                ),
+                home_id, dest_sys_id, "Manufactured goods", 12, 180.0,
+            )
+        }
+        (0, Some(FactionCategory::Criminal)) => {
+            Contract::delivery(
+                npc.id, npc.faction_id,
+                format!("Discreet delivery to {}", dest_sys_name),
+                format!(
+                    "\"I've got a package. It needs to get to {} without anyone \
+                     asking questions. No manifests, no declarations. \
+                     You handle it clean, I make it worth your while.\"",
+                    dest_sys_name
+                ),
+                home_id, dest_sys_id, "Unmarked cargo", 3, 300.0,
+            )
+        }
+        (0, _) => {
+            Contract::delivery(
+                npc.id, npc.faction_id,
+                format!("Courier run to {}", dest_loc_name),
+                format!(
+                    "\"Standard job. Take this cargo to {}, hand it off, \
+                     come back with confirmation. Simple work, fair pay.\"",
+                    dest_loc_name
+                ),
+                home_id, dest_sys_id, "General cargo", 6, 175.0,
+            )
+        }
+
+        // ---- RETRIEVAL contracts ----
+        (1, Some(FactionCategory::Guild)) => {
+            Contract::retrieval(
+                npc.id, npc.faction_id,
+                format!("Retrieve salvaged parts from {}", dest_loc_name),
+                format!(
+                    "\"There's a set of reclaimed drive components at {}. \
+                     Paid for, just need someone to pick them up and bring \
+                     them back here. Should be straightforward.\"",
+                    dest_loc_name
+                ),
+                home_id, dest_sys_id, "Reclaimed drive parts", 6, 220.0,
+            )
+        }
+        (1, Some(FactionCategory::Religious)) => {
+            Contract::retrieval(
+                npc.id, npc.faction_id,
+                format!("Recover relics from {}", dest_loc_name),
+                format!(
+                    "\"An artifact of the Order was left at {} during \
+                     the last evacuation. We need it returned. \
+                     You'll know it when you see it — it resonates.\"",
+                    dest_loc_name
+                ),
+                home_id, dest_sys_id, "Order relics", 2, 200.0,
+            )
+        }
+        (1, Some(FactionCategory::Economic)) => {
+            Contract::retrieval(
+                npc.id, npc.faction_id,
+                format!("Collect payment from {}", dest_loc_name),
+                format!(
+                    "\"We have an outstanding balance at {}. \
+                     They've got our goods sitting in their hold. \
+                     Go collect — here's the manifest.\"",
+                    dest_loc_name
+                ),
+                home_id, dest_sys_id, "Collected goods", 8, 190.0,
+            )
+        }
+        (1, Some(FactionCategory::Academic)) => {
+            Contract::retrieval(
+                npc.id, npc.faction_id,
+                format!("Retrieve research samples from {}", dest_loc_name),
+                format!(
+                    "\"Our field team at {} has samples ready for analysis. \
+                     Delicate materials — keep them sealed. \
+                     The data is more valuable than the containers.\"",
+                    dest_loc_name
+                ),
+                home_id, dest_sys_id, "Research samples", 3, 250.0,
+            )
+        }
+        (1, _) => {
+            Contract::retrieval(
+                npc.id, npc.faction_id,
+                format!("Pick up cargo from {}", dest_loc_name),
+                format!(
+                    "\"There's a shipment waiting for us at {}. \
+                     Go get it, bring it back. I'll make it worth your time.\"",
+                    dest_loc_name
+                ),
+                home_id, dest_sys_id, "Retrieved cargo", 5, 185.0,
+            )
+        }
+
+        // ---- INVESTIGATION contracts ----
+        (_, Some(FactionCategory::Military)) => {
+            Contract::investigation(
+                npc.id, npc.faction_id,
+                format!("Investigate activity near {}", dest_sys_name),
+                format!(
+                    "\"We've had reports of unusual activity in the {} system. \
+                     Go there, assess the situation, and report back. \
+                     Don't engage — just observe and document.\"",
+                    dest_sys_name
+                ),
+                home_id, dest_sys_id, 280.0,
+            )
+        }
+        (_, Some(FactionCategory::Academic)) => {
+            Contract::investigation(
+                npc.id, npc.faction_id,
+                format!("Survey anomalous readings at {}", dest_sys_name),
+                format!(
+                    "\"Our instruments have been picking up unusual readings \
+                     from the {} system. We need someone on-site to \
+                     confirm and characterize the source. Standard survey protocol.\"",
+                    dest_sys_name
+                ),
+                home_id, dest_sys_id, 260.0,
+            )
+        }
+        (_, Some(FactionCategory::Criminal)) => {
+            Contract::investigation(
+                npc.id, npc.faction_id,
+                format!("Scout {} for opportunities", dest_sys_name),
+                format!(
+                    "\"I need eyes at {}. Security patterns, docking schedules, \
+                     who's coming and going. Routine business intelligence. \
+                     Just look around and tell me what you see.\"",
+                    dest_sys_name
+                ),
+                home_id, dest_sys_id, 300.0,
+            )
+        }
+        (_, Some(FactionCategory::Political)) => {
+            Contract::investigation(
+                npc.id, npc.faction_id,
+                format!("Assess the political situation at {}", dest_sys_name),
+                format!(
+                    "\"There's been a shift in the local power balance at {}. \
+                     I need an outside perspective — someone without ties. \
+                     Go there, talk to people, and report back what you find.\"",
+                    dest_sys_name
+                ),
+                home_id, dest_sys_id, 260.0,
+            )
+        }
+        (_, Some(FactionCategory::Religious)) => {
+            Contract::investigation(
+                npc.id, npc.faction_id,
+                format!("Investigate temporal readings near {}", dest_sys_name),
+                format!(
+                    "\"The Order has detected temporal anomalies in the {} region. \
+                     We need someone to visit and document what they experience. \
+                     Pay attention to how time feels there.\"",
+                    dest_sys_name
+                ),
+                home_id, dest_sys_id, 220.0,
+            )
+        }
+        (_, _) => {
+            Contract::investigation(
+                npc.id, npc.faction_id,
+                format!("Check on situation at {}", dest_sys_name),
+                format!(
+                    "\"I need someone to swing by {} and see what's going on. \
+                     Nothing dangerous — just take a look around and let me know.\"",
+                    dest_sys_name
+                ),
+                home_id, dest_sys_id, 200.0,
+            )
+        }
+    };
+
+    contract.destination_location_id = dest_loc_id;
     Some(contract)
 }
 
@@ -3457,7 +3623,12 @@ fn display_contracts(gs: &GameState) {
 
             let status = match contract.state {
                 ContractState::Active => {
-                    format!("Deliver to {} — then return to {}", dest_str, origin_sys)
+                    let action = match contract.contract_type {
+                        ContractType::Delivery => format!("Deliver to {}", dest_str),
+                        ContractType::Retrieval => format!("Retrieve from {}", dest_str),
+                        ContractType::Investigation => format!("Investigate at {}", dest_str),
+                    };
+                    format!("{} — then return to {}", action, origin_sys)
                 }
                 ContractState::ReadyToComplete => {
                     format!("Return to {} to collect payment", origin_sys)
@@ -3531,7 +3702,64 @@ fn check_contract_progress(gs: &mut GameState) {
                     }
                 }
             }
-            _ => {} // Other types for later.
+            ContractType::Retrieval => {
+                // Must be at the destination system.
+                if contract.destination_system_id != current_system {
+                    continue;
+                }
+                if let Some(dest_loc) = contract.destination_location_id {
+                    if current_location != Some(dest_loc) {
+                        continue;
+                    }
+                }
+                // Auto-acquire the required cargo at the destination.
+                if let Some((ref cargo_name, qty)) = contract.cargo_required {
+                    let total_cargo: u32 = gs.journey.ship.cargo.values().sum();
+                    if total_cargo + qty > gs.journey.ship.cargo_capacity {
+                        messages.push(format!(
+                            "You've located the {} for contract: {}, \
+                             but your cargo hold is too full to take it. \
+                             Free up {} units of cargo space.",
+                            cargo_name, contract.title, qty,
+                        ));
+                        continue;
+                    }
+                    let current = gs.journey.ship.cargo.get(cargo_name).copied().unwrap_or(0);
+                    gs.journey.ship.cargo.insert(cargo_name.clone(), current + qty);
+                    contract.state = ContractState::ReadyToComplete;
+                    messages.push(format!(
+                        "Contract objective complete: {}. Retrieved {} x{}. \
+                         Return to the contract issuer to collect payment.",
+                        contract.title, cargo_name, qty,
+                    ));
+                } else {
+                    // Retrieval with no specific cargo — just arriving is enough.
+                    contract.state = ContractState::ReadyToComplete;
+                    messages.push(format!(
+                        "Contract objective complete: {}. \
+                         Return to the contract issuer to collect payment.",
+                        contract.title,
+                    ));
+                }
+            }
+            ContractType::Investigation => {
+                // Must be at the destination system.
+                if contract.destination_system_id != current_system {
+                    continue;
+                }
+                if let Some(dest_loc) = contract.destination_location_id {
+                    if current_location != Some(dest_loc) {
+                        continue;
+                    }
+                }
+                // Arriving at the destination completes the investigation.
+                contract.state = ContractState::ReadyToComplete;
+                messages.push(format!(
+                    "Investigation complete: {}. You've seen enough. \
+                     Return to the contract issuer to report your findings.",
+                    contract.title,
+                ));
+            }
         }
     }
 

@@ -5,8 +5,9 @@
 //! game state when the player selects "Gather Rumors" at a location with
 //! the Rumors service.
 //!
-//! Three scanners produce candidates:
+//! Four scanners produce candidates:
 //!   - Trade scanner: price differentials across known economies
+//!   - Contract scanner: NPC-offered work based on faction presence
 //!   - Faction scanner: recent galactic tick events
 //!   - Thread scanner: unresolved narrative threads and potential seeds
 //!
@@ -17,10 +18,11 @@ use rand::prelude::*;
 use uuid::Uuid;
 
 use starbound_core::galaxy::{
-    InfrastructureLevel, Location, StarSystem, TradeGood,
+    FactionCategory, InfrastructureLevel, Location, StarSystem, TradeGood,
 };
 use starbound_core::journey::Journey;
-use starbound_core::narrative::{ResolutionState, Thread, ThreadType};
+use starbound_core::narrative::{ResolutionState, ThreadType};
+use starbound_core::npc::Npc;
 use starbound_core::rumor::{
     base_reliability, rumor_count_range, Rumor, RumorCategory, RumorContent,
 };
@@ -58,6 +60,7 @@ pub fn generate_rumors(ctx: &RumorContext, rng: &mut StdRng) -> Vec<Rumor> {
     let mut candidates: Vec<ScoredCandidate> = Vec::new();
 
     candidates.extend(scan_trade(ctx, reliability));
+    candidates.extend(scan_contracts(ctx, reliability));
     candidates.extend(scan_factions(ctx, reliability));
     candidates.extend(scan_threads(ctx, reliability));
     candidates.extend(scan_local_color(ctx, reliability));
@@ -225,6 +228,128 @@ fn scan_trade(ctx: &RumorContext, reliability: f64) -> Vec<ScoredCandidate> {
     // Keep only the top 3 trade tips (don't flood with trade data).
     candidates.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
     candidates.truncate(3);
+    candidates
+}
+
+// ---------------------------------------------------------------------------
+// Contract scanner
+// ---------------------------------------------------------------------------
+
+/// Scan NPCs at the current location for potential contract offerings.
+/// Generates ContractLead rumors that reference specific NPCs by name,
+/// with contract types varied by faction category.
+fn scan_contracts(ctx: &RumorContext, reliability: f64) -> Vec<ScoredCandidate> {
+    let mut candidates = Vec::new();
+
+    let loc_id = match ctx.journey.current_location {
+        Some(id) => id,
+        None => return candidates, // Not docked — no NPCs to hear about.
+    };
+
+    // Find NPCs at this location who could offer work.
+    let npcs_here: Vec<&Npc> = ctx.galaxy.npcs.iter()
+        .filter(|n| {
+            n.home_system_id == ctx.system.id
+                && n.alive
+                && n.home_location_id == Some(loc_id)
+                && n.will_offer_contracts()
+        })
+        .collect();
+
+    // Check if the player already has contracts from these NPCs (skip them).
+    let active_issuers: Vec<Uuid> = ctx.journey.active_contracts.iter()
+        .filter(|c| c.state == starbound_core::contract::ContractState::Active
+            || c.state == starbound_core::contract::ContractState::ReadyToComplete)
+        .map(|c| c.issuer_npc_id)
+        .collect();
+
+    for npc in npcs_here {
+        if active_issuers.contains(&npc.id) {
+            continue; // Already working for this NPC.
+        }
+
+        let faction_category = npc.faction_id
+            .and_then(|fid| {
+                ctx.galaxy.factions.iter()
+                    .find(|f| f.id == fid)
+                    .map(|f| f.category)
+            });
+
+        let faction_name = npc.faction_id
+            .and_then(|fid| {
+                ctx.galaxy.factions.iter()
+                    .find(|f| f.id == fid)
+                    .map(|f| f.name.as_str())
+            })
+            .unwrap_or("an independent operator");
+
+        // Pick a contract type and flavor text based on faction category.
+        let (contract_type, verb, reward_estimate) = match faction_category {
+            Some(FactionCategory::Military) => {
+                ("investigation", "investigate a situation", 280.0)
+            }
+            Some(FactionCategory::Economic) => {
+                ("delivery", "run a shipment", 200.0)
+            }
+            Some(FactionCategory::Guild) => {
+                ("retrieval", "retrieve some equipment", 220.0)
+            }
+            Some(FactionCategory::Criminal) => {
+                ("delivery", "move some cargo discreetly", 320.0)
+            }
+            Some(FactionCategory::Religious) => {
+                ("retrieval", "recover an artifact", 180.0)
+            }
+            Some(FactionCategory::Academic) => {
+                ("investigation", "look into something", 240.0)
+            }
+            Some(FactionCategory::Political) => {
+                ("investigation", "assess a situation", 260.0)
+            }
+            None => {
+                ("delivery", "handle a courier job", 175.0)
+            }
+        };
+
+        let display = format!(
+            "\"{} — {} — is looking for someone to {}. \
+             Talk to {} if you're interested.\"",
+            npc.name, npc.title, verb,
+            npc.pronouns.object,
+        );
+
+        let summary = format!(
+            "{} ({}) wants a {} job done (~{:.0} cr)",
+            npc.name, faction_name, contract_type, reward_estimate,
+        );
+
+        // Score: contract leads are generally valuable. Boost slightly
+        // for NPCs with better disposition (better terms likely).
+        let disposition_bonus = (npc.disposition.max(0.0) as f64) * 0.2;
+        let score = 0.7 + disposition_bonus;
+
+        candidates.push(ScoredCandidate {
+            id: Uuid::new_v4(),
+            category: RumorCategory::ContractLead,
+            content: RumorContent::ContractLead {
+                faction_id: npc.faction_id.unwrap_or(Uuid::nil()),
+                contract_type: contract_type.into(),
+                destination_system: None, // Specific destination determined at offer time.
+                estimated_reward: reward_estimate,
+                npc_id: Some(npc.id),
+                npc_name: Some(npc.name.clone()),
+            },
+            display_text: display,
+            summary,
+            score,
+            reliability, // Contract leads are as reliable as the location.
+            expires_in: RumorCategory::ContractLead.default_expiry(),
+        });
+    }
+
+    // Keep top 2 (don't overwhelm with contract leads).
+    candidates.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    candidates.truncate(2);
     candidates
 }
 
@@ -739,5 +864,110 @@ mod tests {
         if rumors.len() > 1 {
             assert!(unique.len() > 1, "Multiple rumors should span multiple categories");
         }
+    }
+
+    #[test]
+    fn test_contract_scanner_finds_npcs() {
+        use starbound_core::npc::{Npc, Species, BiologicalSex, NpcPersonality};
+
+        let loc = test_location("Station", InfrastructureLevel::Hub, None);
+        let sys = test_system("Alpha", vec![loc.clone()]);
+
+        let faction_id = Uuid::new_v4();
+        let mut npc = Npc::new(
+            "Maren Vasquez",
+            "Guild Factor",
+            Species::Human { sex: BiologicalSex::Female },
+            Some(faction_id),
+            sys.id,
+            "A seasoned trader.",
+        );
+        npc.home_location_id = Some(loc.id);
+        npc.disposition = 0.1; // Neutral — will offer contracts.
+        npc.personality = NpcPersonality {
+            warmth: 0.7,
+            boldness: 0.4,
+            idealism: 0.6,
+        };
+
+        let mut galaxy = minimal_galaxy(vec![sys.clone()]);
+        galaxy.factions.push(starbound_core::galaxy::Faction {
+            id: faction_id,
+            name: "Corridor Guild".into(),
+            category: FactionCategory::Guild,
+            scope: starbound_core::galaxy::FactionScope::Independent,
+            ethos: starbound_core::galaxy::FactionEthos {
+                alignment: 0.0,
+                openness: 0.7,
+                aggression: 0.2,
+            },
+            influence: HashMap::new(),
+            player_standing: starbound_core::galaxy::FactionStanding::unknown(),
+            description: "A guild.".into(),
+            notable_assets: vec![],
+        });
+        galaxy.npcs.push(npc);
+
+        let mut journey = test_journey(sys.id);
+        journey.current_location = Some(loc.id);
+
+        let ctx = RumorContext {
+            galaxy: &galaxy,
+            journey: &journey,
+            recent_tick_events: &[],
+            location: &loc,
+            system: &sys,
+        };
+
+        let candidates = scan_contracts(&ctx, 0.8);
+        assert!(!candidates.is_empty(), "Should find contract leads from NPCs");
+        assert_eq!(candidates[0].category, RumorCategory::ContractLead);
+
+        // Verify the NPC name is in the display text.
+        assert!(
+            candidates[0].display_text.contains("Maren Vasquez"),
+            "Contract lead should reference the NPC by name"
+        );
+    }
+
+    #[test]
+    fn test_contract_scanner_skips_hostile_npcs() {
+        use starbound_core::npc::{Npc, Species, BiologicalSex, NpcPersonality};
+
+        let loc = test_location("Station", InfrastructureLevel::Hub, None);
+        let sys = test_system("Alpha", vec![loc.clone()]);
+
+        let mut npc = Npc::new(
+            "Cold Officer",
+            "Watch Officer",
+            Species::Human { sex: BiologicalSex::Male },
+            None,
+            sys.id,
+            "A hostile officer.",
+        );
+        npc.home_location_id = Some(loc.id);
+        npc.disposition = -0.6; // Hostile — won't offer contracts.
+        npc.personality = NpcPersonality {
+            warmth: 0.2,
+            boldness: 0.8,
+            idealism: 0.3,
+        };
+
+        let mut galaxy = minimal_galaxy(vec![sys.clone()]);
+        galaxy.npcs.push(npc);
+
+        let mut journey = test_journey(sys.id);
+        journey.current_location = Some(loc.id);
+
+        let ctx = RumorContext {
+            galaxy: &galaxy,
+            journey: &journey,
+            recent_tick_events: &[],
+            location: &loc,
+            system: &sys,
+        };
+
+        let candidates = scan_contracts(&ctx, 0.8);
+        assert!(candidates.is_empty(), "Should not generate leads for hostile NPCs");
     }
 }

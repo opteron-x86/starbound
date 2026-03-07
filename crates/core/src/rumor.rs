@@ -90,6 +90,10 @@ pub enum RumorContent {
         contract_type: String,
         destination_system: Option<Uuid>,
         estimated_reward: f64,
+        /// The specific NPC offering this work (if known).
+        npc_id: Option<Uuid>,
+        /// Display name of the NPC (for rumor text).
+        npc_name: Option<String>,
     },
     FactionIntel {
         summary: String,
