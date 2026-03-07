@@ -38,7 +38,7 @@ use starbound_simulation::tick::{tick_galaxy, TickResult, TickEvent, TickEventCa
 
 use starbound_game::travel::execute_travel;
 use starbound_game::consequences::{convert_effects, apply_effects};
-use starbound_game::rumors::{generate_rumors, RumorContext};
+use starbound_game::rumors::{generate_rumors, validate_rumors_at_location, RumorContext};
 use starbound_game::crew_conversation::{
     generate_topics, conversation_effects_to_game_effects, apply_concern_removals,
     describe_crew_state, ConversationTopic, ConversationEffect,
@@ -50,6 +50,7 @@ use starbound_game::npc_interaction::{
 
 use starbound_llm::config::LlmConfig;
 use starbound_llm::generate::generate_encounter;
+use starbound_llm::rumor_flavor::{flavor_rumor, RumorSource};
 use starbound_llm::prompt::DestinationInfo;
 
 // ---------------------------------------------------------------------------
@@ -817,6 +818,7 @@ fn display_galactic_news(tick_result: &TickResult, _gs: &GameState) {
             TickEventCategory::Military => "  ▸",
             TickEventCategory::Internal => "  ▸",
             TickEventCategory::Faction => "  ▸",
+            TickEventCategory::Economic => "  ▸",
         };
 
         for line in wrap_text(&format!("{} {}", icon, event.description), 60) {
@@ -1855,6 +1857,27 @@ fn navigate_to_location(gs: &mut GameState, target_id: Uuid, from_dist: f32) {
     // Check contract progress at this location.
     check_contract_progress(gs);
 
+    // Validate trade rumors against actual prices at this location.
+    if let Some(loc) = gs.current_location().cloned() {
+        let sys = gs.current_system().clone();
+        let validations = validate_rumors_at_location(
+            &gs.journey, &sys, &loc, gs.journey.time.galactic_days,
+        );
+        for v in &validations {
+            println!();
+            for line in wrap_text(&v.message, 60) {
+                println!("  {}", line);
+            }
+        }
+        // Apply outcomes to rumors.
+        for v in validations {
+            if let Some(rumor) = gs.journey.discovered_rumors.get_mut(v.rumor_idx) {
+                rumor.outcome = Some(v.outcome);
+                rumor.acted_on = true;
+            }
+        }
+    }
+
     pause();
 
     // --- Docked/orbit ambient event ---
@@ -2561,7 +2584,7 @@ fn rumors_screen(gs: &mut GameState) {
         system: &system,
     };
 
-    let rumors = generate_rumors(&ctx, &mut gs.rng);
+    let mut rumors = generate_rumors(&ctx, &mut gs.rng);
 
     if rumors.is_empty() {
         println!("  Nothing interesting. The station is quiet.");
@@ -2572,6 +2595,39 @@ fn rumors_screen(gs: &mut GameState) {
         gs.journey.time.personal_days += hours / 24.0;
         gs.journey.time.galactic_days += galactic_hours / 24.0;
         return;
+    }
+
+    // --- Optional LLM flavor pass ---
+    // When the LLM is available, try to flavor each rumor's delivery.
+    // Falls back to template text silently on failure.
+    if gs.llm_config.is_available() {
+        for rumor in rumors.iter_mut() {
+            // Pick a source type based on rumor category.
+            let source = match rumor.category {
+                starbound_core::rumor::RumorCategory::ContractLead => {
+                    if let RumorContent::ContractLead { npc_name: Some(ref name), .. } = rumor.content {
+                        RumorSource::FactionContact {
+                            name: name.clone(),
+                            title: "contact".into(),
+                        }
+                    } else {
+                        RumorSource::Overheard
+                    }
+                }
+                starbound_core::rumor::RumorCategory::FactionIntel => RumorSource::NewsTerminal,
+                starbound_core::rumor::RumorCategory::TradeTip => RumorSource::DockWorker,
+                _ => RumorSource::Overheard,
+            };
+
+            if let Some(flavored) = flavor_rumor(
+                &gs.llm_config,
+                &rumor.summary,
+                &source,
+                &location.name,
+            ) {
+                rumor.display_text = flavored;
+            }
+        }
     }
 
     // Display each rumor.

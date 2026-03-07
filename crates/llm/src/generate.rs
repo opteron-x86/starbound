@@ -14,7 +14,7 @@ use starbound_core::npc::Npc;
 
 use starbound_encounters::seed_event::{EventTrigger, SeedEvent};
 
-use crate::client::{self, ApiError};
+use crate::client;
 use crate::config::LlmConfig;
 use crate::prompt::{self, EncounterContext, DestinationInfo};
 use crate::response;

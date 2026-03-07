@@ -214,6 +214,7 @@ fn scan_trade(ctx: &RumorContext, reliability: f64) -> Vec<ScoredCandidate> {
                         sell_system: system.id,
                         sell_location: Some(loc.id),
                         estimated_spread: spread,
+                        estimated_sell_price: sell_there,
                     },
                     display_text: display,
                     summary,
@@ -515,10 +516,19 @@ fn scan_threads(ctx: &RumorContext, reliability: f64) -> Vec<ScoredCandidate> {
                 continue;
             }
 
+            let faction_list = if faction_names.len() == 2 {
+                format!("{} and {}", faction_names[0], faction_names[1])
+            } else {
+                // "A, B, and C"
+                let last = faction_names.last().unwrap().clone();
+                let rest = &faction_names[..faction_names.len() - 1];
+                format!("{}, and {}", rest.join(", "), last)
+            };
+
             let display = format!(
-                "\"Things are tense at {}. {} are both vying for influence there.\"",
+                "\"Things are tense at {}. {} are all vying for influence there.\"",
                 system.name,
-                faction_names.join(" and "),
+                faction_list,
             );
 
             let summary = format!(
@@ -534,7 +544,7 @@ fn scan_threads(ctx: &RumorContext, reliability: f64) -> Vec<ScoredCandidate> {
                     description: format!(
                         "Power struggle at {} between {}",
                         system.name,
-                        faction_names.join(" and "),
+                        faction_list,
                     ),
                     related_system: Some(system.id),
                     thread_type: format!("{}", ThreadType::Mystery),
@@ -622,6 +632,108 @@ fn scan_local_color(ctx: &RumorContext, reliability: f64) -> Vec<ScoredCandidate
     }
 
     candidates
+}
+
+// ---------------------------------------------------------------------------
+// Rumor validation
+// ---------------------------------------------------------------------------
+
+/// A result from validating a trade rumor against actual prices.
+pub struct RumorValidation {
+    pub rumor_idx: usize,
+    pub outcome: starbound_core::rumor::RumorOutcome,
+    pub message: String,
+}
+
+/// Validate trade tip rumors when the player docks at a location.
+///
+/// Checks rumors that reference this system as a sell destination.
+/// Compares the estimated spread against actual prices. Returns
+/// validation results for any rumors that can be checked here.
+pub fn validate_rumors_at_location(
+    journey: &Journey,
+    system: &StarSystem,
+    location: &Location,
+    galactic_day: f64,
+) -> Vec<RumorValidation> {
+    let mut results = Vec::new();
+    let economy = match &location.economy {
+        Some(e) => e,
+        None => return results,
+    };
+
+    for (idx, rumor) in journey.discovered_rumors.iter().enumerate() {
+        // Only validate trade tips that haven't been checked yet.
+        if rumor.outcome.is_some() || rumor.acted_on {
+            continue;
+        }
+
+        if let RumorContent::TradeTip {
+            ref good, sell_system, estimated_sell_price, ..
+        } = rumor.content {
+            // Only validate if this is the sell destination.
+            if sell_system != system.id {
+                continue;
+            }
+
+            // Find the actual sell price for this good.
+            let actual_sell = TradeGood::all().iter()
+                .find(|g| g.display_name() == good)
+                .map(|g| economy.sell_price(*g));
+
+            let actual_sell = match actual_sell {
+                Some(p) => p,
+                None => continue,
+            };
+
+            // Check if the rumor has expired.
+            let age = galactic_day - rumor.generated_at;
+            let expired = age > rumor.expires_in;
+
+            // Compare actual sell price vs what was estimated when the rumor was heard.
+            // Within 20% = accurate, beyond that = stale, expired = stale.
+            let price_diff = (actual_sell - estimated_sell_price).abs();
+            let tolerance = estimated_sell_price.max(1.0) * 0.2;
+
+            let outcome = if expired {
+                starbound_core::rumor::RumorOutcome::Stale
+            } else if price_diff <= tolerance {
+                starbound_core::rumor::RumorOutcome::Accurate
+            } else {
+                starbound_core::rumor::RumorOutcome::Stale
+            };
+
+            let message = match outcome {
+                starbound_core::rumor::RumorOutcome::Accurate => {
+                    format!(
+                        "Trade tip confirmed: {} is selling for ~{:.0} here, as expected.",
+                        good, actual_sell,
+                    )
+                }
+                starbound_core::rumor::RumorOutcome::Stale => {
+                    format!(
+                        "Trade tip outdated: {} is now selling for ~{:.0} here — \
+                         prices have shifted since you heard.",
+                        good, actual_sell,
+                    )
+                }
+                starbound_core::rumor::RumorOutcome::Inaccurate => {
+                    format!(
+                        "Trade tip was wrong: {} prices at {} don't match what you heard.",
+                        good, system.name,
+                    )
+                }
+            };
+
+            results.push(RumorValidation {
+                rumor_idx: idx,
+                outcome,
+                message,
+            });
+        }
+    }
+
+    results
 }
 
 // ---------------------------------------------------------------------------

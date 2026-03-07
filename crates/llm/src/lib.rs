@@ -38,3 +38,4 @@ pub mod client;
 pub mod prompt;
 pub mod response;
 pub mod generate;
+pub mod rumor_flavor;

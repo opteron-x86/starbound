@@ -20,6 +20,8 @@ const MILITARIZE_GROWTH: f32 = 0.03;
 const STABILIZE_RECOVERY: f32 = 0.08;
 const STABILITY_PASSIVE_DECAY: f32 = 0.01;
 const NEW_PRESSURE_CHANCE: f64 = 0.15;
+const ECONOMY_DRIFT_RANGE: f32 = 0.08;
+const ECONOMY_EVENT_SHIFT: f32 = 0.15;
 
 #[derive(Debug, Clone)]
 pub struct TickEvent {
@@ -38,6 +40,7 @@ pub enum TickEventCategory {
     Military,
     Internal,
     Faction,
+    Economic,
 }
 
 #[derive(Debug)]
@@ -73,6 +76,15 @@ pub fn tick_galaxy(
 
         // Faction presence drift, expansion, and pruning.
         tick_factions(galaxy, tick, tick_day, rng, &mut events);
+
+        // Economy drift — prices shift based on events and random perturbation.
+        // Collect this tick's events first (read), then generate economic events (write).
+        let this_tick_events: Vec<TickEvent> = events.iter()
+            .filter(|e| e.tick_number == tick)
+            .cloned()
+            .collect();
+        let econ_events = tick_economies(galaxy, tick, tick_day, rng, &this_tick_events);
+        events.extend(econ_events);
     }
     TickResult { ticks_run: num_ticks, days_consumed: num_ticks as f64 * DAYS_PER_TICK, events }
 }
@@ -233,6 +245,128 @@ fn shift_disposition(galaxy: &mut GeneratedGalaxy, from: Uuid, toward: Uuid, dip
             disp.military = (disp.military + military_delta).clamp(-1.0, 1.0);
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Economy drift
+// ---------------------------------------------------------------------------
+
+/// Drift location economies during galactic ticks.
+///
+/// Two effects:
+/// 1. **Random drift** — small perturbations to production/consumption every tick.
+///    Frontier systems drift more than capitals. This makes trade tips go stale.
+/// 2. **Event-driven shifts** — military tensions increase fuel demand,
+///    expansion increases construction material demand, internal unrest
+///    increases medical supply demand.
+fn tick_economies(
+    galaxy: &mut GeneratedGalaxy,
+    tick_number: usize,
+    galactic_day: f64,
+    rng: &mut StdRng,
+    this_tick_events: &[TickEvent],
+) -> Vec<TickEvent> {
+    let mut events = Vec::new();
+
+    // Collect system IDs affected by this tick's events.
+    let military_system_ids: Vec<Uuid> = this_tick_events.iter()
+        .filter(|e| e.category == TickEventCategory::Military)
+        .flat_map(|e| e.entities.iter().copied())
+        .collect();
+
+    let expansion_system_ids: Vec<Uuid> = this_tick_events.iter()
+        .filter(|e| e.category == TickEventCategory::Expansion || e.category == TickEventCategory::Infrastructure)
+        .flat_map(|e| e.entities.iter().copied())
+        .collect();
+
+    let unrest_civ_ids: Vec<Uuid> = this_tick_events.iter()
+        .filter(|e| e.category == TickEventCategory::Internal)
+        .flat_map(|e| e.entities.iter().copied())
+        .collect();
+
+    for system in galaxy.systems.iter_mut() {
+        // Check if this system is affected by events.
+        let has_military_tension = military_system_ids.contains(&system.id)
+            || system.controlling_civ.map_or(false, |cid| military_system_ids.contains(&cid));
+        let has_expansion = expansion_system_ids.contains(&system.id);
+        let has_unrest = system.controlling_civ.map_or(false, |cid| unrest_civ_ids.contains(&cid));
+
+        for location in system.locations.iter_mut() {
+            let economy = match location.economy.as_mut() {
+                Some(e) => e,
+                None => continue,
+            };
+
+            let volatility = economy.price_volatility;
+            let drift_scale = ECONOMY_DRIFT_RANGE * volatility;
+
+            // 1. Random drift — every good gets a small random shift.
+            for good in TradeGood::all() {
+                let prod_drift = rng.gen_range(-drift_scale..=drift_scale);
+                let cons_drift = rng.gen_range(-drift_scale..=drift_scale);
+
+                if let Some(prod) = economy.production.get_mut(good) {
+                    *prod = (*prod + prod_drift).clamp(0.0, 1.0);
+                }
+                if let Some(cons) = economy.consumption.get_mut(good) {
+                    *cons = (*cons + cons_drift).clamp(0.0, 1.0);
+                }
+            }
+
+            // 2. Event-driven shifts.
+            if has_military_tension {
+                // Military tension → increased fuel demand, decreased general trade.
+                if let Some(cons) = economy.consumption.get_mut(&TradeGood::RefinedFuelCells) {
+                    *cons = (*cons + ECONOMY_EVENT_SHIFT).clamp(0.0, 1.0);
+                }
+                economy.fuel_price *= 1.1;
+                economy.fuel_price = economy.fuel_price.min(15.0);
+            }
+
+            if has_expansion {
+                // Expansion → construction materials in demand.
+                if let Some(cons) = economy.consumption.get_mut(&TradeGood::ConstructionMaterials) {
+                    *cons = (*cons + ECONOMY_EVENT_SHIFT).clamp(0.0, 1.0);
+                }
+            }
+
+            if has_unrest {
+                // Internal unrest → medical supply demand spike.
+                if let Some(cons) = economy.consumption.get_mut(&TradeGood::MedicalSupplies) {
+                    *cons = (*cons + ECONOMY_EVENT_SHIFT).clamp(0.0, 1.0);
+                }
+            }
+
+            // Slowly mean-revert fuel/supply prices toward baseline.
+            let base_fuel = 3.0 + volatility * 2.0;
+            economy.fuel_price += (base_fuel - economy.fuel_price) * 0.1;
+            let base_supply = 2.0 + volatility;
+            economy.supply_price += (base_supply - economy.supply_price) * 0.1;
+        }
+
+        // Emit one event per system if significant economic change occurred.
+        if has_military_tension || has_expansion || has_unrest {
+            let reasons: Vec<&str> = [
+                if has_military_tension { Some("military tensions") } else { None },
+                if has_expansion { Some("expansion activity") } else { None },
+                if has_unrest { Some("civil unrest") } else { None },
+            ].iter().filter_map(|x| *x).collect();
+
+            events.push(TickEvent {
+                tick_number,
+                galactic_day,
+                description: format!(
+                    "Trade conditions shifted at {} due to {}.",
+                    system.name,
+                    reasons.join(" and "),
+                ),
+                entities: vec![system.id],
+                category: TickEventCategory::Economic,
+            });
+        }
+    }
+
+    events
 }
 
 #[cfg(test)]

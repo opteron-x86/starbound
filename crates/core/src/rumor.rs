@@ -84,6 +84,9 @@ pub enum RumorContent {
         sell_location: Option<Uuid>,
         /// Expected profit per unit (sell price − buy price).
         estimated_spread: f64,
+        /// The sell price at the time the rumor was heard.
+        #[serde(default)]
+        estimated_sell_price: f64,
     },
     ContractLead {
         faction_id: Uuid,
