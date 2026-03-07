@@ -52,6 +52,10 @@ RULES:
 - Use quotation marks for dialogue. No dialogue tags beyond the first sentence.
 - DO NOT use exclamation marks. This world is understated.
 - DO NOT explain what the fact means for the player. Just deliver it.
+- NEVER use: chipped mugs, steepled fingers, 'measured gaze/look', \
+  'the hum of X filled the silence', 'something flickered in their eyes', \
+  'the weight of', drumming fingers, or tracing the rim of anything. \
+  Ground atmosphere in concrete physical details specific to this place.
 - Respond with ONLY the flavored text. No JSON, no labels, no preamble.";
 
 /// Attempt to generate flavored delivery for a single rumor.

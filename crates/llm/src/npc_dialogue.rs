@@ -123,6 +123,10 @@ RULES:
 - Use correct pronouns throughout.
 - DO NOT use exclamation marks. This world is understated.
 - DO NOT invent facts about the world, the player, or their history.
+- NEVER use: chipped mugs, steepled fingers, 'measured gaze/look', \
+  'the hum of X filled the silence', 'something flickered in their eyes', \
+  'the weight of', drumming fingers, or tracing the rim of anything. \
+  Use concrete sensory details specific to THIS location instead.
 - Respond with ONLY the greeting text. No JSON, no labels, no preamble.";
 
 const KNOWLEDGE_SYSTEM_PROMPT: &str = "\
@@ -144,6 +148,10 @@ RULES:
 - Use correct pronouns throughout.
 - DO NOT add knowledge items that aren't provided. Stick to the facts given.
 - DO NOT use exclamation marks.
+- NEVER use: chipped mugs, steepled fingers, 'measured gaze/look', \
+  'the hum of X filled the silence', 'something flickered in their eyes', \
+  'the weight of', drumming fingers, or tracing the rim of anything. \
+  Use concrete sensory details specific to THIS character and location.
 - Respond with ONLY the dialogue/narration. No JSON, no labels, no preamble.";
 
 // ---------------------------------------------------------------------------
