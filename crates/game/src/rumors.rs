@@ -18,7 +18,8 @@ use rand::prelude::*;
 use uuid::Uuid;
 
 use starbound_core::galaxy::{
-    FactionCategory, InfrastructureLevel, Location, StarSystem, TradeGood,
+    BodyType, FactionCategory, InfrastructureLevel, Location, LocationType, StarSystem,
+    StarType, TradeGood,
 };
 use starbound_core::journey::Journey;
 use starbound_core::narrative::{ResolutionState, ThreadType};
@@ -358,8 +359,9 @@ fn scan_contracts(ctx: &RumorContext, reliability: f64) -> Vec<ScoredCandidate> 
 // Faction scanner
 // ---------------------------------------------------------------------------
 
-/// Read recent galactic tick events and surface political/military shifts
-/// relevant to factions present at this location.
+/// Surface political, military, and diplomatic intelligence from both recent
+/// tick events and live galaxy state — civ stability, inter-civ tensions,
+/// internal pressures, militarization, and faction power shifts at neighbors.
 fn scan_factions(ctx: &RumorContext, reliability: f64) -> Vec<ScoredCandidate> {
     let mut candidates = Vec::new();
 
@@ -368,37 +370,22 @@ fn scan_factions(ctx: &RumorContext, reliability: f64) -> Vec<ScoredCandidate> {
         .map(|fp| fp.faction_id)
         .collect();
 
+    // ----- Tick event rumors (recent galactic history) -----
+
     for event in ctx.recent_tick_events {
-        // Score events that involve factions present locally higher.
         let involves_local = event.entities.iter()
             .any(|eid| local_faction_ids.contains(eid));
 
         if !involves_local && ctx.recent_tick_events.len() > 5 {
-            // For large event sets, skip events that don't touch local factions.
             continue;
         }
 
-        // Resolve entity names for display.
-        let faction_names: Vec<String> = event.entities.iter()
-            .filter_map(|eid| {
-                ctx.galaxy.factions.iter()
-                    .find(|f| f.id == *eid)
-                    .map(|f| f.name.clone())
-                    .or_else(|| {
-                        ctx.galaxy.civilizations.iter()
-                            .find(|c| c.id == *eid)
-                            .map(|c| c.name.clone())
-                    })
-            })
-            .collect();
-
-        let display = format!(
-            "\"{}\"",
-            event.description,
+        let faction_names: Vec<String> = resolve_entity_names(
+            &event.entities, &ctx.galaxy.factions, &ctx.galaxy.civilizations,
         );
 
+        let display = format!("\"{}\"", event.description);
         let summary = event.description.clone();
-
         let score = if involves_local { 0.8 } else { 0.4 };
 
         candidates.push(ScoredCandidate {
@@ -425,10 +412,243 @@ fn scan_factions(ctx: &RumorContext, reliability: f64) -> Vec<ScoredCandidate> {
         });
     }
 
-    // Keep top 3.
+    // ----- Live galaxy state: controlling civilization -----
+
+    if let Some(civ_id) = ctx.system.controlling_civ {
+        if let Some(civ) = ctx.galaxy.civilizations.iter().find(|c| c.id == civ_id) {
+            // Low stability — the population is nervous.
+            if civ.internal_dynamics.stability < 0.4 {
+                let severity = if civ.internal_dynamics.stability < 0.2 {
+                    "on the verge of something ugly"
+                } else {
+                    "not stable — people are nervous"
+                };
+                let display = format!(
+                    "\"Things under {} rule are {}. \
+                     You can feel it in the docking bay.\"",
+                    civ.name, severity,
+                );
+                let summary = format!(
+                    "{}: stability low ({:.0}%)",
+                    civ.name, civ.internal_dynamics.stability * 100.0,
+                );
+                candidates.push(faction_intel_candidate(
+                    format!("{} internal stability deteriorating", civ.name),
+                    vec![civ_id],
+                    "Instability means unpredictability — and opportunity.".into(),
+                    display, summary, 0.75, reliability,
+                ));
+            }
+
+            // Active internal pressures — specific unrest.
+            if let Some(pressure) = civ.internal_dynamics.pressures.first() {
+                let display = format!(
+                    "\"Word is {} is dealing with problems. {}\"",
+                    civ.name, pressure.description,
+                );
+                let summary = format!("{}: {}", civ.name, pressure.description);
+                candidates.push(faction_intel_candidate(
+                    format!("{}: {}", civ.name, pressure.description),
+                    vec![civ_id],
+                    "Internal problems spill outward sooner or later.".into(),
+                    display, summary, 0.65, reliability,
+                ));
+            }
+
+            // Inter-civ relationships: military tension or diplomatic warming.
+            for (other_id, disp) in &civ.relationships {
+                let other = match ctx.galaxy.civilizations.iter().find(|c| c.id == *other_id) {
+                    Some(c) => c,
+                    None => continue,
+                };
+
+                if disp.military < -0.3 {
+                    let (severity, implication) = if disp.military < -0.7 {
+                        (
+                            "on the brink of open conflict",
+                            "Border systems will become dangerous. Plan routes carefully.",
+                        )
+                    } else {
+                        (
+                            "at each other's throats politically",
+                            "Military traffic is up. Inspections may get thorough.",
+                        )
+                    };
+                    let display = format!(
+                        "\"{} and {} are {}. Military traffic through here has picked up.\"",
+                        civ.name, other.name, severity,
+                    );
+                    let summary = format!(
+                        "Military tension: {} vs {} ({:.0}%)",
+                        civ.name, other.name, -disp.military * 100.0,
+                    );
+                    candidates.push(faction_intel_candidate(
+                        format!("Military tension between {} and {}", civ.name, other.name),
+                        vec![civ_id, *other_id],
+                        implication.into(),
+                        display, summary, 0.85, reliability,
+                    ));
+                } else if disp.diplomatic > 0.5 && disp.economic > 0.4 {
+                    let display = format!(
+                        "\"{} and {} are getting friendly. Trade agreements, joint patrols — \
+                         good for business if you work both sides.\"",
+                        civ.name, other.name,
+                    );
+                    let summary = format!(
+                        "Warming relations: {} + {}",
+                        civ.name, other.name,
+                    );
+                    candidates.push(faction_intel_candidate(
+                        format!("{} and {} strengthening ties", civ.name, other.name),
+                        vec![civ_id, *other_id],
+                        "Alliance means smoother trade routes through both territories.".into(),
+                        display, summary, 0.5, reliability,
+                    ));
+                }
+            }
+
+            // Militarization — civ is arming up.
+            if civ.capabilities.military > 0.7 {
+                let display = format!(
+                    "\"{} has been building up military strength. Shipyards running \
+                     double shifts, new patrol routes going in.\"",
+                    civ.name,
+                );
+                let summary = format!(
+                    "{}: military buildup ({:.0}%)",
+                    civ.name, civ.capabilities.military * 100.0,
+                );
+                candidates.push(faction_intel_candidate(
+                    format!("{} expanding military capabilities", civ.name),
+                    vec![civ_id],
+                    "Militarization usually means someone expects a fight.".into(),
+                    display, summary, 0.6, reliability,
+                ));
+            }
+        }
+    }
+
+    // ----- Live galaxy state: neighboring systems -----
+
+    let neighbor_ids: Vec<Uuid> = ctx.galaxy.connections.iter()
+        .filter_map(|c| {
+            if c.system_a == ctx.system.id { Some(c.system_b) }
+            else if c.system_b == ctx.system.id { Some(c.system_a) }
+            else { None }
+        })
+        .collect();
+
+    for neighbor_id in &neighbor_ids {
+        let neighbor = match ctx.galaxy.systems.iter().find(|s| s.id == *neighbor_id) {
+            Some(s) => s,
+            None => continue,
+        };
+
+        // Dominant faction consolidating power at a neighbor.
+        if let Some(dominant) = neighbor.faction_presence.iter()
+            .max_by(|a, b| a.strength.partial_cmp(&b.strength).unwrap_or(std::cmp::Ordering::Equal))
+        {
+            if dominant.strength > 0.7 {
+                if let Some(faction) = ctx.galaxy.factions.iter().find(|f| f.id == dominant.faction_id) {
+                    let display = format!(
+                        "\"The {} practically run {} now. \
+                         Anyone doing business there works on their terms.\"",
+                        faction.name, neighbor.name,
+                    );
+                    let summary = format!(
+                        "{} dominant at {} ({:.0}%)",
+                        faction.name, neighbor.name, dominant.strength * 100.0,
+                    );
+                    candidates.push(faction_intel_candidate(
+                        format!("{} consolidating power at {}", faction.name, neighbor.name),
+                        vec![faction.id],
+                        format!("Expect {} rules to shape conditions at {}.", faction.name, neighbor.name),
+                        display, summary, 0.55, reliability * 0.9,
+                    ));
+                }
+            }
+        }
+
+        // Three or more factions contesting a neighbor — powder keg.
+        let strong_here: Vec<Uuid> = neighbor.faction_presence.iter()
+            .filter(|fp| fp.strength >= 0.3)
+            .map(|fp| fp.faction_id)
+            .collect();
+
+        if strong_here.len() >= 3 {
+            let names: Vec<String> = strong_here.iter()
+                .filter_map(|fid| {
+                    ctx.galaxy.factions.iter()
+                        .find(|f| f.id == *fid)
+                        .map(|f| f.name.clone())
+                })
+                .collect();
+
+            if !names.is_empty() {
+                let display = format!(
+                    "\"{} is a powder keg — {} all jockeying for position there.\"",
+                    neighbor.name, names.join(", "),
+                );
+                let summary = format!(
+                    "{}: {} factions competing",
+                    neighbor.name, strong_here.len(),
+                );
+                candidates.push(faction_intel_candidate(
+                    format!("Power struggle at {}", neighbor.name),
+                    strong_here,
+                    "Contested systems are volatile — and profitable for the right captain.".into(),
+                    display, summary, 0.6, reliability * 0.85,
+                ));
+            }
+        }
+    }
+
+    // Keep top 4 — more material now, allow slightly deeper pool.
     candidates.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
-    candidates.truncate(3);
+    candidates.truncate(4);
     candidates
+}
+
+/// Helper: build a FactionIntel candidate without repeating boilerplate.
+fn faction_intel_candidate(
+    content_summary: String,
+    factions_involved: Vec<Uuid>,
+    implication: String,
+    display_text: String,
+    summary: String,
+    score: f64,
+    reliability: f64,
+) -> ScoredCandidate {
+    ScoredCandidate {
+        id: Uuid::new_v4(),
+        category: RumorCategory::FactionIntel,
+        content: RumorContent::FactionIntel {
+            summary: content_summary,
+            factions_involved,
+            implication,
+        },
+        display_text,
+        summary,
+        score,
+        reliability,
+        expires_in: RumorCategory::FactionIntel.default_expiry(),
+    }
+}
+
+/// Resolve entity UUIDs to display names, checking factions then civilizations.
+fn resolve_entity_names(
+    ids: &[Uuid],
+    factions: &[starbound_core::galaxy::Faction],
+    civs: &[starbound_core::galaxy::Civilization],
+) -> Vec<String> {
+    ids.iter()
+        .filter_map(|eid| {
+            factions.iter()
+                .find(|f| f.id == *eid)
+                .map(|f| f.name.clone())
+                .or_else(|| civs.iter().find(|c| c.id == *eid).map(|c| c.name.clone()))
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -566,27 +786,27 @@ fn scan_threads(ctx: &RumorContext, reliability: f64) -> Vec<ScoredCandidate> {
 // Local color scanner
 // ---------------------------------------------------------------------------
 
-/// Generate atmospheric details from the current system's state.
-/// These have no mechanical payload — pure world texture.
+/// Generate atmospheric details from the system, location, ship, and faction
+/// state. No mechanical payload — pure world texture that makes a spaceport
+/// feel like a place, not a menu.
 fn scan_local_color(ctx: &RumorContext, reliability: f64) -> Vec<ScoredCandidate> {
     let mut candidates = Vec::new();
 
-    // Time distortion commentary for frontier/edge systems.
-    if ctx.system.time_factor > 1.0 {
+    // ----- Time distortion (preserved from original) -----
+
+    if ctx.system.time_factor >= 1.5 {
         let display = if ctx.system.time_factor >= 8.0 {
             format!(
                 "\"Don't linger here. Clocks run ×{:.0} — a week at {} \
                  costs you months outside.\"",
                 ctx.system.time_factor, ctx.system.name,
             )
-        } else if ctx.system.time_factor >= 1.5 {
+        } else {
             format!(
                 "\"Time runs a bit thick at {}. ×{:.1} — \
                  nothing dramatic, but it adds up.\"",
                 ctx.system.name, ctx.system.time_factor,
             )
-        } else {
-            return candidates; // Not interesting enough.
         };
 
         let summary = format!(
@@ -594,21 +814,13 @@ fn scan_local_color(ctx: &RumorContext, reliability: f64) -> Vec<ScoredCandidate
             ctx.system.name, ctx.system.time_factor,
         );
 
-        candidates.push(ScoredCandidate {
-            id: Uuid::new_v4(),
-            category: RumorCategory::LocalColor,
-            content: RumorContent::LocalColor {
-                description: display.clone(),
-            },
-            display_text: display,
-            summary,
-            score: 0.3,
-            reliability: 1.0, // Physical facts don't lie.
-            expires_in: RumorCategory::LocalColor.default_expiry(),
-        });
+        candidates.push(local_color_candidate(
+            display, summary, 0.3,
+        ));
     }
 
-    // Infrastructure commentary.
+    // ----- Low infrastructure (preserved from original) -----
+
     if ctx.location.infrastructure <= InfrastructureLevel::Outpost {
         let display = format!(
             "\"Not much out here. {} is barely an outpost — \
@@ -616,22 +828,264 @@ fn scan_local_color(ctx: &RumorContext, reliability: f64) -> Vec<ScoredCandidate
             ctx.location.name,
         );
         let summary = format!("{}: low infrastructure", ctx.location.name);
+        candidates.push(local_color_candidate(display, summary, 0.2));
+    }
 
-        candidates.push(ScoredCandidate {
-            id: Uuid::new_v4(),
-            category: RumorCategory::LocalColor,
-            content: RumorContent::LocalColor {
-                description: display.clone(),
-            },
-            display_text: display,
-            summary,
-            score: 0.2,
-            reliability: 1.0,
-            expires_in: RumorCategory::LocalColor.default_expiry(),
-        });
+    // ----- Star type flavor (exotic stars get a comment) -----
+
+    let star_flavor: Option<(&str, f64)> = match ctx.system.star_type {
+        StarType::BlackHole => Some((
+            "You can't see it directly, but the lensing is unmistakable — a dark \
+             circle eating the starfield. The station creaks when it accretes.",
+            0.40,
+        )),
+        StarType::Neutron => Some((
+            "The neutron star pulses through the viewport like a lighthouse. \
+             Instruments flicker every time it sweeps past.",
+            0.35,
+        )),
+        StarType::Pulsar => Some((
+            "The pulsar ticks like a clock you can feel in your teeth. \
+             Navigation is precise but the radiation is brutal.",
+            0.35,
+        )),
+        StarType::WolfRayet => Some((
+            "The Wolf-Rayet is shedding its skin — luminous gas shells expanding \
+             outward. Beautiful to look at. Don't go outside.",
+            0.30,
+        )),
+        StarType::BlueSuperGiant | StarType::BlueGiant => Some((
+            "The star fills half the viewport. Blue-white and furious. Radiation \
+             warnings ping every few minutes — you get used to it.",
+            0.28,
+        )),
+        StarType::RedGiant => Some((
+            "The red giant hangs out there like a dying ember the size of a solar \
+             system. The light makes everything look like permanent sunset.",
+            0.25,
+        )),
+        StarType::BrownDwarf => Some((
+            "It's dark here. The brown dwarf barely qualifies as a star — more \
+             like a warm spot in the void. Station lights do the real work.",
+            0.25,
+        )),
+        StarType::Binary => Some((
+            "Two suns. The shadows never sit still. Takes a few hours before \
+             your eyes stop trying to make sense of the light.",
+            0.22,
+        )),
+        StarType::WhiteDwarf => Some((
+            "The white dwarf is small and fierce — a tiny bright point throwing \
+             hard light across the system. Everything looks overexposed.",
+            0.20,
+        )),
+        _ => None, // Common star types don't warrant comment.
+    };
+
+    if let Some((text, score)) = star_flavor {
+        let display = format!("\"{}\"", text);
+        let summary = format!("{}: notable star", ctx.system.name);
+        candidates.push(local_color_candidate(display, summary, score));
+    }
+
+    // ----- Faction atmosphere at this system -----
+
+    let faction_count = ctx.system.faction_presence.len();
+    let visible_count = ctx.system.faction_presence.iter()
+        .filter(|fp| fp.visibility > 0.4)
+        .count();
+
+    if visible_count >= 3 {
+        let display = "\"Three or more insignias on the concourse. Everyone's polite, \
+             but nobody's relaxed. You can feel the factions sizing each other up.\"";
+        let summary = format!("{}: multi-faction tension", ctx.location.name);
+        candidates.push(local_color_candidate(display.to_string(), summary, 0.28));
+    } else if let Some(dominant) = ctx.system.faction_presence.iter()
+        .filter(|fp| fp.visibility > 0.5)
+        .max_by(|a, b| a.strength.partial_cmp(&b.strength).unwrap_or(std::cmp::Ordering::Equal))
+    {
+        if dominant.strength > 0.6 {
+            if let Some(faction) = ctx.galaxy.factions.iter().find(|f| f.id == dominant.faction_id) {
+                let flavor = match faction.category {
+                    FactionCategory::Military => {
+                        "Uniforms everywhere. Security checkpoints at every junction. \
+                         The kind of place where you keep your ident ready."
+                    }
+                    FactionCategory::Economic => {
+                        "Everything here has a price tag. The concourse is all \
+                         storefronts and trading terminals. Commerce never sleeps."
+                    }
+                    FactionCategory::Criminal => {
+                        "The kind of place where you don't ask questions and nobody \
+                         asks them of you. Useful, if you know how to behave."
+                    }
+                    FactionCategory::Guild => {
+                        "Guild banners on the docking pylons. Engineers and pilots \
+                         everywhere. The sort of station that runs well."
+                    }
+                    FactionCategory::Religious => {
+                        "Chanting drifts from somewhere down-corridor. Pilgrims mix \
+                         with the dock crews. There's incense in the air recyclers."
+                    }
+                    FactionCategory::Academic => {
+                        "Research equipment stacked in every corridor. Half the people \
+                         here look like they haven't slept in days. Lab coats and coffee."
+                    }
+                    FactionCategory::Political => {
+                        "Officials and aides everywhere, moving with purpose. \
+                         Screens broadcasting policy debates. Bureaucracy in motion."
+                    }
+                };
+                let display = format!("\"{}\"", flavor);
+                let summary = format!(
+                    "{}: {} atmosphere ({})",
+                    ctx.location.name, faction.category, faction.name,
+                );
+                candidates.push(local_color_candidate(display, summary, 0.25));
+            }
+        }
+    }
+
+    if faction_count == 0 && ctx.location.infrastructure >= InfrastructureLevel::Colony {
+        let display = "\"No faction insignias on the concourse. Nobody's claimed this \
+             place — or everyone who tried gave up. Frontier rules.\"";
+        let summary = format!("{}: unclaimed territory", ctx.location.name);
+        candidates.push(local_color_candidate(display.to_string(), summary, 0.22));
+    }
+
+    // ----- Location type flavor -----
+
+    let loc_flavor: Option<(&str, f64)> = match &ctx.location.location_type {
+        LocationType::AsteroidBelt => Some((
+            "Rocks drift past the viewport. The whole station hums with mining \
+             equipment — drills, ore processors, the clang of cargo pods coupling.",
+            0.22,
+        )),
+        LocationType::PlanetSurface { body_type } => match body_type {
+            BodyType::Gaia => Some((
+                "Real air outside. Wind, sky, the faint smell of vegetation \
+                 through the port vents. Crew members linger at the airlocks.",
+                0.25,
+            )),
+            BodyType::IceWorld => Some((
+                "The cold seeps through the docking seals. Everything outside \
+                 is white and grey and still. Beautiful, in a desolate way.",
+                0.20,
+            )),
+            BodyType::Oceanic => Some((
+                "Water in every direction through the lower viewports. The \
+                 station sways slightly with the current. Takes getting used to.",
+                0.22,
+            )),
+            BodyType::Barren => Some((
+                "Dust and rock as far as the sensors reach. The dome keeps \
+                 the nothing out. People here chose isolation deliberately.",
+                0.18,
+            )),
+            _ => None,
+        },
+        LocationType::DeepSpace => Some((
+            "Nothing out the viewport but stars. The station hangs in the void \
+             like a dropped coin. No planet, no belt — just the structure and \
+             whatever brought people here.",
+            0.22,
+        )),
+        LocationType::Megastructure { .. } => Some((
+            "The scale is wrong. Corridors that go on too long, ceilings too high, \
+             proportions built for something other than human comfort. You feel small.",
+            0.30,
+        )),
+        _ => None,
+    };
+
+    if let Some((text, score)) = loc_flavor {
+        let display = format!("\"{}\"", text);
+        let summary = format!("{}: location atmosphere", ctx.location.name);
+        candidates.push(local_color_candidate(display, summary, score));
+    }
+
+    // ----- Ship condition (you notice this when you dock) -----
+
+    let ship = &ctx.journey.ship;
+    if ship.hull_condition < 0.5 {
+        let display = if ship.hull_condition < 0.25 {
+            "\"Dock workers give your hull a long look as you taxi in. One of \
+             them shakes her head. You pretend not to notice.\""
+        } else {
+            "\"Your ship is showing its scars. A few glances from the dock \
+             crew — nothing hostile, just the quiet assessment of professionals.\""
+        };
+        let summary = format!(
+            "Ship hull at {:.0}% — drawing attention",
+            ship.hull_condition * 100.0,
+        );
+        candidates.push(local_color_candidate(display.to_string(), summary, 0.28));
+    }
+
+    // ----- Supply situation (prices tell a story) -----
+
+    if let Some(economy) = &ctx.location.economy {
+        if economy.fuel_price > 5.0 {
+            let display = format!(
+                "\"Fuel's expensive here — {:.0} credits a unit. Someone's either \
+                 gouging or there's a shortage. Either way, plan accordingly.\"",
+                economy.fuel_price,
+            );
+            let summary = format!(
+                "{}: fuel at {:.0} cr (expensive)",
+                ctx.location.name, economy.fuel_price,
+            );
+            candidates.push(local_color_candidate(display, summary, 0.22));
+        } else if economy.fuel_price < 2.0 {
+            let display = format!(
+                "\"Fuel's cheap here — {:.0} credits a unit. Might be worth \
+                 topping off the tank while you can.\"",
+                economy.fuel_price,
+            );
+            let summary = format!(
+                "{}: fuel at {:.0} cr (cheap)",
+                ctx.location.name, economy.fuel_price,
+            );
+            candidates.push(local_color_candidate(display, summary, 0.18));
+        }
+    }
+
+    // ----- Busy hub vs. quiet port -----
+
+    if ctx.location.infrastructure >= InfrastructureLevel::Hub && faction_count >= 3 {
+        let display = "\"Busy port. Ships queuing for berths, cargo loaders running \
+             double shifts, every docking bay full. The concourse sounds like a \
+             market day.\"";
+        let summary = format!("{}: busy port traffic", ctx.location.name);
+        candidates.push(local_color_candidate(display.to_string(), summary, 0.15));
+    } else if ctx.location.infrastructure == InfrastructureLevel::Colony && faction_count <= 1 {
+        let display = "\"Quiet here. A handful of ships, long stretches of empty \
+             corridor. The bartender has time to talk.\"";
+        let summary = format!("{}: quiet port", ctx.location.name);
+        candidates.push(local_color_candidate(display.to_string(), summary, 0.15));
     }
 
     candidates
+}
+
+/// Helper: build a LocalColor candidate without repeating boilerplate.
+fn local_color_candidate(
+    display_text: String,
+    summary: String,
+    score: f64,
+) -> ScoredCandidate {
+    ScoredCandidate {
+        id: Uuid::new_v4(),
+        category: RumorCategory::LocalColor,
+        content: RumorContent::LocalColor {
+            description: display_text.clone(),
+        },
+        display_text,
+        summary,
+        score,
+        reliability: 1.0, // Direct observations don't lie.
+        expires_in: RumorCategory::LocalColor.default_expiry(),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1081,5 +1535,261 @@ mod tests {
 
         let candidates = scan_contracts(&ctx, 0.8);
         assert!(candidates.is_empty(), "Should not generate leads for hostile NPCs");
+    }
+
+    // -----------------------------------------------------------------------
+    // Expanded faction scanner tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_faction_scanner_civ_stability() {
+        let loc = test_location("Station", InfrastructureLevel::Hub, None);
+        let mut sys = test_system("Alpha", vec![loc.clone()]);
+
+        // Create a civilization with low stability.
+        let civ_id = Uuid::new_v4();
+        sys.controlling_civ = Some(civ_id);
+
+        let mut galaxy = minimal_galaxy(vec![sys.clone()]);
+        galaxy.civilizations.push(Civilization {
+            id: civ_id,
+            name: "Shaky Republic".into(),
+            ethos: CivEthos {
+                expansionist: 0.3, isolationist: 0.2, militaristic: 0.4,
+                diplomatic: 0.5, theocratic: 0.1, mercantile: 0.6,
+                technocratic: 0.3, communal: 0.4,
+            },
+            capabilities: CivCapabilities {
+                size: 0.5, wealth: 0.4, technology: 0.5, military: 0.3,
+            },
+            relationships: HashMap::new(),
+            internal_dynamics: InternalDynamics {
+                stability: 0.25,
+                pressures: vec![CivPressure {
+                    description: "Trade unions demanding better terms".into(),
+                    source_faction: None,
+                }],
+            },
+            faction_ids: vec![],
+        });
+
+        let journey = test_journey(sys.id);
+        let ctx = RumorContext {
+            galaxy: &galaxy,
+            journey: &journey,
+            recent_tick_events: &[],
+            location: &loc,
+            system: &sys,
+        };
+
+        let candidates = scan_factions(&ctx, 0.8);
+        assert!(
+            candidates.len() >= 2,
+            "Should find stability + pressure intel (got {})",
+            candidates.len(),
+        );
+        assert!(
+            candidates.iter().any(|c| c.display_text.contains("Shaky Republic")),
+            "Should mention the civilization by name",
+        );
+    }
+
+    #[test]
+    fn test_faction_scanner_military_tension() {
+        let loc = test_location("Station", InfrastructureLevel::Hub, None);
+        let mut sys = test_system("Alpha", vec![loc.clone()]);
+
+        let civ_a = Uuid::new_v4();
+        let civ_b = Uuid::new_v4();
+        sys.controlling_civ = Some(civ_a);
+
+        let mut rels_a = HashMap::new();
+        rels_a.insert(civ_b, CivDisposition {
+            diplomatic: -0.4, economic: 0.1, military: -0.8,
+        });
+
+        let mut galaxy = minimal_galaxy(vec![sys.clone()]);
+        galaxy.civilizations.push(Civilization {
+            id: civ_a,
+            name: "Iron Dominion".into(),
+            ethos: CivEthos {
+                expansionist: 0.5, isolationist: 0.1, militaristic: 0.8,
+                diplomatic: 0.2, theocratic: 0.0, mercantile: 0.3,
+                technocratic: 0.4, communal: 0.2,
+            },
+            capabilities: CivCapabilities {
+                size: 0.6, wealth: 0.5, technology: 0.5, military: 0.8,
+            },
+            relationships: rels_a,
+            internal_dynamics: InternalDynamics { stability: 0.7, pressures: vec![] },
+            faction_ids: vec![],
+        });
+        galaxy.civilizations.push(Civilization {
+            id: civ_b,
+            name: "Free Colonies".into(),
+            ethos: CivEthos {
+                expansionist: 0.3, isolationist: 0.4, militaristic: 0.2,
+                diplomatic: 0.7, theocratic: 0.0, mercantile: 0.5,
+                technocratic: 0.3, communal: 0.6,
+            },
+            capabilities: CivCapabilities {
+                size: 0.4, wealth: 0.5, technology: 0.4, military: 0.3,
+            },
+            relationships: HashMap::new(),
+            internal_dynamics: InternalDynamics { stability: 0.8, pressures: vec![] },
+            faction_ids: vec![],
+        });
+
+        let journey = test_journey(sys.id);
+        let ctx = RumorContext {
+            galaxy: &galaxy,
+            journey: &journey,
+            recent_tick_events: &[],
+            location: &loc,
+            system: &sys,
+        };
+
+        let candidates = scan_factions(&ctx, 0.8);
+        let has_tension = candidates.iter().any(|c| {
+            c.display_text.contains("Iron Dominion")
+                && c.display_text.contains("Free Colonies")
+        });
+        assert!(has_tension, "Should surface military tension between civs");
+    }
+
+    // -----------------------------------------------------------------------
+    // Expanded local color tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_local_color_star_type() {
+        let loc = test_location("Station", InfrastructureLevel::Hub, None);
+        let mut sys = test_system("Vortex", vec![loc.clone()]);
+        sys.star_type = StarType::BlackHole;
+
+        let galaxy = minimal_galaxy(vec![sys.clone()]);
+        let journey = test_journey(sys.id);
+
+        let ctx = RumorContext {
+            galaxy: &galaxy,
+            journey: &journey,
+            recent_tick_events: &[],
+            location: &loc,
+            system: &sys,
+        };
+
+        let candidates = scan_local_color(&ctx, 0.8);
+        let has_star = candidates.iter().any(|c| c.display_text.contains("lensing"));
+        assert!(has_star, "Should comment on black hole star type");
+    }
+
+    #[test]
+    fn test_local_color_ship_damage() {
+        let loc = test_location("Station", InfrastructureLevel::Hub, None);
+        let sys = test_system("Alpha", vec![loc.clone()]);
+
+        let galaxy = minimal_galaxy(vec![sys.clone()]);
+        let mut journey = test_journey(sys.id);
+        journey.ship.hull_condition = 0.2;
+
+        let ctx = RumorContext {
+            galaxy: &galaxy,
+            journey: &journey,
+            recent_tick_events: &[],
+            location: &loc,
+            system: &sys,
+        };
+
+        let candidates = scan_local_color(&ctx, 0.8);
+        let has_damage = candidates.iter().any(|c| c.display_text.contains("hull"));
+        assert!(has_damage, "Should comment on damaged ship hull");
+    }
+
+    #[test]
+    fn test_local_color_faction_atmosphere() {
+        let loc = test_location("Station", InfrastructureLevel::Hub, None);
+        let faction_id = Uuid::new_v4();
+        let mut sys = test_system("Alpha", vec![loc.clone()]);
+        sys.faction_presence.push(FactionPresence {
+            faction_id,
+            strength: 0.8,
+            visibility: 0.9,
+            services: vec![],
+        });
+
+        let mut galaxy = minimal_galaxy(vec![sys.clone()]);
+        galaxy.factions.push(Faction {
+            id: faction_id,
+            name: "Naval Command".into(),
+            category: FactionCategory::Military,
+            scope: FactionScope::Independent,
+            ethos: FactionEthos { alignment: 0.5, openness: 0.3, aggression: 0.7 },
+            influence: HashMap::new(),
+            player_standing: FactionStanding::unknown(),
+            description: "A military faction.".into(),
+            notable_assets: vec![],
+        });
+
+        let journey = test_journey(sys.id);
+        let ctx = RumorContext {
+            galaxy: &galaxy,
+            journey: &journey,
+            recent_tick_events: &[],
+            location: &loc,
+            system: &sys,
+        };
+
+        let candidates = scan_local_color(&ctx, 0.8);
+        let has_military = candidates.iter().any(|c|
+            c.display_text.contains("Uniforms") || c.display_text.contains("uniforms")
+        );
+        assert!(has_military, "Should describe military faction atmosphere");
+    }
+
+    #[test]
+    fn test_local_color_gaia_planet() {
+        let mut loc = test_location("Colony", InfrastructureLevel::Colony, None);
+        loc.location_type = LocationType::PlanetSurface { body_type: BodyType::Gaia };
+        let sys = test_system("Eden", vec![loc.clone()]);
+
+        let galaxy = minimal_galaxy(vec![sys.clone()]);
+        let journey = test_journey(sys.id);
+
+        let ctx = RumorContext {
+            galaxy: &galaxy,
+            journey: &journey,
+            recent_tick_events: &[],
+            location: &loc,
+            system: &sys,
+        };
+
+        let candidates = scan_local_color(&ctx, 0.8);
+        let has_gaia = candidates.iter().any(|c|
+            c.display_text.contains("air") || c.display_text.contains("sky")
+        );
+        assert!(has_gaia, "Should comment on gaia planet atmosphere");
+    }
+
+    #[test]
+    fn test_local_color_common_star_no_comment() {
+        let loc = test_location("Station", InfrastructureLevel::Hub, None);
+        let sys = test_system("Sol-like", vec![loc.clone()]);
+        // Default star_type is YellowDwarf — should not generate star flavor.
+
+        let galaxy = minimal_galaxy(vec![sys.clone()]);
+        let journey = test_journey(sys.id);
+
+        let ctx = RumorContext {
+            galaxy: &galaxy,
+            journey: &journey,
+            recent_tick_events: &[],
+            location: &loc,
+            system: &sys,
+        };
+
+        let candidates = scan_local_color(&ctx, 0.8);
+        // Should not have any star-type comment for a boring yellow dwarf.
+        let has_star = candidates.iter().any(|c| c.summary.contains("notable star"));
+        assert!(!has_star, "Yellow dwarf should not generate a star-type comment");
     }
 }
