@@ -140,3 +140,21 @@ pub enum Tone {
     Melancholy,
     Mundane,
 }
+
+impl Tone {
+    /// Parse a tone string with alias support.
+    /// Handles standard names plus aliases (e.g. "dread" → Tense).
+    /// Returns Mundane for unrecognized strings.
+    pub fn parse(s: &str) -> Self {
+        match s {
+            "tense" => Tone::Tense,
+            "quiet" => Tone::Quiet,
+            "wonder" => Tone::Wonder,
+            "urgent" => Tone::Urgent,
+            "melancholy" => Tone::Melancholy,
+            "mundane" => Tone::Mundane,
+            "dread" => Tone::Tense,
+            _ => Tone::Mundane,
+        }
+    }
+}

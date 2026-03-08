@@ -115,6 +115,19 @@ pub enum ModuleTarget {
     LifeSupport,
 }
 
+impl ModuleTarget {
+    /// Human-readable display name for this module.
+    pub fn name(self) -> &'static str {
+        match self {
+            ModuleTarget::Engine => "Engine",
+            ModuleTarget::Sensors => "Sensors",
+            ModuleTarget::Comms => "Comms",
+            ModuleTarget::Weapons => "Weapons",
+            ModuleTarget::LifeSupport => "Life support",
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Deferred effects — require world state beyond Journey
 // ---------------------------------------------------------------------------
@@ -478,7 +491,7 @@ pub fn apply_effects(
                 m.condition = (m.condition - amount).max(0.0);
                 changes.push(format!(
                     "{} damaged ({:.0}%)",
-                    module_name(*module),
+                    module.name(),
                     m.condition * 100.0
                 ));
             }
@@ -488,7 +501,7 @@ pub fn apply_effects(
                 m.condition = (m.condition + amount).min(1.0);
                 changes.push(format!(
                     "{} repaired ({:.0}%)",
-                    module_name(*module),
+                    module.name(),
                     m.condition * 100.0
                 ));
             }
@@ -642,16 +655,6 @@ fn get_module_mut(
         ModuleTarget::Comms => &mut modules.comms,
         ModuleTarget::Weapons => &mut modules.weapons,
         ModuleTarget::LifeSupport => &mut modules.life_support,
-    }
-}
-
-fn module_name(target: ModuleTarget) -> &'static str {
-    match target {
-        ModuleTarget::Engine => "Engine",
-        ModuleTarget::Sensors => "Sensors",
-        ModuleTarget::Comms => "Comms",
-        ModuleTarget::Weapons => "Weapons",
-        ModuleTarget::LifeSupport => "Life support",
     }
 }
 

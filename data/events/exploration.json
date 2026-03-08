@@ -14,7 +14,7 @@
       ],
       "infrastructure_max": "outpost"
     },
-    "text": "Your sensors flag something that shouldn't be here — a pocket of spacetime where the readings fold back on themselves. Not dangerous at this distance, but deeply wrong by every model your navigation computer knows.\n\nThe anomaly pulses. Slowly. Like breathing.\n\nYour instruments can measure it. They can't explain it.",
+    "text": "Your sensors flag something that shouldn't be here \u2014 a pocket of spacetime where the readings fold back on themselves. Not dangerous at this distance, but deeply wrong by every model your navigation computer knows.\n\nThe anomaly pulses. Slowly. Like breathing.\n\nYour instruments can measure it. They can't explain it.",
     "choices": [
       {
         "label": "Move closer and take detailed readings",
@@ -23,7 +23,7 @@
           {
             "type": "spawn_thread",
             "thread_type": "anomaly",
-            "description": "Investigated a spacetime anomaly. Readings suggest something artificial — a structure or device operating on principles outside known physics."
+            "description": "Investigated a spacetime anomaly. Readings suggest something artificial \u2014 a structure or device operating on principles outside known physics."
           },
           {
             "type": "crew_stress",
@@ -60,9 +60,6 @@
           }
         ]
       }
-    ],
-    "intents": [
-      "investigate"
     ]
   },
   {
@@ -79,7 +76,7 @@
         "moon"
       ]
     },
-    "text": "The surface survey picks up geometric patterns beneath the topsoil — too precise for geology, too old for anything in the colonial record. Whatever built this was here long before anyone claimed this world.\n\nExcavation would take days. A surface scan gives you outlines: chambers, corridors, something that might be a central structure. No power signatures. No atmosphere. Just stone and silence and the weight of years.",
+    "text": "The surface survey picks up geometric patterns beneath the topsoil \u2014 too precise for geology, too old for anything in the colonial record. Whatever built this was here long before anyone claimed this world.\n\nExcavation would take days. A surface scan gives you outlines: chambers, corridors, something that might be a central structure. No power signatures. No atmosphere. Just stone and silence and the weight of years.",
     "choices": [
       {
         "label": "Send a team to the central structure",
@@ -129,13 +126,10 @@
         "effects": [
           {
             "type": "narrative",
-            "text": "Logged the coordinates. The ruins have waited this long — they can wait longer."
+            "text": "Logged the coordinates. The ruins have waited this long \u2014 they can wait longer."
           }
         ]
       }
-    ],
-    "intents": [
-      "investigate"
     ]
   },
   {
@@ -147,7 +141,7 @@
     "trigger": "action:scan",
     "event_kind": "discovery",
     "context_requirements": {},
-    "text": "Your sensor sweep catches something at the edge of resolution — a faint, repeating signal buried in the system's background noise. It's not a natural emission. The pattern is too regular, too structured.\n\nIt could be a beacon. It could be an echo of something that stopped transmitting years ago. Your sensors can't tell from here — you'd need to get closer, or allocate processing time to clean up the signal.",
+    "text": "Your sensor sweep catches something at the edge of resolution \u2014 a faint, repeating signal buried in the system's background noise. It's not a natural emission. The pattern is too regular, too structured.\n\nIt could be a beacon. It could be an echo of something that stopped transmitting years ago. Your sensors can't tell from here \u2014 you'd need to get closer, or allocate processing time to clean up the signal.",
     "choices": [
       {
         "label": "Allocate processing time to analyze the signal",
@@ -178,9 +172,6 @@
           }
         ]
       }
-    ],
-    "intents": [
-      "scan"
     ]
   },
   {
@@ -198,7 +189,7 @@
         "asteroid_belt"
       ]
     },
-    "text": "Nothing here but starlight and the faint hiss of cosmic background radiation on your sensors. The system is quiet — the kind of quiet that has weight to it.\n\nYour navigator marks the position on the chart. Another point of reference in the vastness.",
+    "text": "Nothing here but starlight and the faint hiss of cosmic background radiation on your sensors. The system is quiet \u2014 the kind of quiet that has weight to it.\n\nYour navigator marks the position on the chart. Another point of reference in the vastness.",
     "choices": [
       {
         "label": "Run a passive scan while you're here",
@@ -206,7 +197,7 @@
         "effects": [
           {
             "type": "narrative",
-            "text": "Ran a passive scan. Nothing unusual — but the silence was noted."
+            "text": "Ran a passive scan. Nothing unusual \u2014 but the silence was noted."
           }
         ]
       },
@@ -219,7 +210,6 @@
           }
         ]
       }
-    ],
-    "intents": []
+    ]
   }
 ]

@@ -10,7 +10,7 @@
     "context_requirements": {
       "crew_min": 2
     },
-    "text": "The drive note shifts during the burn — a subtle change in pitch that most people wouldn't notice. Your engineer does. She tilts her head, listening to something in the harmonics that you can't hear.\n\n\"It's fine,\" she says, before you ask. \"Just... different. Every repair changes the voice a little. Like an instrument that's been restrung.\"\n\nShe goes back to her readouts. The drive hums on, slightly changed, carrying you forward.",
+    "text": "The drive note shifts during the burn \u2014 a subtle change in pitch that most people wouldn't notice. Your engineer does. She tilts her head, listening to something in the harmonics that you can't hear.\n\n\"It's fine,\" she says, before you ask. \"Just... different. Every repair changes the voice a little. Like an instrument that's been restrung.\"\n\nShe goes back to her readouts. The drive hums on, slightly changed, carrying you forward.",
     "choices": [
       {
         "label": "Ask her what she hears",
@@ -49,8 +49,7 @@
           }
         ]
       }
-    ],
-    "intents": []
+    ]
   },
   {
     "id": "transit_scanner_chatter",
@@ -64,7 +63,7 @@
       "infrastructure_min": "colony",
       "faction_controlled": true
     },
-    "text": "The comms pick up system traffic as you transit — other ships going about their business. Two freighters arguing about lane priority. A patrol vessel running transponder checks and not finding what it wants. A mining shuttle requesting docking clearance with the bored efficiency of someone who does this every day.\n\nThe galaxy at work. You're passing through it.",
+    "text": "The comms pick up system traffic as you transit \u2014 other ships going about their business. Two freighters arguing about lane priority. A patrol vessel running transponder checks and not finding what it wants. A mining shuttle requesting docking clearance with the bored efficiency of someone who does this every day.\n\nThe galaxy at work. You're passing through it.",
     "choices": [
       {
         "label": "Listen for anything interesting",
@@ -72,7 +71,7 @@
         "effects": [
           {
             "type": "narrative",
-            "text": "Monitored system traffic. Nothing stood out — but knowing the rhythm matters."
+            "text": "Monitored system traffic. Nothing stood out \u2014 but knowing the rhythm matters."
           }
         ]
       },
@@ -85,8 +84,7 @@
           }
         ]
       }
-    ],
-    "intents": []
+    ]
   },
   {
     "id": "docked_station_sounds",
@@ -102,7 +100,7 @@
         "station"
       ]
     },
-    "text": "After the silence of transit, the station is overwhelming. Not loud — just full. Ventilation hum, distant conversation, the clank of cargo loaders, a child laughing somewhere several decks above. The air smells of recycled atmosphere with traces of cooking oil and machine lubricant.\n\nYour ship's air was cleaner. This is dirtier, warmer, and unmistakably alive.",
+    "text": "After the silence of transit, the station is overwhelming. Not loud \u2014 just full. Ventilation hum, distant conversation, the clank of cargo loaders, a child laughing somewhere several decks above. The air smells of recycled atmosphere with traces of cooking oil and machine lubricant.\n\nYour ship's air was cleaner. This is dirtier, warmer, and unmistakably alive.",
     "choices": [
       {
         "label": "Take a moment to adjust",
@@ -119,7 +117,7 @@
         ]
       },
       {
-        "label": "Get moving — time is limited",
+        "label": "Get moving \u2014 time is limited",
         "tone_note": "Practical. Every hour costs.",
         "effects": [
           {
@@ -127,8 +125,7 @@
           }
         ]
       }
-    ],
-    "intents": []
+    ]
   },
   {
     "id": "docked_colony_children",
@@ -175,7 +172,6 @@
           }
         ]
       }
-    ],
-    "intents": []
+    ]
   }
 ]

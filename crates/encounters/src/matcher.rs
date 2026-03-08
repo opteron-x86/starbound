@@ -167,8 +167,8 @@ fn requirements_met(req: &ContextRequirements, ctx: &MatchContext) -> bool {
 
     // Infrastructure minimum.
     if let Some(ref min) = req.infrastructure_min {
-        if let Some(min_level) = parse_infrastructure(min) {
-            if infra_rank(effective_infra) < infra_rank(min_level) {
+        if let Ok(min_level) = min.to_lowercase().parse::<InfrastructureLevel>() {
+            if effective_infra < min_level {
                 return false;
             }
         }
@@ -176,8 +176,8 @@ fn requirements_met(req: &ContextRequirements, ctx: &MatchContext) -> bool {
 
     // Infrastructure maximum.
     if let Some(ref max) = req.infrastructure_max {
-        if let Some(max_level) = parse_infrastructure(max) {
-            if infra_rank(effective_infra) > infra_rank(max_level) {
+        if let Ok(max_level) = max.to_lowercase().parse::<InfrastructureLevel>() {
+            if effective_infra > max_level {
                 return false;
             }
         }
@@ -328,29 +328,6 @@ fn specificity(req: &ContextRequirements) -> usize {
     if !req.location_types.is_empty() { score += 2; }
     if req.prerequisites.is_some() { score += 3; }
     score
-}
-
-fn parse_infrastructure(s: &str) -> Option<InfrastructureLevel> {
-    match s.to_lowercase().as_str() {
-        "none" => Some(InfrastructureLevel::None),
-        "outpost" => Some(InfrastructureLevel::Outpost),
-        "colony" => Some(InfrastructureLevel::Colony),
-        "established" => Some(InfrastructureLevel::Established),
-        "hub" => Some(InfrastructureLevel::Hub),
-        "capital" => Some(InfrastructureLevel::Capital),
-        _ => None,
-    }
-}
-
-fn infra_rank(level: InfrastructureLevel) -> u8 {
-    match level {
-        InfrastructureLevel::None => 0,
-        InfrastructureLevel::Outpost => 1,
-        InfrastructureLevel::Colony => 2,
-        InfrastructureLevel::Established => 3,
-        InfrastructureLevel::Hub => 4,
-        InfrastructureLevel::Capital => 5,
-    }
 }
 
 #[cfg(test)]

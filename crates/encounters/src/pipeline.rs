@@ -41,9 +41,10 @@ pub use super::seed_event::{EventTrigger, EventKind};
 // ---------------------------------------------------------------------------
 
 /// A player-initiated action. When present, the pipeline selects from
-/// events that can resolve this intent rather than from the full pool.
+/// events whose trigger matches `action:{tag}` rather than from the
+/// full pool.
 ///
-/// The string tag for each intent matches against `SeedEvent.intents`.
+/// The string tag for each intent matches against `SeedEvent.trigger`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PlayerIntent {
     /// Buy/sell goods at a station or settlement.
@@ -69,7 +70,7 @@ pub enum PlayerIntent {
 }
 
 impl PlayerIntent {
-    /// The string tag used to match against SeedEvent.intents.
+    /// The string tag used to match against SeedEvent.trigger.
     pub fn tag(self) -> &'static str {
         match self {
             PlayerIntent::Trade => "trade",
@@ -623,7 +624,7 @@ fn pacing_score(event: &SeedEvent, recent_tones: &[Tone]) -> f64 {
         return 0.0; // No history to contrast with.
     }
 
-    let event_tone = parse_tone(&event.tone);
+    let event_tone = Tone::parse(&event.tone);
 
     // Count how many recent encounters share this tone.
     let same_count = recent_tones.iter().filter(|t| **t == event_tone).count();
@@ -656,19 +657,6 @@ fn tone_intensity(tone: &Tone) -> f64 {
         Tone::Melancholy => 0.4,
         Tone::Quiet => 0.2,
         Tone::Mundane => 0.1,
-    }
-}
-
-fn parse_tone(s: &str) -> Tone {
-    match s {
-        "tense" => Tone::Tense,
-        "quiet" => Tone::Quiet,
-        "wonder" => Tone::Wonder,
-        "urgent" => Tone::Urgent,
-        "melancholy" => Tone::Melancholy,
-        "mundane" => Tone::Mundane,
-        "dread" => Tone::Tense, // map dread → tense for pacing
-        _ => Tone::Mundane,
     }
 }
 
@@ -1049,7 +1037,7 @@ mod tests {
                 None,
             ) {
                 assert!(
-                    event.intents.contains(&"scan".to_string()),
+                    event.effective_trigger() == EventTrigger::Action("scan".to_string()),
                     "Intent mode should only select scan events, got: {}",
                     event.id,
                 );
@@ -1116,10 +1104,10 @@ mod tests {
                 None,
             ) {
                 assert!(
-                    event.intents.is_empty(),
-                    "Arrival mode should not select intent events, got: {} (intents: {:?})",
+                    !event.effective_trigger().is_player_action(),
+                    "Arrival mode should not select action events, got: {} (trigger: {:?})",
                     event.id,
-                    event.intents,
+                    event.trigger,
                 );
             }
         }

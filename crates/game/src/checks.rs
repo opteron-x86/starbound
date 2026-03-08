@@ -206,7 +206,7 @@ pub fn resolve_check<R: Rng>(
         let condition = get_module_condition(&journey.ship.modules, module_target);
         let contribution = condition * MODULE_WEIGHT;
         breakdown.push(ModifierContribution {
-            source: format!("{} condition ({:.0}%)", module_name(module_target), condition * 100.0),
+            source: format!("{} condition ({:.0}%)", module_target.name(), condition * 100.0),
             value: contribution,
         });
         total += contribution;
@@ -428,16 +428,6 @@ fn get_module_condition(modules: &ShipModules, target: ModuleTarget) -> f32 {
         ModuleTarget::Comms => modules.comms.condition,
         ModuleTarget::Weapons => modules.weapons.condition,
         ModuleTarget::LifeSupport => modules.life_support.condition,
-    }
-}
-
-fn module_name(target: ModuleTarget) -> &'static str {
-    match target {
-        ModuleTarget::Engine => "Engine",
-        ModuleTarget::Sensors => "Sensors",
-        ModuleTarget::Comms => "Comms",
-        ModuleTarget::Weapons => "Weapons",
-        ModuleTarget::LifeSupport => "Life support",
     }
 }
 

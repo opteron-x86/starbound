@@ -302,7 +302,7 @@ fn best_expansion_target(
             let infra_score = systems
                 .iter()
                 .find(|s| s.id == id)
-                .map(|s| infrastructure_value(s.infrastructure_level))
+                .map(|s| s.infrastructure_level.value())
                 .unwrap_or(0.0);
             (id, infra_score + rng.gen_range(0.0..0.5))
         })
@@ -323,33 +323,11 @@ fn lowest_infrastructure_system(
             systems
                 .iter()
                 .find(|s| s.id == id)
-                .map(|s| infrastructure_rank(s.infrastructure_level))
+                .map(|s| s.infrastructure_level.rank())
                 .unwrap_or(0)
         })
         .copied()
         .expect("owned_ids should not be empty")
-}
-
-fn infrastructure_value(level: InfrastructureLevel) -> f64 {
-    match level {
-        InfrastructureLevel::None => 0.0,
-        InfrastructureLevel::Outpost => 0.2,
-        InfrastructureLevel::Colony => 0.4,
-        InfrastructureLevel::Established => 0.6,
-        InfrastructureLevel::Hub => 0.8,
-        InfrastructureLevel::Capital => 1.0,
-    }
-}
-
-fn infrastructure_rank(level: InfrastructureLevel) -> u8 {
-    match level {
-        InfrastructureLevel::None => 0,
-        InfrastructureLevel::Outpost => 1,
-        InfrastructureLevel::Colony => 2,
-        InfrastructureLevel::Established => 3,
-        InfrastructureLevel::Hub => 4,
-        InfrastructureLevel::Capital => 5,
-    }
 }
 
 fn can_upgrade_infrastructure(level: InfrastructureLevel) -> bool {

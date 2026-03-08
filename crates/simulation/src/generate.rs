@@ -2294,8 +2294,9 @@ fn pick_title(
 ) -> String {
     let eligible: Vec<&templates::TitleEntry> = role.titles.iter()
         .filter(|t| {
-            let min = parse_infra_level(&t.min_infra);
-            infra_level_rank(infra) >= infra_level_rank(min)
+            let min: InfrastructureLevel = t.min_infra.to_lowercase().parse()
+                .unwrap_or(InfrastructureLevel::None);
+            infra >= min
         })
         .collect();
 
@@ -2315,29 +2316,6 @@ fn pick_title(
         }
     }
     eligible.last().unwrap().title.clone()
-}
-
-fn parse_infra_level(s: &str) -> InfrastructureLevel {
-    match s.to_lowercase().as_str() {
-        "none" => InfrastructureLevel::None,
-        "outpost" => InfrastructureLevel::Outpost,
-        "colony" => InfrastructureLevel::Colony,
-        "established" => InfrastructureLevel::Established,
-        "hub" => InfrastructureLevel::Hub,
-        "capital" => InfrastructureLevel::Capital,
-        _ => InfrastructureLevel::None,
-    }
-}
-
-fn infra_level_rank(level: InfrastructureLevel) -> u8 {
-    match level {
-        InfrastructureLevel::None => 0,
-        InfrastructureLevel::Outpost => 1,
-        InfrastructureLevel::Colony => 2,
-        InfrastructureLevel::Established => 3,
-        InfrastructureLevel::Hub => 4,
-        InfrastructureLevel::Capital => 5,
-    }
 }
 
 /// Generate personality from faction bias + civ ethos + noise.

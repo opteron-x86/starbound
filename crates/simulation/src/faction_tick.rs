@@ -101,7 +101,7 @@ pub fn tick_factions(
                 name: s.name.clone(),
                 time_factor: s.time_factor as f32,
                 controlling_civ: s.controlling_civ,
-                infra_value: infra_value(s.infrastructure_level),
+                infra_value: s.infrastructure_level.value() as f32,
                 current_strength: s.faction_presence.iter()
                     .find(|fp| fp.faction_id == faction.id)
                     .map(|fp| fp.strength),
@@ -469,21 +469,6 @@ fn retreat_description(faction_name: &str, category: &FactionCategory, system_na
             format!("{} closed its research station at {}.", faction_name, system_name),
         FactionCategory::Criminal =>
             format!("{} is no longer seen at {}.", faction_name, system_name),
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-fn infra_value(level: InfrastructureLevel) -> f32 {
-    match level {
-        InfrastructureLevel::None => 0.0,
-        InfrastructureLevel::Outpost => 0.2,
-        InfrastructureLevel::Colony => 0.4,
-        InfrastructureLevel::Established => 0.6,
-        InfrastructureLevel::Hub => 0.8,
-        InfrastructureLevel::Capital => 1.0,
     }
 }
 

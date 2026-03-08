@@ -15,10 +15,10 @@
         "station"
       ]
     },
-    "text": "A patrol vessel matches your heading as you approach the docking ring. Standard challenge — transponder verification, cargo manifest request, the usual. But the officer's tone has an edge to it. More thorough than routine.\n\n\"Independent vessel, confirm your registration and purpose of visit. We're running enhanced security protocols in this sector.\"\n\nYour comms officer looks at you. How you handle this sets a tone.",
+    "text": "A patrol vessel matches your heading as you approach the docking ring. Standard challenge \u2014 transponder verification, cargo manifest request, the usual. But the officer's tone has an edge to it. More thorough than routine.\n\n\"Independent vessel, confirm your registration and purpose of visit. We're running enhanced security protocols in this sector.\"\n\nYour comms officer looks at you. How you handle this sets a tone.",
     "choices": [
       {
-        "label": "Full cooperation — transmit everything they ask for",
+        "label": "Full cooperation \u2014 transmit everything they ask for",
         "tone_note": "Compliance. Nothing to hide, nothing to fear.",
         "effects": [
           {
@@ -55,8 +55,7 @@
           }
         ]
       }
-    ],
-    "intents": []
+    ]
   },
   {
     "id": "arrival_station_routine",
@@ -72,7 +71,7 @@
         "station"
       ]
     },
-    "text": "Docking protocols complete. The station assigns you a berth and a local frequency. Standard automated welcome — berth number, emergency procedures, a reminder that weapons must be secured while aboard.\n\nThe formality of it is almost comforting. Civilization has procedures. Procedures mean someone is maintaining order, however thinly.",
+    "text": "Docking protocols complete. The station assigns you a berth and a local frequency. Standard automated welcome \u2014 berth number, emergency procedures, a reminder that weapons must be secured while aboard.\n\nThe formality of it is almost comforting. Civilization has procedures. Procedures mean someone is maintaining order, however thinly.",
     "choices": [
       {
         "label": "Review the station directory",
@@ -93,7 +92,6 @@
           }
         ]
       }
-    ],
-    "intents": []
+    ]
   }
 ]

@@ -363,6 +363,35 @@ pub enum InfrastructureLevel {
     Capital,
 }
 
+impl InfrastructureLevel {
+    /// Numeric rank (0–5). Useful where a scalar comparison or
+    /// arithmetic on level is needed. For simple ≤/≥ comparisons
+    /// prefer the derived `PartialOrd` directly.
+    pub fn rank(self) -> u8 {
+        match self {
+            Self::None => 0,
+            Self::Outpost => 1,
+            Self::Colony => 2,
+            Self::Established => 3,
+            Self::Hub => 4,
+            Self::Capital => 5,
+        }
+    }
+
+    /// Normalized value (0.0–1.0) for use in equilibrium, scoring,
+    /// and economic calculations.
+    pub fn value(self) -> f64 {
+        match self {
+            Self::None => 0.0,
+            Self::Outpost => 0.2,
+            Self::Colony => 0.4,
+            Self::Established => 0.6,
+            Self::Hub => 0.8,
+            Self::Capital => 1.0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryEntry {
     pub timestamp: Timestamp,

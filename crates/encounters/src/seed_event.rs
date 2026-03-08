@@ -65,29 +65,20 @@ pub struct SeedEvent {
     pub text: String,
     /// The choices available to the player.
     pub choices: Vec<SeedChoice>,
-    /// Which player intents this event can resolve (legacy field).
-    /// Replaced by `trigger` for new events. Retained for backward
-    /// compatibility — events with intents derive their trigger as
-    /// `Action(intents[0])` when `trigger` is absent.
+    /// Deprecated — retained only for backward compatibility with older
+    /// save data or externally authored JSON. All events should set
+    /// `trigger` and `event_kind` explicitly. Ignored by the pipeline.
     #[serde(default)]
     pub intents: Vec<String>,
 
-    // --- Encounter system redesign fields ---
-
-    /// When this event can fire. Replaces the implicit arrival-vs-intent
-    /// distinction with an explicit trigger type.
+    /// When this event can fire.
     ///
-    /// Defaults: if absent in JSON, derived from `intents`:
-    /// - intents non-empty → `action:{intents[0]}`
-    /// - intents empty → `arrival`
+    /// Values: `arrival`, `transit`, `docked`, `linger`, or
+    /// `action:tag` for player-initiated actions.
     #[serde(default)]
     pub trigger: EventTrigger,
     /// Whether this is ambient (texture, small moments) or discovery
     /// (player-initiated investigation with meaningful stakes).
-    ///
-    /// Defaults: if absent, derived from `intents`:
-    /// - intents non-empty → `discovery`
-    /// - intents empty → `ambient`
     #[serde(default)]
     pub event_kind: EventKind,
 }
@@ -231,41 +222,14 @@ impl EventKind {
 // ---------------------------------------------------------------------------
 
 impl SeedEvent {
-    /// The effective trigger for this event.
-    ///
-    /// If `trigger` was explicitly set in JSON, uses that.
-    /// Otherwise derives from the legacy `intents` field:
-    /// - intents non-empty → `Action(intents[0])`
-    /// - intents empty → `Arrival`
+    /// The trigger for this event.
     pub fn effective_trigger(&self) -> EventTrigger {
-        // If trigger was explicitly set to something other than the default
-        // Arrival, use it. Otherwise fall back to intents-based derivation.
-        if self.trigger != EventTrigger::Arrival {
-            return self.trigger.clone();
-        }
-        // Derive from legacy intents.
-        if let Some(first) = self.intents.first() {
-            EventTrigger::Action(first.clone())
-        } else {
-            EventTrigger::Arrival
-        }
+        self.trigger.clone()
     }
 
-    /// The effective event kind.
-    ///
-    /// If `event_kind` was explicitly set, uses that.
-    /// Otherwise derives: events with intents are Discovery, others Ambient.
+    /// The event kind (ambient or discovery).
     pub fn effective_kind(&self) -> EventKind {
-        // If explicitly set to Discovery, honor it.
-        if self.event_kind == EventKind::Discovery {
-            return EventKind::Discovery;
-        }
-        // Derive from intents.
-        if !self.intents.is_empty() {
-            EventKind::Discovery
-        } else {
-            EventKind::Ambient
-        }
+        self.event_kind
     }
 
     /// Whether this event matches a given trigger.

@@ -18,6 +18,7 @@ use starbound_core::crew::*;
 use starbound_core::galaxy::*;
 use starbound_core::journey::Journey;
 use starbound_core::mission::*;
+use starbound_core::narrative::Tone;
 use starbound_core::npc::{Npc, NpcRelationType, DispositionTier};
 use starbound_core::ship::*;
 use starbound_core::reputation::PlayerProfile;
@@ -893,17 +894,6 @@ fn display_encounter(event: &SeedEvent, ctx: &TemplateContext) {
     }
 }
 
-fn parse_tone(s: &str) -> starbound_core::narrative::Tone {
-    match s {
-        "tense" => starbound_core::narrative::Tone::Tense,
-        "quiet" => starbound_core::narrative::Tone::Quiet,
-        "wonder" => starbound_core::narrative::Tone::Wonder,
-        "urgent" => starbound_core::narrative::Tone::Urgent,
-        "melancholy" => starbound_core::narrative::Tone::Melancholy,
-        _ => starbound_core::narrative::Tone::Mundane,
-    }
-}
-
 /// Resolve template placeholders in effect text fields.
 /// Only affects effects that contain text (Narrative, SpawnThread, AddConcern, AddCargo).
 fn resolve_effect_defs(defs: &[EffectDef], ctx: &TemplateContext) -> Vec<EffectDef> {
@@ -932,7 +922,7 @@ fn run_encounter<'a>(
     gs: &mut GameState,
     event: &'a SeedEvent,
 ) -> Option<&'a starbound_encounters::seed_event::FollowUp> {
-    let tone = parse_tone(&event.tone);
+    let tone = Tone::parse(&event.tone);
     gs.pipeline_state.record_event(&event.id, tone);
 
     clear_screen();
