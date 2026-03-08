@@ -8,6 +8,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::galaxy::InfrastructureLevel;
+
 // ---------------------------------------------------------------------------
 // Core rumor types
 // ---------------------------------------------------------------------------
@@ -153,25 +155,25 @@ impl RumorCategory {
 
 /// Infrastructure-based reliability for rumor generation.
 /// Better infrastructure = more reliable information.
-pub fn base_reliability(infrastructure_label: &str) -> f64 {
-    match infrastructure_label {
-        "capital" => 0.90,
-        "hub" => 0.80,
-        "established" => 0.70,
-        "colony" => 0.55,
-        "outpost" => 0.40,
-        _ => 0.50,
+pub fn base_reliability(level: InfrastructureLevel) -> f64 {
+    match level {
+        InfrastructureLevel::Capital => 0.90,
+        InfrastructureLevel::Hub => 0.80,
+        InfrastructureLevel::Established => 0.70,
+        InfrastructureLevel::Colony => 0.55,
+        InfrastructureLevel::Outpost => 0.40,
+        InfrastructureLevel::None => 0.50,
     }
 }
 
 /// How many rumors a location can generate based on infrastructure.
-pub fn rumor_count_range(infrastructure_label: &str) -> (usize, usize) {
-    match infrastructure_label {
-        "capital" => (3, 4),
-        "hub" => (2, 4),
-        "established" => (2, 3),
-        "colony" => (1, 3),
-        "outpost" => (1, 2),
-        _ => (1, 2),
+pub fn rumor_count_range(level: InfrastructureLevel) -> (usize, usize) {
+    match level {
+        InfrastructureLevel::Capital => (3, 4),
+        InfrastructureLevel::Hub => (2, 4),
+        InfrastructureLevel::Established => (2, 3),
+        InfrastructureLevel::Colony => (1, 3),
+        InfrastructureLevel::Outpost => (1, 2),
+        InfrastructureLevel::None => (1, 2),
     }
 }

@@ -10,14 +10,17 @@
 //! them to the journey state. This keeps all content in JSON — no Rust
 //! changes needed to add new events.
 //!
-//! ## Redesign additions
+//! ## Key features
 //!
 //! - **Category**: Purpose-driven classification (`ambient`, `exploration`,
 //!   `faction`, `crew`, `main_quest`, `side_quest`, `contract`).
 //! - **Priority**: 0–3 tier that affects silence override and score weighting.
 //! - **Prerequisites**: Hard gates on threads, cargo, and visited systems.
-//! - **New effects**: `faction_standing`, `discover_location`, `resolve_thread`,
-//!   `time_cost`, `add_knowledge_node`, `reputation_shift`, `npc_disposition`.
+//! - **Trigger**: Explicit firing conditions (`arrival`, `transit`, `docked`,
+//!   `linger`, `action:tag`) replacing the legacy `intents` field.
+//! - **Effects**: 15+ atomic effect types including `faction_standing`,
+//!   `discover_location`, `resolve_thread`, `time_cost`,
+//!   `add_knowledge_node`, `reputation_shift`, `npc_disposition`.
 
 use serde::{Deserialize, Serialize};
 

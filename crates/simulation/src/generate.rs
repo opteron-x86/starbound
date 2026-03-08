@@ -2521,17 +2521,6 @@ mod tests {
             .unwrap()
     }
 
-    #[allow(dead_code)]
-    fn find_criminal_covert<'a>(factions: &'a [Faction]) -> &'a Faction {
-        factions
-            .iter()
-            .find(|f| {
-                f.category == FactionCategory::Criminal
-                    && matches!(f.scope, FactionScope::Transnational { .. })
-            })
-            .unwrap()
-    }
-
     // -----------------------------------------------------------------------
     // Galaxy-level
     // -----------------------------------------------------------------------

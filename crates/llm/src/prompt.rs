@@ -17,35 +17,7 @@ use starbound_core::npc::Npc;
 use starbound_encounters::seed_event::{EventTrigger, SeedEvent};
 
 /// Style bible text — embedded from the TOML, pre-formatted for prompts.
-const STYLE_BIBLE: &str = "\
-VOICE: Awe tinged with loneliness. The feeling between wonder and melancholy. \
-Quiet and restrained. Trust the player to feel things without being told to feel them.
-
-DESCRIPTIONS: Evocative but incomplete. Describe what you perceive, not what things are. \
-DO: 'The structure fills your viewport and you still can't see the edges.' \
-DON'T: 'The structure is enormous.'
-
-DIALOGUE: Sounds like actual people. Trailing off mid-thought. Mundane observations that \
-carry weight. Important things buried in casual conversation.
-
-PACING: A slow-burn film you're directing. Not every moment needs to be dramatic. \
-Quiet observation is valid. Silence between characters is valid.
-
-BANNED CLICHÉS — never use these:
-- Chipped mugs, cracked mugs, stained mugs. No mugs as props at all.
-- Steepled fingers, drumming fingers, tracing rims of anything.
-- 'Measured gaze', 'measured look', 'measuring eyes'.
-- 'The hum of [X] filled the silence'. No hums filling anything.
-- 'Something flickered in their eyes' or 'something unreadable' in faces.
-- 'The weight of' anything abstract (the weight of silence, of years, etc.).
-- 'Hung in the air' (words, tension, silence — none of them hang).
-- 'Sent a chill down' anyone's anything.
-If you catch yourself reaching for these, find a concrete sensory detail instead. \
-What does this specific place smell like? What's the ambient sound? What's broken, \
-worn, or jury-rigged? Ground atmosphere in physical specifics, not stock gestures.
-
-TEST: When a player lies in bed after playing, are they thinking about loot and levels, \
-or about their navigator's face when she realized the colony was gone?";
+const STYLE_BIBLE: &str = "";
 
 /// The output format specification included in the system prompt.
 const OUTPUT_FORMAT: &str = r#"

@@ -28,7 +28,7 @@ pub struct MatchContext<'a> {
     /// When `None` (system edge), falls back to system.infrastructure_level.
     pub location_infrastructure: Option<InfrastructureLevel>,
     /// Names of systems the player has previously visited.
-    #[allow(dead_code)]
+    /// Wired into `has_visited_system` prerequisite checks.
     pub visited_system_names: Vec<String>,
 }
 

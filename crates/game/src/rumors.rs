@@ -52,10 +52,9 @@ pub struct RumorContext<'a> {
 /// Returns 1-4 rumors selected from all scanner candidates,
 /// scored by relevance and variety-balanced across categories.
 pub fn generate_rumors(ctx: &RumorContext, rng: &mut StdRng) -> Vec<Rumor> {
-    let infra_label = ctx.location.infrastructure.to_string();
-    let (min_count, max_count) = rumor_count_range(&infra_label);
+    let (min_count, max_count) = rumor_count_range(ctx.location.infrastructure);
     let target_count = rng.gen_range(min_count..=max_count);
-    let reliability = base_reliability(&infra_label);
+    let reliability = base_reliability(ctx.location.infrastructure);
 
     // Gather candidates from all scanners.
     let mut candidates: Vec<ScoredCandidate> = Vec::new();

@@ -7,17 +7,10 @@ tone = "Quiet and restrained. Trust the player to feel things without being told
 
 [crew_dialogue]
 principle = "Sounds like actual people."
-examples = [
-    "Trailing off mid-thought.",
-    "Mundane observations that carry weight.",
-    "Important things buried in casual conversation.",
-    "Jokes that aren't very funny.",
-]
+
 
 [descriptions]
-principle = "Evocative but incomplete. Describe what you perceive, not what things are."
-do = "The structure fills your viewport and you still can't see the edges."
-dont = "The structure is enormous."
+principle = "Evocative. Describe what you perceive, not what things are."
 
 [alien_communication]
 principle = "Resists full translation. Partial understanding."

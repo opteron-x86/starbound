@@ -61,7 +61,6 @@ struct CivSnapshot {
 }
 
 /// Pre-collected system state needed for equilibrium calculations.
-#[allow(dead_code)]
 struct SystemSnapshot {
     id: Uuid,
     name: String,

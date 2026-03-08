@@ -110,9 +110,6 @@ The player has just approached this person at a station.
 
 Write the NPC's greeting — what they say or do when the player arrives.
 
-VOICE: People in this world speak like actual people. Trailing off, \
-mundane observations, important things buried in casual conversation. \
-Quiet and restrained. No melodrama.
 
 RULES:
 - Write exactly 2-3 sentences. One of dialogue, one of action/description.
@@ -123,10 +120,6 @@ RULES:
 - Use correct pronouns throughout.
 - DO NOT use exclamation marks. This world is understated.
 - DO NOT invent facts about the world, the player, or their history.
-- NEVER use: chipped mugs, steepled fingers, 'measured gaze/look', \
-  'the hum of X filled the silence', 'something flickered in their eyes', \
-  'the weight of', drumming fingers, or tracing the rim of anything. \
-  Use concrete sensory details specific to THIS location instead.
 - Respond with ONLY the greeting text. No JSON, no labels, no preamble.";
 
 const KNOWLEDGE_SYSTEM_PROMPT: &str = "\
@@ -136,10 +129,6 @@ player in a space exploration game.
 The NPC is sharing specific knowledge items. Your job is to weave them \
 into natural conversation — not a bullet-point briefing.
 
-VOICE: People in this world speak like actual people. Trailing off, \
-mundane observations, important things buried in casual conversation. \
-Quiet and restrained.
-
 RULES:
 - Deliver ALL knowledge items provided. Do not skip any.
 - Weave them into 3-6 sentences of natural conversation. Not a list.
@@ -147,11 +136,6 @@ RULES:
   freely, cold NPCs are terse, bold NPCs are blunt, cautious NPCs hedge.
 - Use correct pronouns throughout.
 - DO NOT add knowledge items that aren't provided. Stick to the facts given.
-- DO NOT use exclamation marks.
-- NEVER use: chipped mugs, steepled fingers, 'measured gaze/look', \
-  'the hum of X filled the silence', 'something flickered in their eyes', \
-  'the weight of', drumming fingers, or tracing the rim of anything. \
-  Use concrete sensory details specific to THIS character and location.
 - Respond with ONLY the dialogue/narration. No JSON, no labels, no preamble.";
 
 // ---------------------------------------------------------------------------
