@@ -1,15 +1,15 @@
 // file: crates/game/src/lib.rs
-//! Game orchestration — state management, save/load, main loop (future).
-//!
-//! Day 2: Persistence layer.
-//! Day 3: Travel execution — applying travel plans to journey state.
+//! Game orchestration — consequence engine, contract management,
+//! reputation tracking, crew dynamics, NPC interaction, rumor
+//! generation, travel execution, and persistence.
 
-pub mod persistence;
-pub mod travel;
-pub mod consequences;
-pub mod supplies;
 pub mod checks;
-pub mod reputation;
+pub mod consequences;
+pub mod contracts;
 pub mod crew_conversation;
 pub mod npc_interaction;
+pub mod persistence;
+pub mod reputation;
 pub mod rumors;
+pub mod supplies;
+pub mod travel;

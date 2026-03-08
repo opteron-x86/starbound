@@ -18,13 +18,15 @@
 use uuid::Uuid;
 
 use starbound_core::crew::Mood;
+use starbound_core::effects::{EffectDef};
 use starbound_core::journey::Journey;
 use starbound_core::mission::{DiscoveryState, KnowledgeNode, KnowledgeNodeType, Relevance};
 use starbound_core::narrative::{
     EventCategory, GameEvent, ResolutionState, Thread, ThreadType,
 };
 
-use starbound_encounters::seed_event::EffectDef;
+// Re-export ModuleTarget from core so existing `use crate::consequences::ModuleTarget` works.
+pub use starbound_core::effects::ModuleTarget;
 
 // ---------------------------------------------------------------------------
 // Effect types
@@ -103,29 +105,6 @@ pub enum Effect {
     /// Change an NPC's disposition.
     /// Deferred to the game loop (needs NPC registry access).
     NpcDisposition { npc_name: String, delta: f32 },
-}
-
-/// Which ship module an effect targets.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ModuleTarget {
-    Engine,
-    Sensors,
-    Comms,
-    Weapons,
-    LifeSupport,
-}
-
-impl ModuleTarget {
-    /// Human-readable display name for this module.
-    pub fn name(self) -> &'static str {
-        match self {
-            ModuleTarget::Engine => "Engine",
-            ModuleTarget::Sensors => "Sensors",
-            ModuleTarget::Comms => "Comms",
-            ModuleTarget::Weapons => "Weapons",
-            ModuleTarget::LifeSupport => "Life support",
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------

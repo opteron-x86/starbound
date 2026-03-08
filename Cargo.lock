@@ -1196,7 +1196,6 @@ dependencies = [
  "serde",
  "serde_json",
  "starbound-core",
- "starbound-encounters",
  "starbound-simulation",
  "uuid",
 ]

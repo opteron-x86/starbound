@@ -8,7 +8,6 @@ description = "Game orchestration — main loop, state management, save/load"
 [dependencies]
 starbound-core = { path = "../core" }
 starbound-simulation = { path = "../simulation" }
-starbound-encounters = { path = "../encounters" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }

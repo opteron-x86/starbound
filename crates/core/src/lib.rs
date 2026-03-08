@@ -7,6 +7,7 @@
 
 pub mod contract;
 pub mod crew;
+pub mod effects;
 pub mod galaxy;
 pub mod journey;
 pub mod mission;
@@ -20,6 +21,7 @@ pub mod time;
 // Re-export the most commonly used types at crate root.
 pub use contract::Contract;
 pub use crew::CrewMember;
+pub use effects::{EffectDef, FollowUp, FollowUpDelay, ModuleTarget};
 pub use galaxy::{Civilization, Connection, Faction, Sector, StarSystem};
 pub use journey::Journey;
 pub use mission::{KnowledgeNode, MissionState};
